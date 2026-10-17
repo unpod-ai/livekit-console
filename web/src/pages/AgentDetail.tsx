@@ -108,7 +108,7 @@ export function AgentDetail() {
             ) : <div className="muted" style={{ padding: 16 }}>No worker endpoint is configured for this agent.</div>}
           </Panel>
           {/* the status panel above already covers a single worker; the table is for several, or for dead ones */}
-          {[...(wk.data?.workers ?? []), ...(wk.data?.former ?? [])].filter((w) => w.agentName === name).length > 1 && (
+          {([...(wk.data?.workers ?? []), ...(wk.data?.former ?? [])].filter((w) => w.agentName === name).length > 1 || (wk.data?.former ?? []).some((w) => w.agentName === name)) && (
             <WorkersPanel workers={wk.data?.workers ?? []} former={wk.data?.former ?? []} agent={name} />
           )}
         </>
