@@ -34,7 +34,8 @@ case "${1:-}" in
 esac
 
 echo "==> Syncing source to $DEPLOY_HOST:~/$DEPLOY_DIR"
-"${SSH[@]}" "mkdir -p ~/$DEPLOY_DIR"
+# Start from a clean tree (keeping only the VM's .env): extracting over the old one would leave deleted files behind.
+"${SSH[@]}" "mkdir -p ~/$DEPLOY_DIR && cd ~/$DEPLOY_DIR && find . -mindepth 1 -maxdepth 1 ! -name .env -exec rm -rf {} +"
 tar czf - --exclude=node_modules --exclude=dist --exclude=.env --exclude=.env.deploy --exclude=data --exclude='*.db*' --exclude=.git . \
   | "${SSH[@]}" "tar xzf - -C ~/$DEPLOY_DIR"
 

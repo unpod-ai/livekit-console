@@ -19,6 +19,19 @@ async function adminToken(): Promise<string> {
   return at.toJwt();
 }
 
+// Twirp answers with proto field names (snake_case) and every default value; the rest of the app uses camelCase.
+// Keys of user-defined maps (attributes, headers) are data, so they are left exactly as stored.
+const MAP_FIELDS = new Set(['attributes', 'headers', 'headers_to_attributes', 'attributes_to_headers', 'participant_attributes']);
+const camel = (k: string): string => k.replace(/_([a-z0-9])/g, (_, c: string) => c.toUpperCase());
+
+export function camelize(v: unknown, inMap = false): unknown {
+  if (Array.isArray(v)) return v.map((x) => camelize(x, inMap));
+  if (v && typeof v === 'object') {
+    return Object.fromEntries(Object.entries(v).map(([k, x]) => [inMap ? k : camel(k), camelize(x, inMap || MAP_FIELDS.has(k))]));
+  }
+  return v;
+}
+
 export async function twirp(service: Service, method: string, body: unknown): Promise<unknown> {
   const res = await fetch(`${config.httpUrl}/twirp/${SERVICES[service]}/${method}`, {
     method: 'POST',
@@ -27,5 +40,5 @@ export async function twirp(service: Service, method: string, body: unknown): Pr
   });
   const data = (await res.json().catch(() => ({}))) as { msg?: string };
   if (!res.ok) throw new TwirpError(data.msg ?? res.statusText, res.status);
-  return data;
+  return camelize(data);
 }
