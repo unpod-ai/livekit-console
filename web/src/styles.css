@@ -220,3 +220,10 @@ kbd { font: 500 11px var(--mono); background: var(--surface-3); border: 1px soli
   .shell .nav-group, .shell .nav-label, .shell .brand-text { display: none; }
   .page { padding: 0 14px 32px; }
 }
+
+a.kpi.link { display: block; transition: border-color 0.15s, background 0.15s; }
+a.kpi.link:hover { border-color: var(--accent); background: var(--surface-2); }
+a.rowlink { color: var(--text); text-decoration: none; }
+a.rowlink:hover { color: var(--accent); text-decoration: underline; }
+a.badge { text-decoration: none; }
+a.badge:hover { border-color: var(--accent); color: var(--accent); }

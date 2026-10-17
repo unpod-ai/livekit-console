@@ -20,7 +20,7 @@ export function Overview() {
   const online = (rooms.data ?? []).reduce((n, r) => n + (r.numParticipants ?? 0), 0);
 
   const cols: Col<Json>[] = [
-    { key: 'room', header: 'Room', cell: (s) => s.room_name },
+    { key: 'room', header: 'Room', cell: (s) => <Link className="rowlink" to={`/sessions/${s.room_sid}`} onClick={(e) => e.stopPropagation()}>{s.room_name}</Link> },
     { key: 'start', header: 'Started', cell: (s) => fromMs(s.started_at) },
     { key: 'dur', header: 'Duration', cell: (s) => durationMs(s.started_at, s.ended_at) },
     { key: 'feat', header: 'Features', cell: (s) => <div className="badges">{!!s.has_agent && <Badge tone="info">Agents</Badge>}{!!s.has_sip && <Badge>SIP</Badge>}{!!s.has_egress && <Badge>Egress</Badge>}</div> },
@@ -33,9 +33,9 @@ export function Overview() {
     <>
       <PageHeader crumbs={[{ label: 'Project' }, { label: 'Overview' }]} title="Overview" sub="Live state of your self-hosted LiveKit server" />
       <Kpis>
-        <Kpi label="Active rooms" value={rooms.data?.length ?? '…'} accent />
-        <Kpi label="Participants online" value={rooms.data ? online : '…'} />
-        <Kpi label="Active calls" value={active.data?.total ?? '…'} />
+        <Kpi label="Active rooms" value={rooms.data?.length ?? '…'} accent to="/rooms" />
+        <Kpi label="Participants online" value={rooms.data ? online : '…'} to="/rooms" />
+        <Kpi label="Active calls" value={active.data?.total ?? '…'} to="/telephony/calls?state=active" />
         <Kpi label="System status" value={<span style={{ fontSize: 15, display: 'inline-flex', alignItems: 'center', gap: 6 }}>{rooms.isLoading ? '…' : lkOk ? <><CheckCircle2 size={16} color="var(--ok)" />LiveKit reachable</> : <><AlertTriangle size={16} color="var(--bad)" />LiveKit unreachable</>}</span>}
           foot={collector.data ? (collector.data.lastEventAt ? `Last webhook ${relTime(collector.data.lastEventAt)}` : 'No webhooks received yet') : undefined} />
       </Kpis>
@@ -44,9 +44,9 @@ export function Overview() {
       )}
       <Panel title="Insights" actions={<RangeSelect value={hours} onChange={setHours} />}>
         <div className="kpis">
-          <Kpi label="Sessions served" value={i?.sessions?.toLocaleString() ?? '…'} />
-          <Kpi label="With agents" value={i?.sessionsWithAgents?.toLocaleString() ?? '…'} />
-          <Kpi label="With telephony" value={i?.sessionsWithTelephony?.toLocaleString() ?? '…'} />
+          <Kpi label="Sessions served" value={i?.sessions?.toLocaleString() ?? '…'} to="/sessions" />
+          <Kpi label="With agents" value={i?.sessionsWithAgents?.toLocaleString() ?? '…'} to="/sessions?feature=agents" />
+          <Kpi label="With telephony" value={i?.sessionsWithTelephony?.toLocaleString() ?? '…'} to="/sessions?feature=sip" />
           <Kpi label="Avg session duration" value={i ? fmtMs(i.avgSessionMs) : '…'} />
           <Kpi label="Agent session minutes" value={i?.agentSessionMinutes?.toLocaleString() ?? '…'} />
           <Kpi label="Participants" value={i?.participants?.toLocaleString() ?? '…'} />

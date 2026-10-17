@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { statSync } from 'node:fs';
 import { db } from './db.js';
+import { redactCredentials } from './twirp.js';
 
 export const history = Router();
 
@@ -79,11 +80,12 @@ history.get('/sessions/:sid', (req, res) => {
     res.status(404).json({ error: 'Session not found' });
     return;
   }
-  const participants = (db.prepare('SELECT * FROM participants WHERE room_sid = ? ORDER BY joined_at').all(req.params.sid) as any[]).map((p) => ({
-    ...p,
-    kind: kindName(p.kind),
-    attributes: JSON.parse(p.attributes || '{}'),
-  }));
+  const rawParticipants = db.prepare('SELECT * FROM participants WHERE room_sid = ? ORDER BY joined_at').all(req.params.sid) as any[];
+  const participants = rawParticipants.map((p) => ({ ...p, kind: kindName(p.kind), attributes: JSON.parse(p.attributes || '{}') }));
+  const calls = rawParticipants
+    .filter((p) => kindName(p.kind) === 'SIP')
+    .map((p) => sipCall({ ...p, room_name: session.room_name }))
+    .map(({ attributes: _a, ...c }) => c);
   const egress = (db.prepare('SELECT egress_id, status, started_at, ended_at, info FROM egress WHERE room_sid = ?').all(req.params.sid) as any[]).map(({ info, ...e }) => ({ ...e, status: egressStatus(e.status), destination: egressDestination(JSON.parse(info)), files: egressFiles(JSON.parse(info)) }));
   const events = db.prepare('SELECT id, ts, type, identity FROM events WHERE room_sid = ? ORDER BY ts').all(req.params.sid);
 
@@ -97,7 +99,7 @@ history.get('/sessions/:sid', (req, res) => {
   let n = 0;
   const timeline = edges.map(([t, d]) => ({ t, n: (n += d) }));
   const totalBytes = null; // bandwidth is only known to LiveKit Cloud's analytics pipeline, not exposed by the OSS server
-  res.json({ session, participants, egress, events, timeline, totalBytes });
+  res.json({ session, participants, calls, egress, events, timeline, totalBytes });
 });
 
 history.get('/sessions/:sid/participants/:psid', (req, res) => {
@@ -193,6 +195,21 @@ function egressFiles(info: any): { name: string; location: string; size: number 
 function egressType(info: any): string {
   return info.roomComposite ? 'Room composite' : info.participant ? 'Participant' : info.trackComposite ? 'Track composite' : info.track ? 'Track' : info.web ? 'Web' : 'Unknown';
 }
+
+history.get('/egress/:id', (req, res) => {
+  const row = db.prepare('SELECT egress_id, room_sid, room_name, status, started_at, ended_at, info FROM egress WHERE egress_id = ?').get(req.params.id) as any;
+  if (!row) {
+    res.status(404).json({ error: 'Egress not found in history' });
+    return;
+  }
+  const info = JSON.parse(row.info);
+  const events = (db.prepare(`SELECT id, ts, type FROM events WHERE type LIKE 'egress_%' AND payload LIKE ? ORDER BY ts`).all(`%"egressId":"${req.params.id.replace(/[^A-Za-z0-9_-]/g, '')}"%`)) as any[];
+  res.json({
+    egress: { egressId: row.egress_id, roomSid: row.room_sid, roomName: row.room_name, status: egressStatus(row.status), startedAt: row.started_at, endedAt: row.ended_at, type: egressType(info), destination: egressDestination(info), files: egressFiles(info), error: info.error || null },
+    request: redactCredentials(info.roomComposite ?? info.participant ?? info.trackComposite ?? info.track ?? info.web ?? {}),
+    events,
+  });
+});
 
 history.get('/insights', (req, res) => {
   const hours = intParam(req.query.hours, 168, 24 * 90);

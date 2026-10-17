@@ -5,7 +5,7 @@ import { AppShell } from './components/AppShell';
 import { Agents } from './pages/Agents';
 import { CallDetail, Calls } from './pages/Calls';
 import { Dispatch } from './pages/Dispatch';
-import { Egress } from './pages/Egress';
+import { Egress, EgressDetail } from './pages/Egress';
 import { Ingress } from './pages/Ingress';
 import { Login } from './pages/Login';
 import { Overview } from './pages/Overview';
@@ -42,6 +42,7 @@ export function App() {
         <Route path="telephony/phone-numbers" element={<PhoneNumbers />} />
         <Route path="telephony/trunks" element={<Trunks />} />
         <Route path="egress" element={<Egress />} />
+        <Route path="egress/:id" element={<EgressDetail />} />
         <Route path="ingress" element={<Ingress />} />
         <Route path="tokens" element={<Tokens />} />
         <Route path="settings" element={<Settings />} />

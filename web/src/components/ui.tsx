@@ -32,14 +32,17 @@ export function PageHeader({ crumbs, title, sub, actions, refresh = true }: { cr
 
 export const Help = ({ text }: { text: string }) => <HelpCircle size={12} aria-label={text} role="img"><title>{text}</title></HelpCircle>;
 
-export function Kpi({ label, value, unit, foot, help, accent }: { label: string; value: ReactNode; unit?: string; foot?: ReactNode; help?: string; accent?: boolean }) {
-  return (
-    <div className={`kpi ${accent ? 'accent' : ''}`}>
+export function Kpi({ label, value, unit, foot, help, accent, to }: { label: string; value: ReactNode; unit?: string; foot?: ReactNode; help?: string; accent?: boolean; to?: string }) {
+  const body = (
+    <>
       <div className="kpi-label">{label}{help && <Help text={help} />}</div>
       <div className="kpi-value">{value}{unit && <small>{unit}</small>}</div>
       {foot && <div className="kpi-foot">{foot}</div>}
-    </div>
+    </>
   );
+  return to
+    ? <Link to={to} className={`kpi link ${accent ? 'accent' : ''}`}>{body}</Link>
+    : <div className={`kpi ${accent ? 'accent' : ''}`}>{body}</div>;
 }
 
 export const Kpis = ({ children }: { children: ReactNode }) => <div className="kpis">{children}</div>;

@@ -26,6 +26,7 @@ export function Rooms() {
     { key: 'parts', header: 'Participants', cell: (r) => r.numParticipants ?? 0, sort: (r) => r.numParticipants ?? 0 },
     { key: 'pubs', header: 'Publishers', hidden: true, cell: (r) => r.numPublishers ?? 0 },
     { key: 'created', header: 'Created', cell: (r) => fromSeconds(r.creationTime), sort: (r) => Number(r.creationTime) },
+    { key: 'session', header: 'Session', cell: (r) => <Link className="rowlink" to={`/sessions/${r.sid}`} onClick={(e) => e.stopPropagation()}>History</Link> },
     { key: 'timeout', header: 'Empty timeout', hidden: true, cell: (r) => `${r.emptyTimeout ?? 0}s` },
   ];
   return (
@@ -69,7 +70,7 @@ export function RoomDetail() {
   ];
   return (
     <>
-      <PageHeader crumbs={[{ label: 'Project' }, { label: 'Live rooms', to: '/rooms' }, { label: name }]} title={name} sub="Live participants and agent dispatch" />
+      <PageHeader crumbs={[{ label: 'Project' }, { label: 'Live rooms', to: '/rooms' }, { label: name }]} title={name} sub="Live participants and agent dispatch" actions={<Link className="btn secondary" to={`/sessions?q=${encodeURIComponent(name)}`}>Session history</Link>} />
       {parts.error && <Alert kind="bad">{(parts.error as Error).message}</Alert>}
       <Panel title={`Participants (${parts.data?.length ?? 0})`}>
         <DataTable rows={parts.data} cols={cols} rowKey={(p) => p.sid} loading={parts.isLoading} pageSize={false} empty={{ title: 'Nobody is in this room' }}

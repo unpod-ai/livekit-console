@@ -1,20 +1,25 @@
 import { useMemo, useState } from 'react';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { Plus, Square } from 'lucide-react';
 import { lk, type Json } from '../lib/api';
 import { useApi, useLkList, useMutate } from '../lib/hooks';
+import { useInitialQuery, useTab } from '../lib/useTab';
 import { useConfirm } from '../lib/confirm';
-import { durationMs, fmtBytes, fmtMs, fromMs } from '../lib/format';
+import { durationMs, fmtBytes, fmtMs, fromMs, fromMsPrecise } from '../lib/format';
 import { egressDestination, egressFiles, isUrl, type EgressFile } from '../lib/egress';
-import { Recording } from '../components/Recording';
 import { Drawer } from '../components/Drawer';
 import { JsonEditor, parseJson } from '../components/JsonEditor';
 import { DataTable, type Col } from '../components/DataTable';
-import { Alert, CopyButton, Field, KV, PageHeader, Panel, StatusBadge } from '../components/ui';
+import { Recording } from '../components/Recording';
+import { Alert, CopyButton, Field, KV, PageHeader, Panel, StatusBadge, Tabs } from '../components/ui';
 
-type Row = { id: string; room: string; status: string; started: number | null; ended: number | null; type: string; dest: string; files: EgressFile[]; error?: string; raw?: Json };
+type Row = { id: string; room: string; roomSid?: string; status: string; started: number | null; ended: number | null; type: string; dest: string; files: EgressFile[]; error?: string; raw?: Json };
 
 const lkType = (e: Json) => (e.roomComposite ? 'Room composite' : e.participant ? 'Participant' : e.trackComposite ? 'Track composite' : e.track ? 'Track' : e.web ? 'Web' : 'Unknown');
 const nsToMs = (v?: string) => (Number(v) ? Math.round(Number(v) / 1e6) : null);
+const requestOf = (e: Json) => e.roomComposite ?? e.participant ?? e.trackComposite ?? e.track ?? e.web ?? {};
+const active = (s: string) => /ACTIVE|STARTING/.test(s);
+const sessionLink = (r: { roomSid?: string; room: string }) => (r.roomSid ? `/sessions/${r.roomSid}` : `/sessions?q=${encodeURIComponent(r.room)}`);
 
 const TEMPLATES: Record<string, { method: string; label: string; body: Json }> = {
   roomComposite: { method: 'StartRoomCompositeEgress', label: 'Room composite (record a whole room)', body: { roomName: 'room-name', layout: 'speaker', audioOnly: true, fileOutputs: [{ filepath: '{room_name}-{time}.mp4' }] } },
@@ -48,72 +53,105 @@ function StartDrawer({ onClose }: { onClose: () => void }) {
 }
 
 export function Egress() {
+  const navigate = useNavigate();
+  const initialQuery = useInitialQuery();
   const live = useLkList('egress', 'ListEgress', { live: true });
   const hist = useApi<Json[]>(['egress-history'], '/history/egress?hours=720');
   const [starting, setStarting] = useState(false);
-  const [detail, setDetail] = useState<Row | null>(null);
   const confirm = useConfirm();
   const stop = useMutate((id: string) => lk('egress', 'StopEgress', { egressId: id }), { invalidate: [['lk', 'egress'], ['egress-history']], success: 'Egress stopping' });
 
   // LiveKit's own list is authoritative for what it still retains; the collector adds older history.
   const rows = useMemo<Row[]>(() => {
     const m = new Map<string, Row>();
-    (hist.data ?? []).forEach((h) => m.set(h.egress_id, { id: h.egress_id, room: h.room_name ?? '', status: h.status, started: h.started_at, ended: h.ended_at, type: h.type, dest: h.destination ?? '—', files: h.files ?? [] }));
-    (live.data ?? []).forEach((e) => m.set(e.egressId, { id: e.egressId, room: e.roomName ?? '', status: e.status, started: nsToMs(e.startedAt), ended: nsToMs(e.endedAt), type: lkType(e), dest: egressDestination(e), files: egressFiles(e), error: e.error || undefined, raw: e }));
+    (hist.data ?? []).forEach((h) => m.set(h.egress_id, { id: h.egress_id, room: h.room_name ?? '', roomSid: h.room_sid ?? undefined, status: h.status, started: h.started_at, ended: h.ended_at, type: h.type, dest: h.destination ?? '—', files: h.files ?? [] }));
+    (live.data ?? []).forEach((e) => m.set(e.egressId, { id: e.egressId, room: e.roomName ?? '', roomSid: e.roomId || undefined, status: e.status, started: nsToMs(e.startedAt), ended: nsToMs(e.endedAt), type: lkType(e), dest: egressDestination(e), files: egressFiles(e), error: e.error || undefined, raw: e }));
     return [...m.values()].sort((a, b) => (b.started ?? 0) - (a.started ?? 0));
   }, [live.data, hist.data]);
 
   const cols: Col<Row>[] = [
-    { key: 'id', header: 'Egress ID', cell: (e) => <span className="mono">{e.id}</span>, text: (e) => e.id },
+    { key: 'id', header: 'Egress ID', cell: (e) => <Link className="rowlink mono" to={`/egress/${e.id}`} onClick={(ev) => ev.stopPropagation()}>{e.id}</Link>, text: (e) => e.id },
     { key: 'start', header: 'Started at', cell: (e) => fromMs(e.started), sort: (e) => e.started ?? 0 },
     { key: 'dur', header: 'Duration', cell: (e) => durationMs(e.started, e.ended) },
     { key: 'status', header: 'Status', cell: (e) => <StatusBadge status={e.status} />, text: (e) => e.status },
     { key: 'type', header: 'Type', cell: (e) => e.type, text: (e) => e.type },
-    { key: 'room', header: 'Source (room)', cell: (e) => e.room || '—', text: (e) => e.room },
+    { key: 'room', header: 'Source (session)', cell: (e) => (e.room ? <Link className="rowlink" to={sessionLink(e)} onClick={(ev) => ev.stopPropagation()}>{e.room}</Link> : '—'), text: (e) => e.room },
     { key: 'dest', header: 'Destination', cell: (e) => <span className="mono">{e.dest}</span>, text: (e) => e.dest },
-    { key: 'rec', header: 'Recording', cell: (e) => <Recording file={e.files[0]} />, text: (e) => e.files.map((f) => `${f.name} ${f.location}`).join(' ') },
+    { key: 'rec', header: 'Recording', cell: (e) => <span onClick={(ev) => ev.stopPropagation()}><Recording file={e.files[0]} /></span>, text: (e) => e.files.map((f) => `${f.name} ${f.location}`).join(' ') },
     { key: 'size', header: 'Size', hidden: true, cell: (e) => (e.files[0]?.size ? fmtBytes(e.files[0].size) : '—') },
   ];
-  const active = (s: string) => /ACTIVE|STARTING/.test(s);
   return (
     <>
       <PageHeader crumbs={[{ label: 'Media' }, { label: 'Egress' }]} title="Egress" sub="Recordings and streams" actions={<button className="btn" onClick={() => setStarting(true)}><Plus size={15} />Start egress</button>} />
       <Panel>
-        <DataTable rows={rows} cols={cols} rowKey={(e) => e.id} loading={live.isLoading} error={live.error} storageKey="egress" onRow={setDetail} empty={{ title: 'No egress', hint: 'Start a recording, or egress appears here when a room is recorded.' }}
+        <DataTable rows={rows} cols={cols} rowKey={(e) => e.id} loading={live.isLoading} error={live.error} storageKey="egress" initialQuery={initialQuery} onRow={(e) => navigate(`/egress/${e.id}`)} empty={{ title: 'No egress', hint: 'Start a recording, or egress appears here when a room is recorded.' }}
           rowActions={(e) => active(e.status) ? <button className="btn danger sm" onClick={async () => (await confirm({ title: 'Stop egress?', message: `${e.id} will finish and upload what it has recorded.`, confirmLabel: 'Stop', danger: true })) && stop.mutate(e.id)}><Square size={12} />Stop</button> : null} />
       </Panel>
       {starting && <StartDrawer onClose={() => setStarting(false)} />}
-      <Drawer open={!!detail} wide title={detail?.id ?? ''} subtitle={detail ? `${detail.type} · ${detail.room || 'no room'}` : ''} onClose={() => setDetail(null)}>
-        {detail && (
-          <>
-            <Panel><KV items={[['Status', <StatusBadge status={detail.status} />], ['Type', detail.type], ['Source (room)', detail.room || '—'], ['Destination', <span className="mono">{detail.dest}</span>], ['Started', fromMs(detail.started)], ['Duration', durationMs(detail.started, detail.ended)]]} /></Panel>
-            {detail.error && <Alert kind="bad">{detail.error}</Alert>}
-            <Panel title={`Recording files (${detail.files.length})`}>
-              {detail.files.length === 0
-                ? <div className="panel-body muted">{/ACTIVE|STARTING/.test(detail.status) ? 'The file location appears when the egress finishes.' : 'No output files were reported for this egress.'}</div>
-                : detail.files.map((f, i) => (
-                  <div key={i} className="panel-body" style={{ borderTop: i ? '1px solid var(--border)' : 0 }}>
-                    <div className="mono" style={{ overflowWrap: 'anywhere' }}>{f.location || f.name}</div>
-                    <div className="muted" style={{ marginTop: 4, display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
-                      {f.size != null && <span>{fmtBytes(f.size)}</span>}
-                      {f.durationMs != null && <span>{fmtMs(f.durationMs)}</span>}
-                      <CopyButton text={f.location || f.name} label="Copy location" />
-                      {isUrl(f.location) && <a href={f.location} target="_blank" rel="noopener noreferrer">Open</a>}
-                    </div>
+    </>
+  );
+}
+
+export function EgressDetail() {
+  const { id = '' } = useParams();
+  const [tab, setTab] = useTab('overview', ['overview', 'events'] as const);
+  // LiveKit keeps the full record for recent egresses; fall back to what the webhook collector stored.
+  const fromLk = useLkList('egress', 'ListEgress', { body: { egressId: id }, live: true });
+  const stored = useApi<Json>(['egress-stored', id], `/history/egress/${id}`, { live: false });
+  const stop = useMutate(() => lk('egress', 'StopEgress', { egressId: id }), { invalidate: [['lk', 'egress'], ['egress-history']], success: 'Egress stopping' });
+  const confirm = useConfirm();
+
+  const lkRaw = fromLk.data?.[0];
+  const st = stored.data?.egress;
+  const row: Row | null = lkRaw
+    ? { id, room: lkRaw.roomName ?? '', roomSid: lkRaw.roomId || st?.roomSid, status: lkRaw.status, started: nsToMs(lkRaw.startedAt), ended: nsToMs(lkRaw.endedAt), type: lkType(lkRaw), dest: egressDestination(lkRaw), files: egressFiles(lkRaw), error: lkRaw.error || undefined, raw: lkRaw }
+    : st ? { id, room: st.roomName ?? '', roomSid: st.roomSid ?? undefined, status: st.status, started: st.startedAt, ended: st.endedAt, type: st.type, dest: st.destination, files: st.files ?? [], error: st.error ?? undefined } : null;
+  const request = lkRaw ? requestOf(lkRaw) : stored.data?.request;
+  const loading = fromLk.isLoading || (stored.isLoading && !row);
+
+  return (
+    <>
+      <PageHeader crumbs={[{ label: 'Media' }, { label: 'Egress', to: '/egress' }, { label: id }]} title={id} sub={row && <StatusBadge status={row.status} />}
+        actions={row && active(row.status) ? <button className="btn danger" onClick={async () => (await confirm({ title: 'Stop egress?', message: `${id} will finish and upload what it has recorded.`, confirmLabel: 'Stop', danger: true })) && stop.mutate()}><Square size={13} />Stop egress</button> : undefined} />
+      {!row && !loading && <Alert kind="bad">This egress is no longer retained by LiveKit and was not seen by the collector.</Alert>}
+      <Tabs value={tab} onChange={setTab} tabs={[{ id: 'overview', label: 'Egress overview' }, { id: 'events', label: 'Events', count: stored.data?.events?.length }]} />
+      {row && tab === 'overview' && (
+        <>
+          <Panel><KV items={[
+            ['Egress ID', <span className="mono">{row.id}</span>], ['Started at', fromMs(row.started)], ['Ended at', fromMs(row.ended)], ['Duration', durationMs(row.started, row.ended)],
+            ['Type', row.type], ['Status', <StatusBadge status={row.status} />],
+            ['Source (session)', row.room ? <Link to={sessionLink(row)}>{row.room}</Link> : '—'], ['Destination', <span className="mono">{row.dest}</span>],
+          ]} /></Panel>
+          {row.error && <Alert kind="bad">{row.error}</Alert>}
+          <Panel title={`Destinations (${row.files.length})`}>
+            {row.files.length === 0
+              ? <div className="panel-body muted">{active(row.status) ? 'The file location appears when the egress finishes.' : 'No output files were reported for this egress.'}</div>
+              : row.files.map((f, i) => (
+                <div key={i} className="panel-body" style={{ borderTop: i ? '1px solid var(--border)' : 0 }}>
+                  <div className="kv" style={{ margin: -14 }}>
+                    <div><div className="k">Target</div><div className="v mono">{f.name || '—'}</div></div>
+                    <div><div className="k">URL</div><div className="v mono">{f.location || '—'} {f.location && <CopyButton text={f.location} label="Copy URL" />} {isUrl(f.location) && <a href={f.location} target="_blank" rel="noopener noreferrer">Open</a>}</div></div>
+                    <div><div className="k">Size / duration</div><div className="v">{f.size != null ? fmtBytes(f.size) : '—'} · {f.durationMs != null ? fmtMs(f.durationMs) : '—'}</div></div>
                   </div>
-                ))}
-            </Panel>
-            {detail.files.some((f) => /^https?:\/\/[^/]+\.s3[.-]/i.test(f.location) || f.name.includes('private')) && (
-              <Alert kind="info">Recordings in a private bucket cannot be opened with this plain link. Download them with your storage tooling, or generate a signed URL.</Alert>
-            )}
-            {detail.raw && (
-              <Panel title="Details" actions={<CopyButton text={JSON.stringify(detail.raw, null, 2)} label="Copy JSON" />}>
-                <pre className="mono" style={{ whiteSpace: 'pre-wrap', margin: 0, padding: 14 }}>{JSON.stringify(detail.raw, null, 2)}</pre>
-              </Panel>
-            )}
-          </>
-        )}
-      </Drawer>
+                </div>
+              ))}
+          </Panel>
+          {row.files.some((f) => /\.s3[.-]/i.test(f.location) || f.name.includes('private')) && (
+            <Alert kind="info">Recordings in a private bucket cannot be opened with this plain link. Download them with your storage tooling, or generate a signed URL.</Alert>
+          )}
+          <Panel title="Request" actions={request && <CopyButton text={JSON.stringify(request, null, 2)} label="Copy request" />}>
+            {request && Object.keys(request).length
+              ? <pre className="mono" style={{ whiteSpace: 'pre-wrap', margin: 0, padding: 14 }}>{JSON.stringify(request, null, 2)}</pre>
+              : <div className="panel-body muted">The request is not available for this egress.</div>}
+          </Panel>
+        </>
+      )}
+      {tab === 'events' && (
+        <Panel>
+          <DataTable rows={(stored.data?.events ?? []) as Json[]} rowKey={(e) => e.id} pageSize={50} empty={{ title: 'No events recorded', hint: 'Only egress events received since webhooks were enabled are stored.' }}
+            cols={[{ key: 't', header: 'Timestamp', cell: (e) => <span className="mono">{fromMsPrecise(e.ts)}</span>, sort: (e) => e.ts }, { key: 'e', header: 'Event', cell: (e) => <span className="mono">{e.type}</span>, text: (e) => e.type }]} />
+        </Panel>
+      )}
     </>
   );
 }

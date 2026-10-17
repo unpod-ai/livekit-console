@@ -26,16 +26,17 @@ type Props<T> = {
   empty?: { title: string; hint?: ReactNode };
   toolbar?: ReactNode;
   footer?: ReactNode;
+  initialQuery?: string;
 };
 
 /** Dense table with search, sortable headers, column visibility (remembered) and client paging. */
-export function DataTable<T>({ rows, cols, rowKey, onRow, rowActions, loading, error, search = true, pageSize = 25, storageKey, empty, toolbar, footer }: Props<T>) {
+export function DataTable<T>({ rows, cols, rowKey, onRow, rowActions, loading, error, search = true, pageSize = 25, storageKey, empty, toolbar, footer, initialQuery }: Props<T>) {
   const lsKey = storageKey ? `lkc.cols.${storageKey}` : null;
   const [hidden, setHidden] = useState<Record<string, boolean>>(() => {
     const saved = lsKey ? JSON.parse(localStorage.getItem(lsKey) ?? 'null') : null;
     return saved ?? Object.fromEntries(cols.filter((c) => c.hidden).map((c) => [c.key, true]));
   });
-  const [q, setQ] = useState('');
+  const [q, setQ] = useState(initialQuery ?? '');
   const [sort, setSort] = useState<{ key: string; dir: 1 | -1 } | null>(null);
   const [page, setPage] = useState(0);
   const [menu, setMenu] = useState(false);

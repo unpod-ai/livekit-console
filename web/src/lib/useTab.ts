@@ -7,3 +7,6 @@ export function useTab<T extends string>(dflt: T, valid: readonly T[]): [T, (t: 
   const tab = raw && valid.includes(raw) ? raw : dflt;
   return [tab, (t) => setParams(t === dflt ? {} : { tab: t }, { replace: true })];
 }
+
+/** Initial value for a page's search box, so links like /telephony/trunks?q=ST_123 land pre-filtered. */
+export const useInitialQuery = (): string => useSearchParams()[0].get('q') ?? '';

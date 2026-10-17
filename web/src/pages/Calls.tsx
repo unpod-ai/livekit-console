@@ -1,9 +1,9 @@
 import { useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ArrowDownLeft, ArrowUpRight, Info } from 'lucide-react';
 import { type Json } from '../lib/api';
 import { useApi } from '../lib/hooks';
-import { useTab } from '../lib/useTab';
+import { useInitialQuery, useTab } from '../lib/useTab';
 import { fromMs, fromMsPrecise, durationMs, fmtMs } from '../lib/format';
 import { DataTable, type Col } from '../components/DataTable';
 import { Alert, Badge, KV, Kpi, Kpis, PageHeader, Panel, RangeSelect, ServerPager, StatusBadge, Tabs } from '../components/ui';
@@ -15,16 +15,17 @@ export const DirectionBadge = ({ d }: { d: string | null }) =>
 export function Calls() {
   const navigate = useNavigate();
   const [hours, setHours] = useState(24);
-  const [q, setQ] = useState('');
+  const [q, setQ] = useState(useInitialQuery());
   const [direction, setDirection] = useState('');
-  const [state, setState] = useState('');
+  const [params] = useSearchParams();
+  const [state, setState] = useState(params.get('state') ?? '');
   const [offset, setOffset] = useState(0);
   const res = useApi<Json>(['calls', hours, q, direction, state, offset], `/history/calls?hours=${hours}&q=${encodeURIComponent(q)}&direction=${direction}&state=${state}&limit=${LIMIT}&offset=${offset}`);
   const reset = <T,>(f: (v: T) => void) => (v: T) => { f(v); setOffset(0); };
   const d = res.data;
 
   const cols: Col<Json>[] = [
-    { key: 'id', header: 'Call ID', cell: (c) => <span className="mono">{c.callId ?? c.id}</span> },
+    { key: 'id', header: 'Call ID', cell: (c) => <Link className="rowlink mono" to={`/telephony/calls/${c.id}`} onClick={(e) => e.stopPropagation()}>{c.callId ?? c.id}</Link> },
     { key: 'from', header: 'From', cell: (c) => c.from ?? '—' },
     { key: 'to', header: 'To', cell: (c) => c.to ?? '—' },
     { key: 'dir', header: 'Direction', cell: (c) => <DirectionBadge d={c.direction} /> },
@@ -75,7 +76,7 @@ export function CallDetail() {
         <>
           <Panel title="Call overview"><KV items={[['Call ID', <span className="mono">{c.callId ?? '—'}</span>], ['Started at', fromMs(c.joinedAt)], ['Ended at', fromMs(c.leftAt)], ['Duration', durationMs(c.joinedAt, c.leftAt)], ['Session', <Link to={`/sessions/${c.roomSid}`}>{c.roomName}</Link>], ['Status', <StatusBadge status={c.state} />]]} /></Panel>
           <div className="grid-2">
-            <Panel title="SIP details"><KV items={[['Direction', <DirectionBadge d={c.direction} />], ['Trunk ID', <span className="mono">{c.trunkId ?? '—'}</span>], ['Dispatch rule', <span className="mono">{c.ruleId ?? '—'}</span>], ['Last call status', c.callStatus ?? '—']]} /></Panel>
+            <Panel title="SIP details"><KV items={[['Direction', <DirectionBadge d={c.direction} />], ['Trunk ID', c.trunkId ? <Link className="mono" to={`/telephony/trunks?q=${c.trunkId}`}>{c.trunkId}</Link> : '—'], ['Dispatch rule', c.ruleId ? <Link className="mono" to={`/telephony/dispatch?q=${c.ruleId}`}>{c.ruleId}</Link> : '—'], ['Last call status', c.callStatus ?? '—']]} /></Panel>
             <Panel title="Call details"><KV items={[['From number', c.from ?? '—'], ['To number', c.to ?? '—'], ['Participant', <Link to={`/sessions/${c.roomSid}/participants/${c.id}`} className="mono">{c.identity}</Link>]]} /></Panel>
           </div>
           <Panel title={`SIP attributes (${attrs.length})`}>

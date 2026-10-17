@@ -2,7 +2,9 @@ import { useState } from 'react';
 import { Plus, Pencil, Trash2 } from 'lucide-react';
 import { lk, type Json } from '../lib/api';
 import { joinList, splitList, useLkList, useMutate } from '../lib/hooks';
+import { Link } from 'react-router-dom';
 import { useConfirm } from '../lib/confirm';
+import { useInitialQuery } from '../lib/useTab';
 import { Drawer } from '../components/Drawer';
 import { JsonEditor, parseJson } from '../components/JsonEditor';
 import { DataTable, type Col } from '../components/DataTable';
@@ -121,6 +123,8 @@ function TrunkDrawer({ dir: initialDir, trunk, onClose }: { dir: Dir; trunk: Jso
 export function Trunks() {
   const inbound = useLkList('sip', METHODS.inbound.list, { live: true });
   const outbound = useLkList('sip', METHODS.outbound.list, { live: true });
+  const rules = useLkList('sip', 'ListSIPDispatchRule');
+  const initialQuery = useInitialQuery();
   const [tab, setTab] = useState<Dir>('inbound');
   const [open, setOpen] = useState<{ dir: Dir; trunk: Json | 'new' } | null>(null);
   const confirm = useConfirm();
@@ -134,6 +138,7 @@ export function Trunks() {
     ...(tab === 'outbound'
       ? [{ key: 'address', header: 'SIP URI', cell: (t: Json) => <span className="mono">{t.address}</span>, text: (t: Json) => t.address ?? '' }]
       : [{ key: 'addrs', header: 'Allowed addresses', cell: (t: Json) => joinList(t.allowedAddresses) || <span className="muted">All</span>, text: (t: Json) => joinList(t.allowedAddresses), hidden: true }]),
+    { key: 'links', header: 'Related', cell: (t) => { const n = (rules.data ?? []).filter((r) => (r.trunkIds ?? []).includes(t.sipTrunkId)).length; return <span className="badges" onClick={(e) => e.stopPropagation()}>{tab === 'inbound' && <Link className="badge" to={`/telephony/dispatch?q=${t.sipTrunkId}`}>{n} rule{n === 1 ? '' : 's'}</Link>}<Link className="badge" to={`/telephony/calls?q=${t.sipTrunkId}`}>Calls</Link></span>; } },
     { key: 'enc', header: 'Media encryption', hidden: true, cell: (t) => <Badge>{(t.mediaEncryption ?? 'SIP_MEDIA_ENCRYPT_DISABLE').replace('SIP_MEDIA_ENCRYPT_', '').toLowerCase()}</Badge> },
     { key: 'auth', header: 'Auth', hidden: true, cell: (t) => (t.authUsername ? <Badge tone="ok">Configured</Badge> : '—') },
   ];
@@ -144,7 +149,7 @@ export function Trunks() {
         actions={<button className="btn" onClick={() => setOpen({ dir: tab, trunk: 'new' })}><Plus size={15} />Create new trunk</button>} />
       <Tabs value={tab} onChange={setTab} tabs={[{ id: 'inbound', label: 'Inbound', count: inbound.data?.length }, { id: 'outbound', label: 'Outbound', count: outbound.data?.length }]} />
       <Panel>
-        <DataTable rows={q.data} cols={cols} rowKey={(t) => t.sipTrunkId} loading={q.isLoading} error={q.error} storageKey={`trunks-${tab}`} onRow={(t) => setOpen({ dir: tab, trunk: t })}
+        <DataTable rows={q.data} cols={cols} rowKey={(t) => t.sipTrunkId} loading={q.isLoading} error={q.error} storageKey={`trunks-${tab}`} initialQuery={initialQuery} onRow={(t) => setOpen({ dir: tab, trunk: t })}
           empty={{ title: `No ${tab} trunks`, hint: 'Create a trunk to connect a carrier.' }}
           rowActions={(t) => (
             <>
