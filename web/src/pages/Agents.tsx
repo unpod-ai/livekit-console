@@ -10,7 +10,7 @@ import { useRange } from '../lib/range';
 import { DataTable, type Col } from '../components/DataTable';
 import { Alert, Badge, Kpi, Kpis, PageHeader, Panel } from '../components/ui';
 
-export type Worker = { url: string; ok: boolean; agentName: string | null; workerType: string | null; load: number | null; activeJobs: number | null; sdkVersion: string | null; projectType: string | null; latencyMs: number | null; checkedAt: number; error: string | null; uptimePct: number | null; avgLoadPct: number | null; firstSeenAt: number | null; lastOkAt: number | null; lastCheckedAt: number | null; samples: number };
+export type Worker = { url: string; ok: boolean; agentName: string | null; workerId: string | null; workerType: string | null; load: number | null; activeJobs: number | null; sdkVersion: string | null; projectType: string | null; latencyMs: number | null; checkedAt: number; error: string | null; uptimePct: number | null; avgLoadPct: number | null; firstSeenAt: number | null; lastOkAt: number | null; lastCheckedAt: number | null; samples: number };
 export type FormerWorker = Pick<Worker, 'url' | 'agentName' | 'workerType' | 'sdkVersion' | 'projectType' | 'uptimePct' | 'avgLoadPct' | 'firstSeenAt' | 'lastOkAt' | 'lastCheckedAt' | 'samples'>;
 
 const JOB_TYPES: Record<string, string> = { JT_ROOM: 'Room', JT_PUBLISHER: 'Publisher', JT_PARTICIPANT: 'Participant' };
@@ -30,6 +30,7 @@ export function WorkersPanel({ workers, former, agent }: { workers: Worker[]; fo
   const cols: Col<WorkerRow>[] = [
     { key: 'status', header: 'Status', cell: (w) => (w.ok ? <Badge tone="ok" dot>Running</Badge> : <Badge tone="bad" dot>{w.retired ? 'Dead · removed' : 'Dead'}</Badge>), sort: (w) => Number(w.ok), text: (w) => (w.ok ? 'running' : 'dead') },
     { key: 'agent', header: 'Agent', cell: (w) => (w.agentName ? <Link className="rowlink" to={`/agents/${encodeURIComponent(w.agentName)}`}><b>{w.agentName}</b></Link> : '—'), text: (w) => w.agentName ?? '', sort: (w) => w.agentName ?? '' },
+    { key: 'id', header: 'Worker ID', cell: (w) => (('workerId' in w && w.workerId) ? <span className="mono">{w.workerId}</span> : <span className="muted">—</span>), text: (w) => ('workerId' in w && w.workerId) || '' },
     { key: 'url', header: 'Endpoint', cell: (w) => <span className="mono">{w.url}</span>, text: (w) => w.url },
     { key: 'ping', header: 'Last ping', cell: (w) => (w.lastCheckedAt ? <span title={fromMs(w.lastCheckedAt)}>{relTime(w.lastCheckedAt)}</span> : '—'), sort: (w) => w.lastCheckedAt ?? 0 },
     { key: 'ok', header: 'Last healthy', cell: (w) => (w.lastOkAt ? <span title={fromMs(w.lastOkAt)}>{w.ok ? 'now' : relTime(w.lastOkAt)}</span> : 'Never'), sort: (w) => w.lastOkAt ?? 0 },
@@ -141,8 +142,6 @@ export function Agents() {
         <DataTable rows={rows} cols={cols} rowKey={(a) => a.name} loading={seen.isLoading || rules.isLoading} error={seen.error} storageKey="agents" initialQuery={initialQuery} onRow={(a) => navigate(`/agents/${encodeURIComponent(a.name)}`)}
           empty={{ title: 'No agents yet', hint: 'An agent shows up when its worker endpoint is configured, after it joins a session, or when a dispatch rule names it.' }} />
       </Panel>
-
-      <WorkersPanel workers={workers.data?.workers ?? []} former={workers.data?.former ?? []} />
 
       <Panel title="Session activity">
         <BarsChart data={insights.data?.agentSeries ?? []} series={[{ key: 'n', label: 'Agent sessions', color: PALETTE.cyan }]} bucketMs={insights.data?.bucketMs ?? 3600000} from={Date.now() - hours * 3600000} to={Date.now()} height={170} />

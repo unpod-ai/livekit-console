@@ -90,6 +90,7 @@ export function AgentDetail() {
           <Panel title="Worker status" actions={worker ? <Badge tone={worker.ok ? 'ok' : 'bad'} dot>{worker.ok ? 'Running' : 'Dead'}</Badge> : undefined}>
             {worker ? (
               <KV items={[
+                ['Worker ID', worker.workerId ? <span className="mono">{worker.workerId}</span> : <span className="muted" title="The worker's status server doesn't report its ID; it appears in the worker's startup log (AW_…)">Not reported by the worker</span>],
                 ['Endpoint', <span className="mono">{worker.url}</span>],
                 ['Agent name', name],
                 ['Job type', <span title="What one job is scoped to: JT_ROOM = one job per room (the agent handles the whole room); JT_PUBLISHER = one per publishing participant">{jobType(worker.workerType)}</span>],

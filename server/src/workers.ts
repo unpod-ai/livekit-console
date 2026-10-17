@@ -10,6 +10,7 @@ export type WorkerStatus = {
   url: string;
   ok: boolean;
   agentName: string | null;
+  workerId: string | null; // only when the worker's status server reports one
   workerType: string | null;
   load: number | null; // 0..1
   activeJobs: number | null;
@@ -23,18 +24,22 @@ export type WorkerStatus = {
 const TIMEOUT_MS = 3000;
 let latest: WorkerStatus[] = [];
 const knownNames = new Map<string, string>(); // so a worker that goes down keeps its agent name
+const knownIds = new Map<string, string>();
 
 const insert = db.prepare('INSERT INTO agent_worker_samples (url, agent_name, at, ok, load, active_jobs, latency_ms, worker_type, sdk_version, project_type) VALUES (?,?,?,?,?,?,?,?,?,?)');
 
 async function probe(url: string): Promise<WorkerStatus> {
   const started = Date.now();
-  const status: WorkerStatus = { url, ok: false, agentName: knownNames.get(url) ?? null, workerType: null, load: null, activeJobs: null, sdkVersion: null, projectType: null, latencyMs: null, checkedAt: started, error: null };
+  const status: WorkerStatus = { url, ok: false, agentName: knownNames.get(url) ?? null, workerId: knownIds.get(url) ?? null, workerType: null, load: null, activeJobs: null, sdkVersion: null, projectType: null, latencyMs: null, checkedAt: started, error: null };
   try {
     const [health, info] = await Promise.all([fetch(`${url}/`, { signal: AbortSignal.timeout(TIMEOUT_MS) }), fetch(`${url}/worker`, { signal: AbortSignal.timeout(TIMEOUT_MS) })]);
     const j = info.ok ? ((await info.json()) as Record<string, unknown>) : null;
     if (j && typeof j.agent_name === 'string') knownNames.set(url, j.agent_name);
+    const id = typeof j?.worker_id === 'string' ? j.worker_id : typeof j?.id === 'string' ? j.id : null;
+    if (id) knownIds.set(url, id);
     return {
       ...status,
+      workerId: id ?? status.workerId,
       ok: health.ok,
       agentName: (j?.agent_name as string | undefined) ?? status.agentName,
       workerType: (j?.worker_type as string | undefined) ?? null,
