@@ -154,6 +154,13 @@ history.get('/agents', (req, res) => {
   res.json([...byName.values()].map((a) => ({ name: a.name, sessions: a.sessions.size, jobs: a.jobs, minutes: Math.round(a.ms / 60000), avgMs: a.jobs ? a.ms / a.jobs : 0, activeNow: a.active, lastSeenAt: a.lastSeenAt, firstSeenAt: a.firstSeenAt })).sort((x, y) => y.lastSeenAt - x.lastSeenAt));
 });
 
+history.get('/agent-pings', (_req, res) => {
+  const rows = db
+    .prepare('SELECT agent_name AS name, at, ok, latency_ms AS latencyMs, error, by_user AS byUser FROM agent_pings WHERE id IN (SELECT MAX(id) FROM agent_pings GROUP BY agent_name)')
+    .all();
+  res.json(rows);
+});
+
 history.get('/calls', (req, res) => {
   const hours = intParam(req.query.hours, 24, 24 * 90);
   const limit = intParam(req.query.limit, 50, 200);

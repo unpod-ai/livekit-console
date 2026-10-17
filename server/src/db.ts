@@ -28,6 +28,11 @@ db.exec(`
     password_hash TEXT NOT NULL, role TEXT NOT NULL CHECK (role IN ('admin','viewer')),
     created_at INTEGER NOT NULL, last_login_at INTEGER
   );
+  CREATE TABLE IF NOT EXISTS agent_pings (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, agent_name TEXT NOT NULL, at INTEGER NOT NULL,
+    ok INTEGER NOT NULL, latency_ms INTEGER, worker_id TEXT, error TEXT, by_user TEXT
+  );
+  CREATE INDEX IF NOT EXISTS agent_pings_name ON agent_pings(agent_name, at);
   CREATE TABLE IF NOT EXISTS egress (
     egress_id TEXT PRIMARY KEY, room_sid TEXT, room_name TEXT, status TEXT,
     started_at INTEGER, ended_at INTEGER, info TEXT NOT NULL
