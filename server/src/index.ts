@@ -10,6 +10,7 @@ import { handleWebhook } from './collector.js';
 import { history } from './history.js';
 import { api } from './routes.js';
 import { startReconciler } from './reconcile.js';
+import { startWorkerPolling } from './workers.js';
 
 const app = express();
 app.set('trust proxy', 1);
@@ -35,4 +36,5 @@ if (existsSync(webDist)) {
 
 const host = process.env.HOST ?? '0.0.0.0';
 startReconciler();
+startWorkerPolling();
 app.listen(config.port, host, () => console.log(`livekit-console listening on ${host}:${config.port}`));

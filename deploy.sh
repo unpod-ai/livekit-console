@@ -46,9 +46,9 @@ if [[ "${1:-}" == "--sync-env" ]]; then
 fi
 
 echo "==> Building image and restarting container"
-"${SSH[@]}" bash -s -- "$DEPLOY_DIR" "$CONSOLE_PORT" "${LIVEKIT_INTERNAL_URL:-ws://127.0.0.1:7880}" <<'REMOTE'
+"${SSH[@]}" bash -s -- "$DEPLOY_DIR" "$CONSOLE_PORT" "${LIVEKIT_INTERNAL_URL:-ws://127.0.0.1:7880}" "${AGENT_WORKER_URLS:-}" <<'REMOTE'
 set -euo pipefail
-dir="$1"; port="$2"; lk_url="$3"
+dir="$1"; port="$2"; lk_url="$3"; worker_urls="$4"
 cd ~/"$dir"
 [[ -f .env ]] || { echo "No .env on the VM; run ./deploy.sh --sync-env" >&2; exit 1; }
 
@@ -61,6 +61,7 @@ docker run -d --name livekit-console --restart unless-stopped --network host \
   -e HOST=127.0.0.1 -e PORT="$port" \
   -e LIVEKIT_URL="$lk_url" \
   -e DB_PATH=/data/console.db \
+  -e AGENT_WORKER_URLS="$worker_urls" \
   -v livekit-console-data:/data \
   livekit-console:latest >/dev/null
 

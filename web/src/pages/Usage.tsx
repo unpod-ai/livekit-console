@@ -5,7 +5,7 @@ import { fmtMs } from '../lib/format';
 import { BarsChart } from '../components/Charts';
 import { Alert, Kpi, Kpis, PageHeader, Panel, RangeSelect } from '../components/ui';
 
-const C = { a: '#22d3ee', b: '#818cf8', c: '#34d399', d: '#fbbf24' };
+const C = { a: '#20d5f9', b: '#dc85ff', c: '#1fb66a', d: '#ffa424' };
 
 export function Usage() {
   const [hours, setHours] = useState(168);

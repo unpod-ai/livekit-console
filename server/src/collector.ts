@@ -41,10 +41,7 @@ export async function handleWebhook(req: Request, res: Response): Promise<void> 
   }
 }
 
-export const PING_ROOM_PREFIX = 'lkc-ping-';
-
 function record(e: any): void {
-  if (typeof e.room?.name === 'string' && e.room.name.startsWith(PING_ROOM_PREFIX)) return; // agent pings: not real sessions
   const ts = secs(e.createdAt) || Date.now();
   const roomSid: string | null = e.room?.sid || e.egressInfo?.roomId || null;
   const roomName: string | null = e.room?.name || e.egressInfo?.roomName || null;

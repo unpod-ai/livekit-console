@@ -28,16 +28,19 @@ db.exec(`
     password_hash TEXT NOT NULL, role TEXT NOT NULL CHECK (role IN ('admin','viewer')),
     created_at INTEGER NOT NULL, last_login_at INTEGER
   );
-  CREATE TABLE IF NOT EXISTS agent_pings (
-    id INTEGER PRIMARY KEY AUTOINCREMENT, agent_name TEXT NOT NULL, at INTEGER NOT NULL,
-    ok INTEGER NOT NULL, latency_ms INTEGER, worker_id TEXT, error TEXT, by_user TEXT
+  CREATE TABLE IF NOT EXISTS agent_worker_samples (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, url TEXT NOT NULL, agent_name TEXT, at INTEGER NOT NULL,
+    ok INTEGER NOT NULL, load REAL, active_jobs INTEGER, latency_ms INTEGER
   );
-  CREATE INDEX IF NOT EXISTS agent_pings_name ON agent_pings(agent_name, at);
+  CREATE INDEX IF NOT EXISTS agent_worker_samples_at ON agent_worker_samples(url, at);
   CREATE TABLE IF NOT EXISTS egress (
     egress_id TEXT PRIMARY KEY, room_sid TEXT, room_name TEXT, status TEXT,
     started_at INTEGER, ended_at INTEGER, info TEXT NOT NULL
   );
 `);
+
+// The manual agent ping was replaced by worker status polling.
+db.exec('DROP TABLE IF EXISTS agent_pings');
 
 // Timestamps are unix milliseconds throughout.
 export const nowMs = (): number => Date.now();

@@ -1,6 +1,8 @@
 import { Router } from 'express';
 import { statSync } from 'node:fs';
+import { config } from './config.js';
 import { db } from './db.js';
+import { workerStatuses } from './workers.js';
 import { redactCredentials } from './twirp.js';
 
 export const history = Router();
@@ -154,11 +156,17 @@ history.get('/agents', (req, res) => {
   res.json([...byName.values()].map((a) => ({ name: a.name, sessions: a.sessions.size, jobs: a.jobs, minutes: Math.round(a.ms / 60000), avgMs: a.jobs ? a.ms / a.jobs : 0, activeNow: a.active, lastSeenAt: a.lastSeenAt, firstSeenAt: a.firstSeenAt })).sort((x, y) => y.lastSeenAt - x.lastSeenAt));
 });
 
-history.get('/agent-pings', (_req, res) => {
-  const rows = db
-    .prepare('SELECT agent_name AS name, at, ok, latency_ms AS latencyMs, error, by_user AS byUser FROM agent_pings WHERE id IN (SELECT MAX(id) FROM agent_pings GROUP BY agent_name)')
-    .all();
-  res.json(rows);
+// Worker status polled from each configured agent worker (see workers.ts), with uptime and load over the range.
+history.get('/agent-workers', (req, res) => {
+  const hours = intParam(req.query.hours, 168, 24 * 90);
+  const stats = db.prepare('SELECT COUNT(*) AS n, COALESCE(SUM(ok),0) AS up, AVG(CASE WHEN ok = 1 THEN load END) AS avgLoad FROM agent_worker_samples WHERE url = ? AND at >= ?');
+  res.json({
+    configured: config.workerUrls.length > 0,
+    workers: workerStatuses().map((w) => {
+      const x = stats.get(w.url, since(hours)) as { n: number; up: number; avgLoad: number | null };
+      return { ...w, uptimePct: x.n ? Math.round((x.up / x.n) * 1000) / 10 : null, avgLoadPct: x.avgLoad == null ? null : Math.round(x.avgLoad * 1000) / 10, samples: x.n };
+    }),
+  });
 });
 
 history.get('/calls', (req, res) => {
