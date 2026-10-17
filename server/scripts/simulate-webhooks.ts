@@ -31,7 +31,11 @@ for (let i = 0; i < calls; i++) {
   await send({ event: 'participant_joined', room, participant: { sid: `PA_sip${i}`, identity: `sip_${phone}`, kind: 'SIP', joinedAt: String(Math.floor((t0 + 500) / 1000)), attributes: { 'sip.phoneNumber': phone, 'sip.trunkPhoneNumber': '+14155550100', 'sip.callStatus': 'active', 'sip.callID': `SCL_sim${i}`, ...route } } }, t0 + 500);
   await send({ event: 'participant_joined', room, participant: { sid: `PA_agent${i}`, identity: `agent-sim${i}`, kind: 'AGENT', joinedAt: String(Math.floor((t0 + 1500) / 1000)) } }, t0 + 1500);
   await send({ event: 'egress_started', egressInfo: { egressId: `EG_sim${i}`, roomId: room.sid, roomName: room.name, status: 'EGRESS_ACTIVE', startedAt: String((t0 + 2000) * 1e6) } }, t0 + 2000);
-  await send({ event: 'egress_ended', egressInfo: { egressId: `EG_sim${i}`, roomId: room.sid, roomName: room.name, status: 'EGRESS_COMPLETE', startedAt: String((t0 + 2000) * 1e6), endedAt: String((t0 + 60_000) * 1e6) } }, t0 + 60_000);
+  await send({ event: 'egress_ended', egressInfo: {
+    egressId: `EG_sim${i}`, roomId: room.sid, roomName: room.name, status: 'EGRESS_COMPLETE', startedAt: String((t0 + 2000) * 1e6), endedAt: String((t0 + 60_000) * 1e6),
+    roomComposite: { roomName: room.name, audioOnly: true, fileOutputs: [{ filepath: `recordings/${room.name}.ogg`, s3: { bucket: 'sim-bucket', accessKey: '{access_key}', secret: '{secret}', region: 'ap-south-1' } }] },
+    fileResults: [{ filename: `recordings/${room.name}.ogg`, size: '1947645', duration: '58000000000', location: `https://sim-bucket.s3.amazonaws.com/recordings/${room.name}.ogg` }],
+  } }, t0 + 60_000);
   const left = { sid: `PA_sip${i}`, identity: `sip_${phone}`, kind: 'SIP', attributes: { 'sip.phoneNumber': phone, 'sip.trunkPhoneNumber': '+14155550100', 'sip.callStatus': 'hangup', 'sip.callID': `SCL_sim${i}`, ...route } };
   await send({ event: 'participant_left', room, participant: left }, t0 + 61_000);
   await send({ event: 'room_finished', room }, t0 + 62_000);

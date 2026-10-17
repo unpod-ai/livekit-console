@@ -84,7 +84,7 @@ history.get('/sessions/:sid', (req, res) => {
     kind: kindName(p.kind),
     attributes: JSON.parse(p.attributes || '{}'),
   }));
-  const egress = (db.prepare('SELECT egress_id, status, started_at, ended_at FROM egress WHERE room_sid = ?').all(req.params.sid) as any[]).map((e) => ({ ...e, status: egressStatus(e.status) }));
+  const egress = (db.prepare('SELECT egress_id, status, started_at, ended_at, info FROM egress WHERE room_sid = ?').all(req.params.sid) as any[]).map(({ info, ...e }) => ({ ...e, status: egressStatus(e.status), destination: egressDestination(JSON.parse(info)), files: egressFiles(JSON.parse(info)) }));
   const events = db.prepare('SELECT id, ts, type, identity FROM events WHERE room_sid = ? ORDER BY ts').all(req.params.sid);
 
   // Participants-over-time step series.
@@ -169,8 +169,26 @@ history.get('/egress', (req, res) => {
   const rows = db
     .prepare('SELECT egress_id, room_sid, room_name, status, started_at, ended_at, info FROM egress WHERE COALESCE(started_at,0) >= ? ORDER BY started_at DESC LIMIT 500')
     .all(since(hours)) as any[];
-  res.json(rows.map(({ info, ...r }) => ({ ...r, status: egressStatus(r.status), type: egressType(JSON.parse(info)) })));
+  res.json(rows.map(({ info, ...r }) => { const i = JSON.parse(info); return { ...r, status: egressStatus(r.status), type: egressType(i), destination: egressDestination(i), files: egressFiles(i) }; }));
 });
+
+// Where an egress writes to, from the request that started it (never its credentials).
+function egressDestination(info: any): string {
+  const req = info.roomComposite ?? info.participant ?? info.trackComposite ?? info.track ?? info.web ?? {};
+  const out = req.fileOutputs?.[0] ?? req.file ?? req.segmentOutputs?.[0] ?? {};
+  if (out.s3?.bucket) return `s3://${out.s3.bucket}`;
+  if (out.gcp?.bucket) return `gs://${out.gcp.bucket}`;
+  if (out.azure?.containerName) return `azure://${out.azure.containerName}`;
+  if (out.aliOSS?.bucket) return `oss://${out.aliOSS.bucket}`;
+  if (req.streamOutputs?.length || req.stream) return 'stream';
+  return out.filepath || info.fileResults?.length ? 'local' : '—';
+}
+
+function egressFiles(info: any): { name: string; location: string; size: number | null; durationMs: number | null }[] {
+  const files = (info.fileResults ?? []).map((f: any) => ({ name: f.filename ?? '', location: f.location ?? '', size: f.size ? Number(f.size) : null, durationMs: f.duration ? Math.round(Number(f.duration) / 1e6) : null }));
+  const segs = (info.segmentResults ?? []).map((f: any) => ({ name: f.playlistName ?? '', location: f.playlistLocation ?? '', size: f.size ? Number(f.size) : null, durationMs: f.duration ? Math.round(Number(f.duration) / 1e6) : null }));
+  return [...files, ...segs].filter((f) => f.name || f.location);
+}
 
 function egressType(info: any): string {
   return info.roomComposite ? 'Room composite' : info.participant ? 'Participant' : info.trackComposite ? 'Track composite' : info.track ? 'Track' : info.web ? 'Web' : 'Unknown';

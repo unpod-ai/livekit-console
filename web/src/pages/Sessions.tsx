@@ -5,6 +5,7 @@ import { type Json } from '../lib/api';
 import { useApi } from '../lib/hooks';
 import { useTab } from '../lib/useTab';
 import { fromMs, fromMsPrecise, durationMs, kindLabel } from '../lib/format';
+import { Recording } from '../components/Recording';
 import { DataTable, type Col } from '../components/DataTable';
 import { StepChart } from '../components/Charts';
 import { Alert, Badge, KV, Kpi, Kpis, PageHeader, Panel, RangeSelect, ServerPager, StatusBadge, Tabs } from '../components/ui';
@@ -93,7 +94,7 @@ export function SessionDetail() {
           {data!.egress.length > 0 && (
             <Panel title={`Egresses (${data!.egress.length})`}>
               <DataTable rows={data!.egress as Json[]} search={false} pageSize={false} rowKey={(e) => e.egress_id}
-                cols={[{ key: 'id', header: 'Egress ID', cell: (e) => <span className="mono">{e.egress_id}</span> }, { key: 's', header: 'Status', cell: (e) => <StatusBadge status={e.status} /> }, { key: 't', header: 'Started', cell: (e) => fromMs(e.started_at) }, { key: 'd', header: 'Duration', cell: (e) => durationMs(e.started_at, e.ended_at) }]} />
+                cols={[{ key: 'id', header: 'Egress ID', cell: (e) => <span className="mono">{e.egress_id}</span> }, { key: 's', header: 'Status', cell: (e) => <StatusBadge status={e.status} /> }, { key: 't', header: 'Started', cell: (e) => fromMs(e.started_at) }, { key: 'd', header: 'Duration', cell: (e) => durationMs(e.started_at, e.ended_at) }, { key: 'dest', header: 'Destination', cell: (e) => <span className="mono">{e.destination}</span> }, { key: 'rec', header: 'Recording', cell: (e) => <Recording file={e.files?.[0]} /> }]} />
             </Panel>
           )}
           <Alert><Info size={14} style={{ verticalAlign: -2, marginRight: 6 }} />Bandwidth, latency, packet loss and FPS graphs come from LiveKit Cloud's analytics pipeline. The open-source server does not expose them per session.</Alert>

@@ -3,13 +3,15 @@ import { Plus, Square } from 'lucide-react';
 import { lk, type Json } from '../lib/api';
 import { useApi, useLkList, useMutate } from '../lib/hooks';
 import { useConfirm } from '../lib/confirm';
-import { durationMs, fromMs } from '../lib/format';
+import { durationMs, fmtBytes, fmtMs, fromMs } from '../lib/format';
+import { egressDestination, egressFiles, isUrl, type EgressFile } from '../lib/egress';
+import { Recording } from '../components/Recording';
 import { Drawer } from '../components/Drawer';
 import { JsonEditor, parseJson } from '../components/JsonEditor';
 import { DataTable, type Col } from '../components/DataTable';
-import { Alert, CopyButton, Field, PageHeader, Panel, StatusBadge } from '../components/ui';
+import { Alert, CopyButton, Field, KV, PageHeader, Panel, StatusBadge } from '../components/ui';
 
-type Row = { id: string; room: string; status: string; started: number | null; ended: number | null; type: string; raw?: Json };
+type Row = { id: string; room: string; status: string; started: number | null; ended: number | null; type: string; dest: string; files: EgressFile[]; error?: string; raw?: Json };
 
 const lkType = (e: Json) => (e.roomComposite ? 'Room composite' : e.participant ? 'Participant' : e.trackComposite ? 'Track composite' : e.track ? 'Track' : e.web ? 'Web' : 'Unknown');
 const nsToMs = (v?: string) => (Number(v) ? Math.round(Number(v) / 1e6) : null);
@@ -56,8 +58,8 @@ export function Egress() {
   // LiveKit's own list is authoritative for what it still retains; the collector adds older history.
   const rows = useMemo<Row[]>(() => {
     const m = new Map<string, Row>();
-    (hist.data ?? []).forEach((h) => m.set(h.egress_id, { id: h.egress_id, room: h.room_name ?? '', status: h.status, started: h.started_at, ended: h.ended_at, type: h.type }));
-    (live.data ?? []).forEach((e) => m.set(e.egressId, { id: e.egressId, room: e.roomName ?? '', status: e.status, started: nsToMs(e.startedAt), ended: nsToMs(e.endedAt), type: lkType(e), raw: e }));
+    (hist.data ?? []).forEach((h) => m.set(h.egress_id, { id: h.egress_id, room: h.room_name ?? '', status: h.status, started: h.started_at, ended: h.ended_at, type: h.type, dest: h.destination ?? '—', files: h.files ?? [] }));
+    (live.data ?? []).forEach((e) => m.set(e.egressId, { id: e.egressId, room: e.roomName ?? '', status: e.status, started: nsToMs(e.startedAt), ended: nsToMs(e.endedAt), type: lkType(e), dest: egressDestination(e), files: egressFiles(e), error: e.error || undefined, raw: e }));
     return [...m.values()].sort((a, b) => (b.started ?? 0) - (a.started ?? 0));
   }, [live.data, hist.data]);
 
@@ -68,6 +70,9 @@ export function Egress() {
     { key: 'status', header: 'Status', cell: (e) => <StatusBadge status={e.status} />, text: (e) => e.status },
     { key: 'type', header: 'Type', cell: (e) => e.type, text: (e) => e.type },
     { key: 'room', header: 'Source (room)', cell: (e) => e.room || '—', text: (e) => e.room },
+    { key: 'dest', header: 'Destination', cell: (e) => <span className="mono">{e.dest}</span>, text: (e) => e.dest },
+    { key: 'rec', header: 'Recording', cell: (e) => <Recording file={e.files[0]} />, text: (e) => e.files.map((f) => `${f.name} ${f.location}`).join(' ') },
+    { key: 'size', header: 'Size', hidden: true, cell: (e) => (e.files[0]?.size ? fmtBytes(e.files[0].size) : '—') },
   ];
   const active = (s: string) => /ACTIVE|STARTING/.test(s);
   return (
@@ -78,8 +83,36 @@ export function Egress() {
           rowActions={(e) => active(e.status) ? <button className="btn danger sm" onClick={async () => (await confirm({ title: 'Stop egress?', message: `${e.id} will finish and upload what it has recorded.`, confirmLabel: 'Stop', danger: true })) && stop.mutate(e.id)}><Square size={12} />Stop</button> : null} />
       </Panel>
       {starting && <StartDrawer onClose={() => setStarting(false)} />}
-      <Drawer open={!!detail} wide title={detail?.id ?? ''} subtitle={detail ? `${detail.type} · ${detail.room}` : ''} onClose={() => setDetail(null)}>
-        {detail?.raw ? <><div style={{ marginBottom: 8 }}><CopyButton text={JSON.stringify(detail.raw, null, 2)} label="Copy JSON" /></div><pre className="mono" style={{ whiteSpace: 'pre-wrap', margin: 0 }}>{JSON.stringify(detail.raw, null, 2)}</pre></> : <Alert>LiveKit no longer retains the full record for this egress. Only the summary from webhooks is available.</Alert>}
+      <Drawer open={!!detail} wide title={detail?.id ?? ''} subtitle={detail ? `${detail.type} · ${detail.room || 'no room'}` : ''} onClose={() => setDetail(null)}>
+        {detail && (
+          <>
+            <Panel><KV items={[['Status', <StatusBadge status={detail.status} />], ['Type', detail.type], ['Source (room)', detail.room || '—'], ['Destination', <span className="mono">{detail.dest}</span>], ['Started', fromMs(detail.started)], ['Duration', durationMs(detail.started, detail.ended)]]} /></Panel>
+            {detail.error && <Alert kind="bad">{detail.error}</Alert>}
+            <Panel title={`Recording files (${detail.files.length})`}>
+              {detail.files.length === 0
+                ? <div className="panel-body muted">{/ACTIVE|STARTING/.test(detail.status) ? 'The file location appears when the egress finishes.' : 'No output files were reported for this egress.'}</div>
+                : detail.files.map((f, i) => (
+                  <div key={i} className="panel-body" style={{ borderTop: i ? '1px solid var(--border)' : 0 }}>
+                    <div className="mono" style={{ overflowWrap: 'anywhere' }}>{f.location || f.name}</div>
+                    <div className="muted" style={{ marginTop: 4, display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+                      {f.size != null && <span>{fmtBytes(f.size)}</span>}
+                      {f.durationMs != null && <span>{fmtMs(f.durationMs)}</span>}
+                      <CopyButton text={f.location || f.name} label="Copy location" />
+                      {isUrl(f.location) && <a href={f.location} target="_blank" rel="noopener noreferrer">Open</a>}
+                    </div>
+                  </div>
+                ))}
+            </Panel>
+            {detail.files.some((f) => /^https?:\/\/[^/]+\.s3[.-]/i.test(f.location) || f.name.includes('private')) && (
+              <Alert kind="info">Recordings in a private bucket cannot be opened with this plain link. Download them with your storage tooling, or generate a signed URL.</Alert>
+            )}
+            {detail.raw && (
+              <Panel title="Details" actions={<CopyButton text={JSON.stringify(detail.raw, null, 2)} label="Copy JSON" />}>
+                <pre className="mono" style={{ whiteSpace: 'pre-wrap', margin: 0, padding: 14 }}>{JSON.stringify(detail.raw, null, 2)}</pre>
+              </Panel>
+            )}
+          </>
+        )}
       </Drawer>
     </>
   );

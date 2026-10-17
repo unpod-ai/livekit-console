@@ -32,6 +32,17 @@ export function camelize(v: unknown, inMap = false): unknown {
   return v;
 }
 
+// Egress requests echo the storage credentials they were started with. LiveKit normally redacts them, but never
+// rely on that: blank anything credential-shaped before it can reach the browser.
+const CREDENTIAL_KEYS = new Set(['accessKey', 'secret', 'sessionToken', 'accountKey', 'credentials', 'assumeRoleExternalId']);
+export function redactCredentials(v: unknown): unknown {
+  if (Array.isArray(v)) return v.map(redactCredentials);
+  if (v && typeof v === 'object') {
+    return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, CREDENTIAL_KEYS.has(k) && x ? '<redacted>' : redactCredentials(x)]));
+  }
+  return v;
+}
+
 export async function twirp(service: Service, method: string, body: unknown): Promise<unknown> {
   const res = await fetch(`${config.httpUrl}/twirp/${SERVICES[service]}/${method}`, {
     method: 'POST',
@@ -40,5 +51,6 @@ export async function twirp(service: Service, method: string, body: unknown): Pr
   });
   const data = (await res.json().catch(() => ({}))) as { msg?: string };
   if (!res.ok) throw new TwirpError(data.msg ?? res.statusText, res.status);
-  return camelize(data);
+  const out = camelize(data);
+  return service === 'egress' ? redactCredentials(out) : out;
 }
