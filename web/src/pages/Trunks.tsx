@@ -8,7 +8,8 @@ import { useInitialQuery } from '../lib/useTab';
 import { Drawer } from '../components/Drawer';
 import { JsonEditor, parseJson } from '../components/JsonEditor';
 import { DataTable, type Col } from '../components/DataTable';
-import { Alert, Badge, Field, PageHeader, Panel, Tabs } from '../components/ui';
+import { Alert, Badge, Field, Kpi, Kpis, PageHeader, Panel, Tabs } from '../components/ui';
+import { SipUriKpi } from '../components/SipUri';
 
 type Dir = 'inbound' | 'outbound';
 type Form = {
@@ -147,6 +148,11 @@ export function Trunks() {
     <>
       <PageHeader crumbs={[{ label: 'Telephony' }, { label: 'SIP trunks' }]} title="SIP trunks" sub={`${inbound.data?.length ?? 0} inbound · ${outbound.data?.length ?? 0} outbound`}
         actions={<button className="btn" onClick={() => setOpen({ dir: tab, trunk: 'new' })}><Plus size={15} />Create new trunk</button>} />
+      <Kpis>
+        <Kpi label="Total inbound trunks" value={inbound.data?.length ?? '…'} />
+        <Kpi label="Total outbound trunks" value={outbound.data?.length ?? '…'} />
+        <SipUriKpi />
+      </Kpis>
       <Tabs value={tab} onChange={setTab} tabs={[{ id: 'inbound', label: 'Inbound', count: inbound.data?.length }, { id: 'outbound', label: 'Outbound', count: outbound.data?.length }]} />
       <Panel>
         <DataTable rows={q.data} cols={cols} rowKey={(t) => t.sipTrunkId} loading={q.isLoading} error={q.error} storageKey={`trunks-${tab}`} initialQuery={initialQuery} onRow={(t) => setOpen({ dir: tab, trunk: t })}

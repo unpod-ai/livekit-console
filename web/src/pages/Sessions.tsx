@@ -6,7 +6,7 @@ import { useApi } from '../lib/hooks';
 import { useInitialQuery, useTab } from '../lib/useTab';
 import { fromMs, fromMsPrecise, durationMs, kindLabel } from '../lib/format';
 import { DataTable, type Col } from '../components/DataTable';
-import { StepChart } from '../components/Charts';
+import { Spark, StepChart } from '../components/Charts';
 import { Recording } from '../components/Recording';
 import { Alert, Badge, KV, Kpi, Kpis, PageHeader, Panel, RangeSelect, ServerPager, StatusBadge, Tabs } from '../components/ui';
 import { DirectionBadge } from './Calls';
@@ -23,7 +23,7 @@ export function Sessions() {
   const [params] = useSearchParams();
   const [feature, setFeature] = useState(params.get('feature') ?? '');
   const [offset, setOffset] = useState(0);
-  const res = useApi<{ total: number; rows: Json[]; uniqueParticipants: number; totalRooms: number }>(['sessions', hours, q, status, feature, offset], `/history/sessions?hours=${hours}&q=${enc(q)}&status=${status}&feature=${feature}&limit=${LIMIT}&offset=${offset}`);
+  const res = useApi<{ total: number; rows: Json[]; uniqueParticipants: number; totalRooms: number; bucketMs: number; series: { t: number; n: number }[]; peopleSeries: { t: number; n: number }[] }>(['sessions', hours, q, status, feature, offset], `/history/sessions?hours=${hours}&q=${enc(q)}&status=${status}&feature=${feature}&limit=${LIMIT}&offset=${offset}`);
   const reset = <T,>(f: (v: T) => void) => (v: T) => { f(v); setOffset(0); };
 
   const cols: Col<Json>[] = [
@@ -47,8 +47,8 @@ export function Sessions() {
     <>
       <PageHeader crumbs={[{ label: 'Project' }, { label: 'Sessions' }]} title="Sessions" sub="Room sessions recorded from LiveKit webhooks since the collector started" />
       <Kpis>
-        <Kpi label="Unique participants" value={res.data?.uniqueParticipants ?? '…'} />
-        <Kpi label="Total rooms" value={res.data?.totalRooms ?? '…'} />
+        <Kpi label="Unique participants" value={res.data?.uniqueParticipants ?? '…'} spark={res.data && <Spark points={res.data.peopleSeries} from={Date.now() - hours * 3600000} to={Date.now()} bucketMs={res.data.bucketMs} />} />
+        <Kpi label="Total rooms" value={res.data?.totalRooms ?? '…'} spark={res.data && <Spark points={res.data.series} from={Date.now() - hours * 3600000} to={Date.now()} bucketMs={res.data.bucketMs} color="#818cf8" />} />
         <Kpi label="Sessions" value={res.data?.total ?? '…'} help="Sessions matching the current filters" />
       </Kpis>
       <Panel>

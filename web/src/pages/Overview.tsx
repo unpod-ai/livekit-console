@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ArrowRight, CheckCircle2, AlertTriangle } from 'lucide-react';
+import { ArrowRight, AlertTriangle, BookOpen, BarChart3, Cable, CheckCircle2, GitBranch, Hash } from 'lucide-react';
 import { type Json } from '../lib/api';
 import { useApi } from '../lib/hooks';
 import { fmtMs, fromMs, durationMs, relTime } from '../lib/format';
@@ -39,6 +39,17 @@ export function Overview() {
         <Kpi label="System status" value={<span style={{ fontSize: 15, display: 'inline-flex', alignItems: 'center', gap: 6 }}>{rooms.isLoading ? '…' : lkOk ? <><CheckCircle2 size={16} color="var(--ok)" />LiveKit reachable</> : <><AlertTriangle size={16} color="var(--bad)" />LiveKit unreachable</>}</span>}
           foot={collector.data ? (collector.data.lastEventAt ? `Last webhook ${relTime(collector.data.lastEventAt)}` : 'No webhooks received yet') : undefined} />
       </Kpis>
+      <div className="kpis" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
+        {[
+          { to: '/telephony/trunks', icon: Cable, label: 'Manage SIP trunks' },
+          { to: '/telephony/dispatch', icon: GitBranch, label: 'Configure dispatch rules' },
+          { to: '/telephony/phone-numbers', icon: Hash, label: 'Review phone numbers' },
+          { to: '/usage', icon: BarChart3, label: 'View project usage' },
+        ].map((a) => (
+          <Link key={a.to} to={a.to} className="kpi link" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px' }}><a.icon size={16} color="var(--accent)" aria-hidden />{a.label}<ArrowRight size={13} style={{ marginLeft: 'auto', opacity: 0.6 }} /></Link>
+        ))}
+        <a href="https://docs.livekit.io" target="_blank" rel="noopener noreferrer" className="kpi link" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px' }}><BookOpen size={16} color="var(--accent)" aria-hidden />Docs and API reference<ArrowRight size={13} style={{ marginLeft: 'auto', opacity: 0.6 }} /></a>
+      </div>
       {noEvents && (
         <div className="alert warn">No webhook events have been received. History pages stay empty until LiveKit is configured to send webhooks to this console (<span className="mono">./deploy.sh webhook</span>).</div>
       )}

@@ -15,4 +15,5 @@ export const config = {
   adminUser: need('ADMIN_USER'),
   adminPassword: need('ADMIN_PASSWORD'),
   sessionSecret: need('SESSION_SECRET'),
+  sipUri: process.env.SIP_URI ?? '',
 };

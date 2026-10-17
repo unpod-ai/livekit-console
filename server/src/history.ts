@@ -71,7 +71,10 @@ history.get('/sessions', (req, res) => {
   const total = db.prepare(`SELECT COUNT(*) AS n FROM sessions s WHERE ${where}`).get(since(hours), q, q) as { n: number };
   const rooms = db.prepare('SELECT COUNT(DISTINCT room_name) AS n, COUNT(DISTINCT room_sid) AS sessions FROM sessions WHERE started_at >= ?').get(since(hours)) as any;
   const people = db.prepare('SELECT COUNT(DISTINCT identity) AS n FROM participants WHERE joined_at >= ?').get(since(hours)) as { n: number };
-  res.json({ total: total.n, rows, uniqueParticipants: people.n, totalRooms: rooms.n });
+  const bucketMs = hours <= 48 ? 3600 * 1000 : 24 * 3600 * 1000;
+  const series = db.prepare(`SELECT (started_at / ${bucketMs}) * ${bucketMs} AS t, COUNT(*) AS n FROM sessions WHERE started_at >= ? GROUP BY t ORDER BY t`).all(since(hours));
+  const peopleSeries = db.prepare(`SELECT (joined_at / ${bucketMs}) * ${bucketMs} AS t, COUNT(DISTINCT identity) AS n FROM participants WHERE joined_at >= ? GROUP BY t ORDER BY t`).all(since(hours));
+  res.json({ total: total.n, rows, uniqueParticipants: people.n, totalRooms: rooms.n, bucketMs, series, peopleSeries });
 });
 
 history.get('/sessions/:sid', (req, res) => {
@@ -141,7 +144,12 @@ history.get('/calls', (req, res) => {
     .filter((c) => (req.query.state ? c.state === req.query.state : true));
   const offset = offsetParam(req.query.offset);
   const sum = (dir?: string) => all.filter((c) => !dir || c.direction === dir).reduce((s, c) => s + ((c.leftAt ?? Date.now()) - c.joinedAt), 0);
+  const bucketMs = hours <= 48 ? 3600 * 1000 : 24 * 3600 * 1000;
+  const byBucket = new Map<number, number>();
+  for (const c of all) byBucket.set(Math.floor(c.joinedAt / bucketMs) * bucketMs, (byBucket.get(Math.floor(c.joinedAt / bucketMs) * bucketMs) ?? 0) + 1);
   res.json({
+    bucketMs,
+    series: [...byBucket.entries()].sort((a, b) => a[0] - b[0]).map(([t, n]) => ({ t, n })),
     total: all.length,
     active: all.filter((c) => c.state === 'active').length,
     totalDurationMs: sum(),

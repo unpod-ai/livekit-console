@@ -8,7 +8,8 @@ import { useInitialQuery } from '../lib/useTab';
 import { Drawer } from '../components/Drawer';
 import { JsonEditor, parseJson } from '../components/JsonEditor';
 import { DataTable, type Col } from '../components/DataTable';
-import { Alert, Badge, Field, PageHeader, Panel, Tabs } from '../components/ui';
+import { Alert, Badge, Field, Kpi, Kpis, PageHeader, Panel, Tabs } from '../components/ui';
+import { RoomPattern, SipUriKpi } from '../components/SipUri';
 
 type Form = {
   name: string; type: 'individual' | 'direct' | 'callee'; roomPrefix: string; roomName: string; pin: string; randomize: boolean;
@@ -145,7 +146,7 @@ export function Dispatch() {
     { key: 'id', header: 'Rule ID', cell: (r) => <span className="mono">{r.sipDispatchRuleId}</span>, text: (r) => r.sipDispatchRuleId, sort: (r) => r.sipDispatchRuleId },
     { key: 'name', header: 'Rule name', cell: (r) => r.name || '—', text: (r) => r.name ?? '', sort: (r) => r.name ?? '' },
     { key: 'type', header: 'Rule type', cell: (r) => <Badge>{(ruleKind(r).type ?? 'unknown').replace(/^./, (c) => c.toUpperCase())}</Badge>, text: (r) => ruleKind(r).type ?? '' },
-    { key: 'room', header: 'Destination room', cell: (r) => <span className="mono">{ruleKind(r).target}</span>, text: (r) => ruleKind(r).target },
+    { key: 'room', header: 'Destination room', cell: (r) => <RoomPattern text={ruleKind(r).target} />, text: (r) => ruleKind(r).target },
     { key: 'agents', header: 'Agents', cell: (r) => (r.roomConfig?.agents ?? []).map((a: Json) => <Link key={a.agentName} className="badge info" to={`/agents?q=${encodeURIComponent(a.agentName)}`} onClick={(e) => e.stopPropagation()}>{a.agentName}</Link>), text: (r) => (r.roomConfig?.agents ?? []).map((a: Json) => a.agentName).join(' ') },
     { key: 'routing', header: 'Inbound routing', cell: (r) => { const nums: string[] = r.inboundNumbers ?? []; const tr: string[] = r.trunkIds ?? []; if (!nums.length && !tr.length) return <span className="muted">All inbound calls</span>; return <span className="badges" onClick={(e) => e.stopPropagation()}>{nums.map((n) => <Link key={n} className="badge" to={`/telephony/phone-numbers?q=${encodeURIComponent(n)}`}>{n}</Link>)}{tr.map((id) => <Link key={id} className="badge" title={id} to={`/telephony/trunks?q=${id}`}>{trunkName(id)}</Link>)}</span>; }, text: (r) => [...(r.inboundNumbers ?? []), ...(r.trunkIds ?? []).map((id: string) => `${id} ${trunkName(id)}`)].join(' ') },
     { key: 'pin', header: 'PIN', hidden: true, cell: (r) => (ruleKind(r).pin ? 'Yes' : '—') },
@@ -155,6 +156,10 @@ export function Dispatch() {
     <>
       <PageHeader crumbs={[{ label: 'Telephony' }, { label: 'Dispatch rules' }]} title="Dispatch rules" sub={`${rules.data?.length ?? 0} rules route inbound SIP calls to rooms and agents`}
         actions={<button className="btn" onClick={() => setOpen('new')}><Plus size={15} />Create new dispatch rule</button>} />
+      <Kpis>
+        <Kpi label="Total dispatch rules" value={rules.data?.length ?? '…'} />
+        <SipUriKpi />
+      </Kpis>
       <Panel>
         <DataTable rows={rules.data} cols={cols} rowKey={(r) => r.sipDispatchRuleId} loading={rules.isLoading} error={rules.error} storageKey="dispatch" initialQuery={initialQuery} onRow={setOpen}
           empty={{ title: 'No dispatch rules', hint: 'Create a rule so inbound calls land in a room.' }}

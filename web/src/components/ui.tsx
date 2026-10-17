@@ -32,12 +32,13 @@ export function PageHeader({ crumbs, title, sub, actions, refresh = true }: { cr
 
 export const Help = ({ text }: { text: string }) => <HelpCircle size={12} aria-label={text} role="img"><title>{text}</title></HelpCircle>;
 
-export function Kpi({ label, value, unit, foot, help, accent, to }: { label: string; value: ReactNode; unit?: string; foot?: ReactNode; help?: string; accent?: boolean; to?: string }) {
+export function Kpi({ label, value, unit, foot, help, accent, to, spark }: { label: string; value: ReactNode; unit?: string; foot?: ReactNode; help?: string; accent?: boolean; to?: string; spark?: ReactNode }) {
   const body = (
     <>
       <div className="kpi-label">{label}{help && <Help text={help} />}</div>
       <div className="kpi-value">{value}{unit && <small>{unit}</small>}</div>
       {foot && <div className="kpi-foot">{foot}</div>}
+      {spark}
     </>
   );
   return to

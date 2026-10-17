@@ -155,3 +155,24 @@ export function StepChart({ points, t0, t1, color = 'var(--accent)', label = 'Pa
     </Frame>
   );
 }
+
+/** Axis-less trend line for KPI cards, spanning the whole selected range. */
+export function Spark({ points, from, to, bucketMs, color = 'var(--accent)', height = 44 }: { points: { t: number; n: number }[]; from: number; to: number; bucketMs: number; color?: string; height?: number }) {
+  const [ref, w] = useWidth();
+  const t0 = Math.floor(from / bucketMs) * bucketMs;
+  const count = Math.min(400, Math.max(2, Math.round((to - t0) / bucketMs) + 1));
+  const byT = new Map(points.map((p) => [p.t, p.n]));
+  const vals = Array.from({ length: count }, (_, i) => byT.get(t0 + i * bucketMs) ?? 0);
+  const max = Math.max(1, ...vals);
+  const X = (i: number) => (i / (count - 1)) * (w - 2) + 1;
+  const Y = (v: number) => height - 3 - (v / max) * (height - 8);
+  const line = vals.map((v, i) => `${i ? 'L' : 'M'} ${X(i)} ${Y(v)}`).join(' ');
+  return (
+    <div ref={ref} aria-hidden>
+      <svg width={w} height={height} className="chart" style={{ marginTop: 6 }}>
+        <path d={`${line} L ${X(count - 1)} ${height} L ${X(0)} ${height} Z`} fill={color} opacity={0.12} />
+        <path d={line} fill="none" stroke={color} strokeWidth={1.5} />
+      </svg>
+    </div>
+  );
+}

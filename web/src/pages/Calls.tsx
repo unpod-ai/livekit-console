@@ -6,6 +6,7 @@ import { useApi } from '../lib/hooks';
 import { useInitialQuery, useTab } from '../lib/useTab';
 import { fromMs, fromMsPrecise, durationMs, fmtMs } from '../lib/format';
 import { DataTable, type Col } from '../components/DataTable';
+import { Spark } from '../components/Charts';
 import { Alert, Badge, KV, Kpi, Kpis, PageHeader, Panel, RangeSelect, ServerPager, StatusBadge, Tabs } from '../components/ui';
 
 const LIMIT = 50;
@@ -43,7 +44,7 @@ export function Calls() {
         <Kpi label="Total calls" value={d?.total?.toLocaleString() ?? '…'} />
         <Kpi label="Total call duration" value={d ? fmtMs(d.totalDurationMs) : '…'} />
         <Kpi label="Average call duration" value={d ? fmtMs(d.avgDurationMs) : '…'} />
-        <Kpi label="Active calls" value={d?.active ?? '…'} accent />
+        <Kpi label="Active calls" value={d?.active ?? '…'} accent foot="Calls started over time" spark={d && <Spark points={d.series} from={Date.now() - hours * 3600000} to={Date.now()} bucketMs={d.bucketMs} />} />
       </Kpis>
       <Panel>
         <DataTable rows={d?.rows} cols={cols} rowKey={(c) => c.id} loading={res.isLoading} error={res.error} search={false} pageSize={false} storageKey="calls" onRow={(c) => navigate(`/telephony/calls/${c.id}`)}

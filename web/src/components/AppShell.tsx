@@ -5,6 +5,7 @@ import {
   LayoutDashboard, LogOut, PanelLeftClose, PanelLeftOpen, PhoneCall, Search, Settings, Waypoints,
 } from 'lucide-react';
 import { api } from '../lib/api';
+import { useMe } from '../lib/me';
 
 type Item = { to: string; label: string; icon: typeof Activity };
 const GROUPS: { title: string; items: Item[] }[] = [
@@ -64,6 +65,7 @@ export function AppShell() {
   const navigate = useNavigate();
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem('lkc.collapsed') === '1');
   const [palette, setPalette] = useState(false);
+  const me = useMe();
   const mac = useRef(/Mac/i.test(navigator.platform));
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -96,6 +98,7 @@ export function AppShell() {
           </div>
         ))}
         <div className="sidebar-foot">
+          {me.data && <div className="nav-label muted" style={{ padding: '4px 10px', fontSize: 12 }}>{me.data.user} · {me.data.role === 'viewer' ? 'Read-only' : 'Admin'}</div>}
           <NavLink to="/settings" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`} title="Settings"><Settings size={16} aria-hidden /><span className="nav-label">Settings</span></NavLink>
           <button className="nav-link" onClick={logout} style={{ background: 'none', border: 0, font: 'inherit' }} title="Sign out"><LogOut size={16} aria-hidden /><span className="nav-label">Sign out</span></button>
           <button className="nav-link" onClick={toggle} style={{ background: 'none', border: 0, font: 'inherit' }} title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}>

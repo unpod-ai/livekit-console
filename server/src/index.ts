@@ -3,7 +3,8 @@ import express from 'express';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { login, logout, me, requireAuth } from './auth.js';
+import { enforceRole, login, logout, me, requireAdmin, requireAuth } from './auth.js';
+import { users } from './users.js';
 import { config } from './config.js';
 import { handleWebhook } from './collector.js';
 import { history } from './history.js';
@@ -21,8 +22,9 @@ app.get('/healthz', (_req, res) => res.json({ ok: true }));
 app.post('/api/auth/login', login);
 app.post('/api/auth/logout', logout);
 app.get('/api/auth/me', requireAuth, me);
+app.use('/api/users', requireAuth, requireAdmin, users);
 app.use('/api/history', requireAuth, history);
-app.use('/api', requireAuth, api);
+app.use('/api', requireAuth, enforceRole, api);
 
 // In production the built web app is served from here.
 const webDist = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../web/dist');

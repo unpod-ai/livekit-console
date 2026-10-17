@@ -29,7 +29,7 @@ const str = (v: unknown, name: string): string => {
 };
 export const api = Router();
 
-api.get('/config', (_req, res) => res.json({ wsUrl: config.wsUrl }));
+api.get('/config', (_req, res) => res.json({ wsUrl: config.wsUrl, sipUri: config.sipUri || null }));
 
 // Rooms
 api.get('/rooms', wrap(async () => toJsonList(await rooms.listRooms())));

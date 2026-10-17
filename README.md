@@ -15,8 +15,13 @@ API key/secret so the browser never sees them, receives LiveKit webhooks and sto
 Not available on a self-hosted server (so not faked): per-session bandwidth/latency analytics, agent observability,
 PCAP/codec/SIP response per call, calls rejected before a room is created, number purchasing, billing.
 
+## Access control
+Sign in with the admin from `.env` (always works, as a fallback), then add teammates under **Settings → Team members**.
+Roles: **Admin** (full access) and **Viewer** (read everything, change nothing; enforced on the server). Passwords are
+stored as scrypt hashes; role changes and removals apply on the person's next request.
+
 ## Run locally
-    cp .env.example .env     # LIVEKIT_URL, API key/secret, ADMIN_USER, ADMIN_PASSWORD, SESSION_SECRET
+    cp .env.example .env     # LIVEKIT_URL, API key/secret, ADMIN_USER, ADMIN_PASSWORD, SESSION_SECRET (optional: SIP_URI)
     npm install
     npm run dev              # web :5173 (proxies /api), server :8080
 

@@ -221,6 +221,7 @@ kbd { font: 500 11px var(--mono); background: var(--surface-3); border: 1px soli
   .page { padding: 0 14px 32px; }
 }
 
+code.chip, .chip { font: 500 11.5px var(--mono); background: var(--surface-3); border: 1px solid var(--border); border-radius: 4px; padding: 0 5px; color: var(--text-2); margin-left: 3px; }
 a.kpi.link { display: block; transition: border-color 0.15s, background 0.15s; }
 a.kpi.link:hover { border-color: var(--accent); background: var(--surface-2); }
 a.rowlink { color: var(--text); text-decoration: none; }
