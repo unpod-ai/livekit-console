@@ -29,7 +29,7 @@ export function Sessions() {
   const cols: Col<Json>[] = [
     { key: 'sid', header: 'Session ID', cell: (s) => <Link className="rowlink mono" to={`/sessions/${s.room_sid}`} onClick={stop}>{s.room_sid}</Link> },
     { key: 'room', header: 'Room name', cell: (s) => <Link className="rowlink" to={`/sessions/${s.room_sid}`} onClick={stop}>{s.room_name}</Link> },
-    { key: 'start', header: 'Started at', cell: (s) => <span className="nowrap">{fromMs(s.started_at)}{s.partial ? ' *' : ''}</span> },
+    { key: 'start', header: 'Started at', cell: (s) => <span className="nowrap">{fromMs(s.started_at)}{s.partial === 1 ? ' *' : ''}{s.partial === 2 && <> <Badge tone="warn">Reconstructed</Badge></>}</span> },
     { key: 'end', header: 'Ended at', hidden: true, cell: (s) => fromMs(s.ended_at) },
     { key: 'dur', header: 'Duration', cell: (s) => durationMs(s.started_at, s.ended_at) },
     { key: 'parts', header: 'Participants', cell: (s) => s.participants },
@@ -61,7 +61,7 @@ export function Sessions() {
             <RangeSelect value={hours} onChange={reset(setHours)} />
           </>}
           empty={{ title: 'No sessions in this range', hint: 'Sessions appear once LiveKit webhooks reach this console.' }}
-          footer={<><ServerPager offset={offset} limit={LIMIT} total={res.data?.total ?? 0} onChange={setOffset} /><div className="pager" style={{ justifyContent: 'flex-start', borderTop: 0, paddingTop: 0 }}>* started before the collector was running, so the start time is the first event seen.</div></>} />
+          footer={<><ServerPager offset={offset} limit={LIMIT} total={res.data?.total ?? 0} onChange={setOffset} /><div className="pager" style={{ justifyContent: 'flex-start', borderTop: 0, paddingTop: 0 }}>* started before the collector was running, so the start time is the first event seen. “Reconstructed” sessions were rebuilt from LiveKit's retained egress records (name, ID and times only; no participants).</div></>} />
       </Panel>
     </>
   );
@@ -105,11 +105,12 @@ export function SessionDetail() {
         sub={s && <StatusBadge status={s.ended_at ? 'closed' : 'active'} />}
         actions={s && !s.ended_at ? <Link className="btn secondary" to={`/rooms/${enc(s.room_name)}`}><Radio size={14} />Open live room</Link> : undefined} />
       {error && <Alert kind="bad">{(error as Error).message}{' '}This session may predate the collector; only sessions seen since webhooks were enabled are recorded.</Alert>}
+      {s?.partial === 2 && <Alert kind="warn">This session was reconstructed from LiveKit's egress record because it started before webhooks were enabled. Its name, ID, times and recording are known; participants and calls were not recorded.</Alert>}
       <Tabs value={tab} onChange={setTab} tabs={[{ id: 'analytics', label: 'Session analytics' }, { id: 'events', label: 'Session events', count: data?.events.length }, { id: 'insights', label: 'Agent insights' }]} />
       {s && tab === 'analytics' && (
         <>
           <Panel><KV items={[['Room name', s.room_name], ['Room session ID', <span className="mono">{s.room_sid}</span>], ['Unique participants', new Set((data!.participants as Json[]).map((p) => p.identity)).size], ['Start time', fromMs(s.started_at)], ['End time', fromMs(s.ended_at)], ['Duration', durationMs(s.started_at, s.ended_at)]]} /></Panel>
-          <Panel title="Session timeline"><StepChart points={data!.timeline} t0={s.started_at} t1={end} /></Panel>
+          {(data!.timeline as unknown[]).length > 0 && <Panel title="Session timeline"><StepChart points={data!.timeline} t0={s.started_at} t1={end} /></Panel>}
           <Panel title={`Participants (${data!.participants.length})`}>
             <DataTable rows={data!.participants as Json[]} cols={pcols} rowKey={(p) => p.sid} storageKey="session-parts" pageSize={false} onRow={(p) => navigate(`/sessions/${sid}/participants/${p.sid}`)} empty={{ title: 'No participants recorded' }} />
           </Panel>

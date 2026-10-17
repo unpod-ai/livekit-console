@@ -1,4 +1,5 @@
 import { db } from './db.js';
+import { importFromLiveKit } from './importer.js';
 import { rooms } from './livekit.js';
 
 const GRACE_MS = 90_000;
@@ -34,6 +35,13 @@ export function startReconciler(): void {
     reconcileSessions()
       .then((n) => n && console.log(`reconciler closed ${n} stale session(s)`))
       .catch((err) => console.error('reconcile failed', err));
+  const sync = () =>
+    importFromLiveKit()
+      .then((n) => n && console.log(`synced ${n} egress record(s) from LiveKit`))
+      .catch((err) => console.error('egress sync failed', err));
   setTimeout(run, 10_000);
   setInterval(run, 60_000).unref();
+  // Covers egress that started before webhooks did, and any whose webhook was missed.
+  setTimeout(sync, 5_000);
+  setInterval(sync, 5 * 60_000).unref();
 }
