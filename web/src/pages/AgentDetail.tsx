@@ -46,7 +46,7 @@ export function AgentDetail() {
 
   return (
     <>
-      <PageHeader crumbs={[{ label: 'Project' }, { label: 'Agents', to: '/agents' }, { label: name }, { label: 'Overview' }]} title={name} range
+      <PageHeader crumbs={[{ label: 'Project' }, { label: 'Agents', to: '/agents' }, { label: name }, { label: { overview: 'Overview', worker: 'Worker', sessions: 'Sessions' }[tab] }]} title={name} range
         actions={<div style={{ textAlign: 'right', lineHeight: 1.2 }}><div className="mono muted" style={{ fontSize: 9.5, letterSpacing: 0.5 }}>CURRENT STATUS</div>{statusEl}</div>} />
       <Tabs value={tab} onChange={setTab} tabs={[{ id: 'overview', label: 'Overview' }, { id: 'worker', label: 'Worker' }, { id: 'sessions', label: 'Sessions', count: detail.data?.sessions.length }]} />
 
@@ -107,7 +107,10 @@ export function AgentDetail() {
               ]} />
             ) : <div className="muted" style={{ padding: 16 }}>No worker endpoint is configured for this agent.</div>}
           </Panel>
-          <WorkersPanel workers={wk.data?.workers ?? []} former={wk.data?.former ?? []} agent={name} />
+          {/* the status panel above already covers a single worker; the table is for several, or for dead ones */}
+          {[...(wk.data?.workers ?? []), ...(wk.data?.former ?? [])].filter((w) => w.agentName === name).length > 1 && (
+            <WorkersPanel workers={wk.data?.workers ?? []} former={wk.data?.former ?? []} agent={name} />
+          )}
         </>
       )}
 
