@@ -1,0 +1,61 @@
+import { useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { ArrowRight, CheckCircle2, AlertTriangle } from 'lucide-react';
+import { type Json } from '../lib/api';
+import { useApi } from '../lib/hooks';
+import { fmtMs, fromMs, durationMs, relTime } from '../lib/format';
+import { DataTable, type Col } from '../components/DataTable';
+import { BarsChart } from '../components/Charts';
+import { Badge, Kpi, Kpis, PageHeader, Panel, RangeSelect, StatusBadge } from '../components/ui';
+
+export function Overview() {
+  const navigate = useNavigate();
+  const [hours, setHours] = useState(168);
+  const insights = useApi<Json>(['insights', hours], `/history/insights?hours=${hours}`);
+  const rooms = useApi<Json[]>(['rooms'], '/rooms');
+  const active = useApi<Json>(['calls-active'], '/history/calls?hours=24&state=active&limit=1');
+  const recent = useApi<Json>(['sessions-recent'], '/history/sessions?hours=168&limit=8');
+  const collector = useApi<Json>(['collector'], '/history/collector');
+  const i = insights.data;
+  const online = (rooms.data ?? []).reduce((n, r) => n + (r.numParticipants ?? 0), 0);
+
+  const cols: Col<Json>[] = [
+    { key: 'room', header: 'Room', cell: (s) => s.room_name },
+    { key: 'start', header: 'Started', cell: (s) => fromMs(s.started_at) },
+    { key: 'dur', header: 'Duration', cell: (s) => durationMs(s.started_at, s.ended_at) },
+    { key: 'feat', header: 'Features', cell: (s) => <div className="badges">{!!s.has_agent && <Badge tone="info">Agents</Badge>}{!!s.has_sip && <Badge>SIP</Badge>}{!!s.has_egress && <Badge>Egress</Badge>}</div> },
+    { key: 'st', header: 'Status', cell: (s) => <StatusBadge status={s.ended_at ? 'closed' : 'active'} /> },
+  ];
+  const lkOk = !rooms.isError && !!rooms.data;
+  const noEvents = collector.data && collector.data.events === 0;
+
+  return (
+    <>
+      <PageHeader crumbs={[{ label: 'Project' }, { label: 'Overview' }]} title="Overview" sub="Live state of your self-hosted LiveKit server" />
+      <Kpis>
+        <Kpi label="Active rooms" value={rooms.data?.length ?? '…'} accent />
+        <Kpi label="Participants online" value={rooms.data ? online : '…'} />
+        <Kpi label="Active calls" value={active.data?.total ?? '…'} />
+        <Kpi label="System status" value={<span style={{ fontSize: 15, display: 'inline-flex', alignItems: 'center', gap: 6 }}>{rooms.isLoading ? '…' : lkOk ? <><CheckCircle2 size={16} color="var(--ok)" />LiveKit reachable</> : <><AlertTriangle size={16} color="var(--bad)" />LiveKit unreachable</>}</span>}
+          foot={collector.data ? (collector.data.lastEventAt ? `Last webhook ${relTime(collector.data.lastEventAt)}` : 'No webhooks received yet') : undefined} />
+      </Kpis>
+      {noEvents && (
+        <div className="alert warn">No webhook events have been received. History pages stay empty until LiveKit is configured to send webhooks to this console (<span className="mono">./deploy.sh webhook</span>).</div>
+      )}
+      <Panel title="Insights" actions={<RangeSelect value={hours} onChange={setHours} />}>
+        <div className="kpis" style={{ padding: 14, marginBottom: 0 }}>
+          <Kpi label="Sessions served" value={i?.sessions?.toLocaleString() ?? '…'} />
+          <Kpi label="With agents" value={i?.sessionsWithAgents?.toLocaleString() ?? '…'} />
+          <Kpi label="With telephony" value={i?.sessionsWithTelephony?.toLocaleString() ?? '…'} />
+          <Kpi label="Avg session duration" value={i ? fmtMs(i.avgSessionMs) : '…'} />
+          <Kpi label="Agent session minutes" value={i?.agentSessionMinutes?.toLocaleString() ?? '…'} />
+          <Kpi label="Participants" value={i?.participants?.toLocaleString() ?? '…'} />
+        </div>
+        <BarsChart data={(i?.series ?? []).map((p: Json) => ({ t: p.t, sessions: p.n }))} series={[{ key: 'sessions', label: 'Sessions', color: 'var(--accent)' }]} bucketMs={i?.bucketMs ?? 3600000} />
+      </Panel>
+      <Panel title="Recent sessions" actions={<Link className="btn ghost sm" to="/sessions">View all <ArrowRight size={13} /></Link>}>
+        <DataTable rows={recent.data?.rows} cols={cols} rowKey={(s) => s.room_sid} search={false} pageSize={false} loading={recent.isLoading} onRow={(s) => navigate(`/sessions/${s.room_sid}`)} empty={{ title: 'No sessions yet' }} />
+      </Panel>
+    </>
+  );
+}

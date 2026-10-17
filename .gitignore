@@ -1,0 +1,9 @@
+data
+*.db
+*.db-*
+dist
+.DS_Store
+.env
+.env.deploy
+node_modules
+*.tsbuildinfo

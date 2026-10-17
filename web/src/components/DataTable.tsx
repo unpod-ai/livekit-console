@@ -1,0 +1,135 @@
+import { useMemo, useState, type ReactNode } from 'react';
+import { ArrowDown, ArrowUp, Columns3, Search } from 'lucide-react';
+import { Empty, ErrorMsgInline, SkeletonRows } from './table-bits';
+
+export type Col<T> = {
+  key: string;
+  header: string;
+  cell: (row: T) => ReactNode;
+  sort?: (row: T) => string | number;
+  text?: (row: T) => string; // what the search box matches against
+  hidden?: boolean; // hidden by default
+  wrap?: boolean;
+};
+
+type Props<T> = {
+  rows?: T[];
+  cols: Col<T>[];
+  rowKey: (row: T) => string;
+  onRow?: (row: T) => void;
+  rowActions?: (row: T) => ReactNode;
+  loading?: boolean;
+  error?: unknown;
+  search?: boolean;
+  pageSize?: number | false;
+  storageKey?: string;
+  empty?: { title: string; hint?: ReactNode };
+  toolbar?: ReactNode;
+  footer?: ReactNode;
+};
+
+/** Dense table with search, sortable headers, column visibility (remembered) and client paging. */
+export function DataTable<T>({ rows, cols, rowKey, onRow, rowActions, loading, error, search = true, pageSize = 25, storageKey, empty, toolbar, footer }: Props<T>) {
+  const lsKey = storageKey ? `lkc.cols.${storageKey}` : null;
+  const [hidden, setHidden] = useState<Record<string, boolean>>(() => {
+    const saved = lsKey ? JSON.parse(localStorage.getItem(lsKey) ?? 'null') : null;
+    return saved ?? Object.fromEntries(cols.filter((c) => c.hidden).map((c) => [c.key, true]));
+  });
+  const [q, setQ] = useState('');
+  const [sort, setSort] = useState<{ key: string; dir: 1 | -1 } | null>(null);
+  const [page, setPage] = useState(0);
+  const [menu, setMenu] = useState(false);
+
+  const visible = cols.filter((c) => !hidden[c.key]);
+  const processed = useMemo(() => {
+    let r = rows ?? [];
+    if (q.trim()) {
+      const needle = q.toLowerCase();
+      r = r.filter((row) => cols.some((c) => (c.text ? c.text(row) : '').toLowerCase().includes(needle)));
+    }
+    const sc = sort && cols.find((c) => c.key === sort.key);
+    if (sc?.sort) {
+      const f = sc.sort;
+      r = [...r].sort((a, b) => (f(a) > f(b) ? 1 : f(a) < f(b) ? -1 : 0) * sort!.dir);
+    }
+    return r;
+  }, [rows, q, sort, cols]);
+
+  const size = pageSize || processed.length || 1;
+  const pages = Math.max(1, Math.ceil(processed.length / size));
+  const cur = Math.min(page, pages - 1);
+  const shown = pageSize ? processed.slice(cur * size, cur * size + size) : processed;
+
+  const toggle = (key: string) => {
+    const next = { ...hidden, [key]: !hidden[key] };
+    setHidden(next);
+    if (lsKey) localStorage.setItem(lsKey, JSON.stringify(next));
+  };
+
+  return (
+    <div>
+      <div className="panel-head" style={{ borderTop: 0 }}>
+        <div className="table-tools">{toolbar}</div>
+        <div className="table-tools">
+          {search && (
+            <div className="search-wrap">
+              <Search size={14} aria-hidden />
+              <input className="input search" placeholder="Search" aria-label="Search table" value={q} onChange={(e) => { setQ(e.target.value); setPage(0); }} />
+            </div>
+          )}
+          <div className="pos-rel">
+            <button className="btn secondary icon" aria-label="Column visibility" aria-expanded={menu} onClick={() => setMenu(!menu)}><Columns3 size={15} /></button>
+            {menu && (
+              <div className="menu" onMouseLeave={() => setMenu(false)}>
+                {cols.map((c) => (
+                  <label key={c.key} className="check">
+                    <input type="checkbox" checked={!hidden[c.key]} onChange={() => toggle(c.key)} /> {c.header}
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+      <ErrorMsgInline error={error} />
+      {loading && !rows ? (
+        <SkeletonRows />
+      ) : shown.length === 0 ? (
+        <Empty title={q ? 'No matches' : empty?.title ?? 'Nothing here yet'}>{q ? 'Try a different search.' : empty?.hint}</Empty>
+      ) : (
+        <div className="table-wrap">
+          <table className="table">
+            <thead>
+              <tr>
+                {visible.map((c) => (
+                  <th key={c.key} className={c.sort ? 'sortable' : ''} aria-sort={sort?.key === c.key ? (sort.dir === 1 ? 'ascending' : 'descending') : undefined}
+                    onClick={() => c.sort && setSort(sort?.key === c.key ? { key: c.key, dir: (sort.dir * -1) as 1 | -1 } : { key: c.key, dir: 1 })}>
+                    {c.header}
+                    {sort?.key === c.key && (sort.dir === 1 ? <ArrowUp size={11} style={{ marginLeft: 4 }} /> : <ArrowDown size={11} style={{ marginLeft: 4 }} />)}
+                  </th>
+                ))}
+                {rowActions && <th />}
+              </tr>
+            </thead>
+            <tbody>
+              {shown.map((row) => (
+                <tr key={rowKey(row)} className={onRow ? 'clickable' : ''} onClick={() => onRow?.(row)}>
+                  {visible.map((c) => <td key={c.key} className={c.wrap ? 'wrap' : ''}>{c.cell(row)}</td>)}
+                  {rowActions && <td className="actions" onClick={(e) => e.stopPropagation()}>{rowActions(row)}</td>}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {pageSize && processed.length > size && (
+        <div className="pager">
+          <span>{cur * size + 1}–{Math.min(cur * size + size, processed.length)} of {processed.length}</span>
+          <button className="btn secondary sm" disabled={cur === 0} onClick={() => setPage(cur - 1)}>Previous</button>
+          <button className="btn secondary sm" disabled={cur >= pages - 1} onClick={() => setPage(cur + 1)}>Next</button>
+        </div>
+      )}
+      {footer}
+    </div>
+  );
+}

@@ -1,0 +1,36 @@
+import cookieParser from 'cookie-parser';
+import express from 'express';
+import { existsSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { login, logout, me, requireAuth } from './auth.js';
+import { config } from './config.js';
+import { handleWebhook } from './collector.js';
+import { history } from './history.js';
+import { api } from './routes.js';
+import { startReconciler } from './reconcile.js';
+
+const app = express();
+app.set('trust proxy', 1);
+// LiveKit signs webhooks itself, so this route sits outside the session login.
+app.post('/webhook', express.raw({ type: 'application/webhook+json' }), handleWebhook);
+app.use(express.json());
+app.use(cookieParser());
+
+app.get('/healthz', (_req, res) => res.json({ ok: true }));
+app.post('/api/auth/login', login);
+app.post('/api/auth/logout', logout);
+app.get('/api/auth/me', requireAuth, me);
+app.use('/api/history', requireAuth, history);
+app.use('/api', requireAuth, api);
+
+// In production the built web app is served from here.
+const webDist = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../web/dist');
+if (existsSync(webDist)) {
+  app.use(express.static(webDist));
+  app.get('*', (_req, res) => res.sendFile(path.join(webDist, 'index.html')));
+}
+
+const host = process.env.HOST ?? '0.0.0.0';
+startReconciler();
+app.listen(config.port, host, () => console.log(`livekit-console listening on ${host}:${config.port}`));
