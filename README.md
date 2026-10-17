@@ -4,14 +4,20 @@ A self-hostable admin console for a **self-hosted LiveKit** server, modeled on t
 (which has no open-source equivalent). React + Vite + TypeScript frontend; a small Express backend that holds the
 API key/secret so the browser never sees them, receives LiveKit webhooks and stores history in SQLite.
 
+## Documentation
+- [Getting started](docs/getting-started.md): configure, run, enable webhooks and agent status
+- [Features](docs/features.md): every page and what it shows
+- [Configuration](docs/configuration.md): all environment variables
+- [Deployment](docs/deployment.md): deploy to a VM with HTTPS and an IP allowlist
+
 ## Screenshots
 Taken from a demo instance with simulated data (`server/scripts/simulate-webhooks.ts`).
 
-| | |
-|---|---|
-| ![Overview](docs/screenshots/overview.jpg) | ![Agents](docs/screenshots/agents.jpg) |
-| ![Agent detail](docs/screenshots/agent-detail.jpg) | ![Calls](docs/screenshots/calls.jpg) |
-| ![Sessions](docs/screenshots/sessions.jpg) | |
+![Overview](docs/images/overview.png)
+![Agents](docs/images/agents.png)
+![Agent detail](docs/images/agent-detail.png)
+![Calls](docs/images/calls.png)
+![Sessions](docs/images/sessions.png)
 
 ## What it covers
 | Area | Source |
