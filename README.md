@@ -15,6 +15,14 @@ API key/secret so the browser never sees them, receives LiveKit webhooks and sto
 Not available on a self-hosted server (so not faked): per-session bandwidth/latency analytics, agent observability,
 PCAP/codec/SIP response per call, calls rejected before a room is created, number purchasing, billing.
 
+## Agents
+Agent status comes from the workers themselves, not from test jobs. Every LiveKit Agents worker serves a small status
+server (port 8081 by default: `GET /` health, `GET /worker` name, job type, load, active jobs, SDK version). Set
+`AGENT_WORKER_URLS` (comma-separated base URLs) and the console polls them every 10s, so a running worker shows as
+**Running** and a stopped one as **Dead**, with its last ping and last healthy time. Each agent's page has an Overview
+(sessions served, join latency, uptime, load), a **Worker** tab and a Sessions tab. The worker ID (`AW_...`) is not exposed
+by the status server, so it only shows if a worker reports one.
+
 ## Access control
 Sign in with the admin from `.env` (always works, as a fallback), then add teammates under **Settings → Team members**.
 Roles: **Admin** (full access) and **Viewer** (read everything, change nothing; enforced on the server). Passwords are
@@ -48,3 +56,8 @@ Point LiveKit at `http://<console>/webhook` (signed with your API key, verified 
 
 The container binds to `127.0.0.1` on the VM; reach it through an SSH tunnel or the HTTPS step above.
 `scripts/simulate-webhooks.ts` and `scripts/check-livekit.ts` help with testing and verifying credentials.
+
+## Star history
+[![Star History Chart](https://api.star-history.com/svg?repos=unpod-ai/livekit-console&type=Date)](https://star-history.com/#unpod-ai/livekit-console&Date)
+
+(The chart renders once the repository is public.)
