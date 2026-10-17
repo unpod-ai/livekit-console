@@ -185,6 +185,22 @@ history.get('/agent-workers', (req, res) => {
   const stats = db.prepare('SELECT COUNT(*) AS n, COALESCE(SUM(ok),0) AS up, AVG(CASE WHEN ok = 1 THEN load END) AS avgLoad FROM agent_worker_samples WHERE url = ? AND at >= ?');
   const seen = db.prepare('SELECT MIN(at) AS firstSeenAt, MAX(CASE WHEN ok = 1 THEN at END) AS lastOkAt, MAX(at) AS lastCheckedAt FROM agent_worker_samples WHERE url = ?');
   const last = db.prepare('SELECT agent_name AS agentName, worker_type AS workerType, sdk_version AS sdkVersion, project_type AS projectType FROM agent_worker_samples WHERE url = ? AND agent_name IS NOT NULL ORDER BY at DESC LIMIT 1');
+  // A worker's outages in the range: each run of failed checks, with when it began and when the worker came back.
+  const samplesOf = db.prepare('SELECT at, ok FROM agent_worker_samples WHERE url = ? AND at >= ? ORDER BY at');
+  const outagesOf = (url: string) => {
+    const out: { from: number; to: number | null; checks: number }[] = [];
+    let open: { from: number; to: number | null; checks: number } | null = null;
+    for (const s of samplesOf.all(url, since(hours)) as { at: number; ok: number }[]) {
+      if (!s.ok) {
+        if (!open) out.push((open = { from: s.at, to: null, checks: 0 }));
+        open.checks++;
+      } else if (open) {
+        open.to = s.at;
+        open = null;
+      }
+    }
+    return out.reverse().slice(0, 25);
+  };
   const describe = (url: string) => {
     const x = stats.get(url, since(hours)) as { n: number; up: number; avgLoad: number | null };
     return {
@@ -192,6 +208,7 @@ history.get('/agent-workers', (req, res) => {
       uptimePct: x.n ? Math.round((x.up / x.n) * 1000) / 10 : null,
       avgLoadPct: x.avgLoad == null ? null : Math.round(x.avgLoad * 1000) / 10,
       samples: x.n,
+      outages: outagesOf(url),
     };
   };
   const current = workerStatuses();

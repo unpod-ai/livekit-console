@@ -10,8 +10,9 @@ import { useRange } from '../lib/range';
 import { DataTable, type Col } from '../components/DataTable';
 import { Alert, Badge, Kpi, Kpis, PageHeader, Panel } from '../components/ui';
 
-export type Worker = { url: string; ok: boolean; agentName: string | null; workerId: string | null; workerType: string | null; load: number | null; activeJobs: number | null; sdkVersion: string | null; projectType: string | null; latencyMs: number | null; checkedAt: number; error: string | null; uptimePct: number | null; avgLoadPct: number | null; firstSeenAt: number | null; lastOkAt: number | null; lastCheckedAt: number | null; samples: number };
-export type FormerWorker = Pick<Worker, 'url' | 'agentName' | 'workerType' | 'sdkVersion' | 'projectType' | 'uptimePct' | 'avgLoadPct' | 'firstSeenAt' | 'lastOkAt' | 'lastCheckedAt' | 'samples'>;
+export type Worker = { url: string; ok: boolean; agentName: string | null; workerId: string | null; workerType: string | null; load: number | null; activeJobs: number | null; sdkVersion: string | null; projectType: string | null; latencyMs: number | null; checkedAt: number; error: string | null; uptimePct: number | null; avgLoadPct: number | null; outages: Outage[]; firstSeenAt: number | null; lastOkAt: number | null; lastCheckedAt: number | null; samples: number };
+export type Outage = { from: number; to: number | null; checks: number };
+export type FormerWorker = Pick<Worker, 'url' | 'agentName' | 'workerType' | 'sdkVersion' | 'projectType' | 'uptimePct' | 'avgLoadPct' | 'outages' | 'firstSeenAt' | 'lastOkAt' | 'lastCheckedAt' | 'samples'>;
 
 const JOB_TYPES: Record<string, string> = { JT_ROOM: 'Room', JT_PUBLISHER: 'Publisher', JT_PARTICIPANT: 'Participant' };
 /** The job type a worker registered for (what one job is scoped to), spelled out. */

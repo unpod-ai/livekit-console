@@ -9,6 +9,7 @@ import { AreaChart, BarsChart, PALETTE, Spark } from '../components/Charts';
 import { DataTable, type Col } from '../components/DataTable';
 import { Alert, Badge, Help, KV, Kpi, Kpis, PageHeader, Panel, Tabs } from '../components/ui';
 import { jobType, sdkLabel, WorkersPanel, type FormerWorker, type Worker } from './Agents';
+import { DataTable as OutageTable } from '../components/DataTable';
 
 const STATE_TONE: Record<string, 'ok' | 'warn' | 'info' | undefined> = { listening: 'ok', speaking: 'info', thinking: 'warn', initializing: 'warn' };
 const ms = (n: number) => (n >= 1000 ? `${+(n / 1000).toFixed(1)}k ms` : `${Math.round(n)} ms`);
@@ -26,6 +27,7 @@ export function AgentDetail() {
   const detail = useApi<{ sessions: Json[] }>(['agent', name], `/history/agents/${enc}`, { live: false });
 
   const worker = wk.data?.workers.find((w) => w.agentName === name);
+  const outages = [...(wk.data?.workers ?? []), ...(wk.data?.former ?? [])].filter((w) => w.agentName === name).flatMap((w) => w.outages.map((o) => ({ ...o, url: w.url }))).sort((a, b) => b.from - a.from);
   const jobs = (live.data ?? []).filter((l) => l.agentName === name);
   const o = ov.data;
   const from = Date.now() - hours * 3600000;
@@ -59,6 +61,8 @@ export function AgentDetail() {
             <Kpi label="Worker endpoint" value={<span className="mono" style={{ fontSize: 13, color: 'var(--text)' }}>{worker?.url ?? 'Not configured'}</span>} />
           </Kpis>
           {wk.data && !worker && <Alert kind="warn">No worker endpoint is configured for this agent, so uptime and load are unknown. Add its status URL to <span className="mono">AGENT_WORKER_URLS</span>.</Alert>}
+
+          <WorkersPanel workers={wk.data?.workers ?? []} former={wk.data?.former ?? []} agent={name} />
 
           <Panel title="Sessions served" actions={<Help text="Sessions this agent joined, per time bucket" />}>
             <BarsChart data={o?.sessions ?? []} series={[{ key: 'n', label: 'Sessions', color: PALETTE.cyan }]} bucketMs={bucketMs} from={from} to={to} height={190} />
@@ -106,6 +110,15 @@ export function AgentDetail() {
                 ['Last error', worker.error ?? '—'],
               ]} />
             ) : <div className="muted" style={{ padding: 16 }}>No worker endpoint is configured for this agent.</div>}
+          </Panel>
+          <Panel title={`Outages (${outages.length})`} actions={<Help text="Each period the worker stopped answering its status checks" />}>
+            <OutageTable rows={outages} search={false} pageSize={false} rowKey={(o) => `${o.url}-${o.from}`} empty={{ title: 'No outages in this range', hint: 'The worker answered every status check.' }} cols={[
+              { key: 'state', header: 'State', cell: (o) => (o.to == null ? <Badge tone="bad" dot>Down now</Badge> : <Badge tone="ok" dot>Recovered</Badge>) },
+              { key: 'url', header: 'Endpoint', cell: (o) => <span className="mono">{o.url}</span> },
+              { key: 'from', header: 'Went down', cell: (o) => fromMs(o.from), sort: (o) => o.from },
+              { key: 'to', header: 'Back up', cell: (o) => (o.to ? fromMs(o.to) : '—') },
+              { key: 'dur', header: 'Down for', cell: (o) => durationMs(o.from, o.to) },
+            ]} />
           </Panel>
           {/* the status panel above already covers a single worker; the table is for several, or for dead ones */}
           {([...(wk.data?.workers ?? []), ...(wk.data?.former ?? [])].filter((w) => w.agentName === name).length > 1 || (wk.data?.former ?? []).some((w) => w.agentName === name)) && (
