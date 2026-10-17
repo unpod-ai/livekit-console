@@ -22,8 +22,9 @@ export function Sessions() {
   const [status, setStatus] = useState('');
   const [params] = useSearchParams();
   const [feature, setFeature] = useState(params.get('feature') ?? '');
+  const [agent, setAgent] = useState(params.get('agent') ?? '');
   const [offset, setOffset] = useState(0);
-  const res = useApi<{ total: number; rows: Json[]; uniqueParticipants: number; totalRooms: number; bucketMs: number; series: { t: number; n: number }[]; peopleSeries: { t: number; n: number }[] }>(['sessions', hours, q, status, feature, offset], `/history/sessions?hours=${hours}&q=${enc(q)}&status=${status}&feature=${feature}&limit=${LIMIT}&offset=${offset}`);
+  const res = useApi<{ total: number; rows: Json[]; uniqueParticipants: number; totalRooms: number; bucketMs: number; series: { t: number; n: number }[]; peopleSeries: { t: number; n: number }[] }>(['sessions', hours, q, status, feature, agent, offset], `/history/sessions?hours=${hours}&q=${enc(q)}&status=${status}&feature=${feature}&agent=${enc(agent)}&limit=${LIMIT}&offset=${offset}`);
   const reset = <T,>(f: (v: T) => void) => (v: T) => { f(v); setOffset(0); };
 
   const cols: Col<Json>[] = [
@@ -55,6 +56,7 @@ export function Sessions() {
         <DataTable rows={res.data?.rows} cols={cols} rowKey={(s) => s.room_sid} loading={res.isLoading} error={res.error} search={false} pageSize={false} storageKey="sessions"
           onRow={(s) => navigate(`/sessions/${s.room_sid}`)}
           toolbar={<>
+            {agent && <button className="btn secondary" onClick={() => reset(setAgent)('')} title="Clear agent filter">Agent: {agent} ✕</button>}
             <input className="input" style={{ width: 240 }} placeholder="Search room name or session ID" aria-label="Search sessions" value={q} onChange={(e) => reset(setQ)(e.target.value)} />
             <select className="select" style={{ width: 'auto' }} aria-label="Status" value={status} onChange={(e) => reset(setStatus)(e.target.value)}><option value="">All statuses</option><option value="active">Active</option><option value="closed">Closed</option></select>
             <select className="select" style={{ width: 'auto' }} aria-label="Feature" value={feature} onChange={(e) => reset(setFeature)(e.target.value)}><option value="">All features</option><option value="agents">Agents</option><option value="sip">SIP</option><option value="egress">Egress</option></select>
@@ -89,7 +91,7 @@ export function SessionDetail() {
       <div className="badges" onClick={stop}>
         {p.kind === 'SIP' && <Link className="badge" to={`/telephony/calls/${p.sid}`} title="Open this call">SIP call</Link>}
         {p.kind === 'EGRESS' && isEgressIdentity(p.identity) && <Link className="badge" to={`/egress/${p.identity}`} title="Open this egress">Egress</Link>}
-        {p.kind === 'AGENT' && <Badge tone="info">Agent</Badge>}
+        {p.kind === 'AGENT' && <Link className="badge info" to={`/agents?q=${enc(p.attributes?.['lk.agent.name'] ?? p.identity)}`} title="Open this agent">{p.attributes?.['lk.agent.name'] ?? 'Agent'}</Link>}
       </div>
     ) },
   ];

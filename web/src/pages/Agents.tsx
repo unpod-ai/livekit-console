@@ -1,43 +1,60 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { useInitialQuery } from '../lib/useTab';
 import { type Json } from '../lib/api';
 import { useApi, useLkList } from '../lib/hooks';
+import { useInitialQuery } from '../lib/useTab';
+import { fmtMs, relTime } from '../lib/format';
 import { DataTable, type Col } from '../components/DataTable';
-import { Alert, Badge, Kpi, Kpis, PageHeader, Panel } from '../components/ui';
+import { Alert, Badge, Kpi, Kpis, PageHeader, Panel, RangeSelect } from '../components/ui';
 
-type Row = { name: string; rules: Json[] };
+type Row = { name: string; sessions: number; jobs: number; minutes: number; avgMs: number; activeNow: number; lastSeenAt: number | null; rules: Json[] };
 
-/** A self-hosted server doesn't track agent workers, so this lists the agents your dispatch rules send to calls. */
+/**
+ * A self-hosted LiveKit server has no API for listing registered agent workers, so this page is built from what is
+ * observable: agents that joined sessions (named in the participant's attributes) and agents named in dispatch rules.
+ */
 export function Agents() {
-  const rules = useLkList('sip', 'ListSIPDispatchRule');
+  const [hours, setHours] = useState(168);
   const initialQuery = useInitialQuery();
-  const insights = useApi<Json>(['insights', 168], '/history/insights?hours=168');
+  const seen = useApi<Json[]>(['agents', hours], `/history/agents?hours=${hours}`);
+  const rules = useLkList('sip', 'ListSIPDispatchRule');
+
   const rows = useMemo<Row[]>(() => {
     const m = new Map<string, Row>();
+    (seen.data ?? []).forEach((a) => m.set(a.name, { name: a.name, sessions: a.sessions, jobs: a.jobs, minutes: a.minutes, avgMs: a.avgMs, activeNow: a.activeNow, lastSeenAt: a.lastSeenAt, rules: [] as Json[] }));
     (rules.data ?? []).forEach((r) => (r.roomConfig?.agents ?? []).forEach((a: Json) => {
-      if (!m.has(a.agentName)) m.set(a.agentName, { name: a.agentName, rules: [] });
-      m.get(a.agentName)!.rules.push(r);
+      const row = m.get(a.agentName) ?? { name: a.agentName, sessions: 0, jobs: 0, minutes: 0, avgMs: 0, activeNow: 0, lastSeenAt: null, rules: [] as Json[] };
+      row.rules.push(r);
+      m.set(a.agentName, row);
     }));
-    return [...m.values()].sort((a, b) => a.name.localeCompare(b.name));
-  }, [rules.data]);
+    return [...m.values()].sort((a, b) => b.activeNow - a.activeNow || (b.lastSeenAt ?? 0) - (a.lastSeenAt ?? 0) || a.name.localeCompare(b.name));
+  }, [seen.data, rules.data]);
+
   const cols: Col<Row>[] = [
-    { key: 'name', header: 'Agent name', cell: (a) => <b>{a.name}</b>, text: (a) => a.name, sort: (a) => a.name },
-    { key: 'count', header: 'Dispatch rules', cell: (a) => a.rules.length, sort: (a) => a.rules.length },
-    { key: 'rules', header: 'Rules', cell: (a) => <div className="badges">{a.rules.slice(0, 4).map((r) => <Link key={r.sipDispatchRuleId} className="badge" to={`/telephony/dispatch?q=${r.sipDispatchRuleId}`}>{r.name || r.sipDispatchRuleId}</Link>)}{a.rules.length > 4 && <Badge>+{a.rules.length - 4}</Badge>}</div>, text: (a) => a.rules.map((r) => r.name).join(' ') },
+    { key: 'name', header: 'Agent name', cell: (a) => <Link className="rowlink" to={`/sessions?agent=${encodeURIComponent(a.name)}`} title="View this agent's sessions"><b>{a.name}</b></Link>, text: (a) => a.name, sort: (a) => a.name },
+    { key: 'status', header: 'Status', cell: (a) => (a.activeNow ? <Badge tone="ok" dot pulse>{a.activeNow} active</Badge> : a.sessions ? <Badge>Idle</Badge> : <Badge>No sessions yet</Badge>), sort: (a) => a.activeNow },
+    { key: 'sessions', header: 'Sessions', cell: (a) => a.sessions.toLocaleString(), sort: (a) => a.sessions },
+    { key: 'minutes', header: 'Agent minutes', cell: (a) => a.minutes.toLocaleString(), sort: (a) => a.minutes },
+    { key: 'avg', header: 'Avg session', cell: (a) => (a.jobs ? fmtMs(a.avgMs) : '—'), sort: (a) => a.avgMs },
+    { key: 'last', header: 'Last seen', cell: (a) => (a.lastSeenAt ? relTime(a.lastSeenAt) : '—'), sort: (a) => a.lastSeenAt ?? 0 },
+    { key: 'rules', header: 'Dispatch rules', cell: (a) => (a.rules.length ? <div className="badges">{a.rules.slice(0, 3).map((r) => <Link key={r.sipDispatchRuleId} className="badge" to={`/telephony/dispatch?q=${r.sipDispatchRuleId}`}>{r.name || r.sipDispatchRuleId}</Link>)}{a.rules.length > 3 && <Badge>+{a.rules.length - 3}</Badge>}</div> : <span className="muted">None</span>), text: (a) => a.rules.map((r) => r.name).join(' ') },
   ];
+  const total = (k: 'sessions' | 'minutes' | 'activeNow') => rows.reduce((n, r) => n + r[k], 0);
+
   return (
     <>
-      <PageHeader crumbs={[{ label: 'Project' }, { label: 'Agents' }]} title="Agents" sub="Agents your dispatch rules send to inbound calls" />
+      <PageHeader crumbs={[{ label: 'Project' }, { label: 'Agents' }]} title="Agents" sub="Agents that have joined sessions, plus agents named in dispatch rules" actions={<RangeSelect value={hours} onChange={setHours} />} />
       <Kpis>
-        <Kpi label="Agents referenced" value={rows.length} />
-        <Kpi label="Agent sessions (7d)" value={insights.data?.sessionsWithAgents?.toLocaleString() ?? '…'} />
-        <Kpi label="Agent session minutes (7d)" value={insights.data?.agentSessionMinutes?.toLocaleString() ?? '…'} />
+        <Kpi label="Agents" value={rows.length} />
+        <Kpi label="Active now" value={total('activeNow')} accent />
+        <Kpi label="Agent sessions" value={total('sessions').toLocaleString()} />
+        <Kpi label="Agent minutes" value={total('minutes').toLocaleString()} />
       </Kpis>
       <Panel>
-        <DataTable rows={rows} cols={cols} rowKey={(a) => a.name} loading={rules.isLoading} error={rules.error} storageKey="agents" initialQuery={initialQuery} empty={{ title: 'No agents in dispatch rules', hint: <>Add an agent name to a <Link to="/telephony/dispatch">dispatch rule</Link> so inbound calls are answered.</> }} />
+        <DataTable rows={rows} cols={cols} rowKey={(a) => a.name} loading={seen.isLoading || rules.isLoading} error={seen.error} storageKey="agents" initialQuery={initialQuery}
+          empty={{ title: 'No agents seen yet', hint: 'An agent shows up here after it joins a session (and webhooks reach this console), or when a dispatch rule names it.' }} />
       </Panel>
-      <Alert>Deploying, versioning and monitoring agent workers is a LiveKit Cloud feature. Here, agents are your own processes; you can also dispatch one into a live room from the room's page.</Alert>
+      <Alert>LiveKit Cloud lists deployed agent workers; a self-hosted server has no API for that, so a worker that is running but has not taken a call yet will not appear. "Active now" counts agents currently inside a session.</Alert>
     </>
   );
 }

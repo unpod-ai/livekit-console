@@ -29,7 +29,7 @@ for (let i = 0; i < calls; i++) {
   const route = i % 2 === 0 ? { 'sip.ruleID': 'SDR_sim', 'sip.trunkID': 'ST_sim' } : { 'sip.trunkID': 'ST_sim' };
   await send({ event: 'room_started', room }, t0);
   await send({ event: 'participant_joined', room, participant: { sid: `PA_sip${i}`, identity: `sip_${phone}`, kind: 'SIP', joinedAt: String(Math.floor((t0 + 500) / 1000)), attributes: { 'sip.phoneNumber': phone, 'sip.trunkPhoneNumber': '+14155550100', 'sip.callStatus': 'active', 'sip.callID': `SCL_sim${i}`, ...route } } }, t0 + 500);
-  await send({ event: 'participant_joined', room, participant: { sid: `PA_agent${i}`, identity: `agent-sim${i}`, kind: 'AGENT', joinedAt: String(Math.floor((t0 + 1500) / 1000)) } }, t0 + 1500);
+  await send({ event: 'participant_joined', room, participant: { sid: `PA_agent${i}`, identity: `agent-sim${i}`, kind: 'AGENT', joinedAt: String(Math.floor((t0 + 1500) / 1000)), attributes: { 'lk.agent.name': i % 3 === 0 ? 'sim-agent-b' : 'sim-agent-a' } } }, t0 + 1500);
   await send({ event: 'egress_started', egressInfo: { egressId: `EG_sim${i}`, roomId: room.sid, roomName: room.name, status: 'EGRESS_ACTIVE', startedAt: String((t0 + 2000) * 1e6) } }, t0 + 2000);
   await send({ event: 'egress_ended', egressInfo: {
     egressId: `EG_sim${i}`, roomId: room.sid, roomName: room.name, status: 'EGRESS_COMPLETE', startedAt: String((t0 + 2000) * 1e6), endedAt: String((t0 + 60_000) * 1e6),

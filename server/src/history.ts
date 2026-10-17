@@ -13,6 +13,9 @@ const kindName = (k: string | null): string => (k ? KINDS[k] ?? k : 'STANDARD');
 const EGRESS_STATUS: Record<string, string> = { '0': 'EGRESS_STARTING', '1': 'EGRESS_ACTIVE', '2': 'EGRESS_ENDING', '3': 'EGRESS_COMPLETE', '4': 'EGRESS_FAILED', '5': 'EGRESS_ABORTED', '6': 'EGRESS_LIMIT_REACHED' };
 const egressStatus = (s: string | null): string | null => (s == null ? s : EGRESS_STATUS[s] ?? s);
 
+// Agent participants carry the name of the agent they run as in their attributes.
+const agentNameOf = (attrs: Record<string, string>): string => attrs['lk.agent.name'] ?? attrs['lk.agent_name'] ?? attrs['agent.name'] ?? 'unknown';
+
 const intParam = (v: unknown, dflt: number, max: number): number => {
   const n = Number(v);
   return Number.isFinite(n) && n > 0 ? Math.min(n, max) : dflt;
@@ -59,7 +62,8 @@ history.get('/sessions', (req, res) => {
     sip: `AND EXISTS(SELECT 1 FROM participants p WHERE p.room_sid = s.room_sid AND p.kind IN ${SIP})`,
     egress: 'AND EXISTS(SELECT 1 FROM egress e WHERE e.room_sid = s.room_sid)',
   } as Record<string, string>)[String(req.query.feature)] ?? '';
-  const where = `s.started_at >= ? AND (s.room_name LIKE ? OR s.room_sid LIKE ?) ${status} ${feature}`;
+  const agent = typeof req.query.agent === 'string' && req.query.agent ? `AND EXISTS(SELECT 1 FROM participants p WHERE p.room_sid = s.room_sid AND p.kind IN ${AGENT} AND p.attributes LIKE '%"lk.agent.name":' || json_quote(?) || '%')` : '';
+  const where = `s.started_at >= ? AND (s.room_name LIKE ? OR s.room_sid LIKE ?) ${status} ${feature} ${agent}`;
   const rows = db
     .prepare(
       `SELECT s.room_sid, s.room_name, s.started_at, s.ended_at, s.partial,
@@ -69,8 +73,8 @@ history.get('/sessions', (req, res) => {
         EXISTS(SELECT 1 FROM egress e WHERE e.room_sid = s.room_sid) AS has_egress
        FROM sessions s WHERE ${where} ORDER BY s.started_at DESC LIMIT ? OFFSET ?`,
     )
-    .all(since(hours), q, q, limit, offsetParam(req.query.offset));
-  const total = db.prepare(`SELECT COUNT(*) AS n FROM sessions s WHERE ${where}`).get(since(hours), q, q) as { n: number };
+    .all(...[since(hours), q, q, ...(agent ? [String(req.query.agent)] : []), limit, offsetParam(req.query.offset)]);
+  const total = db.prepare(`SELECT COUNT(*) AS n FROM sessions s WHERE ${where}`).get(...[since(hours), q, q, ...(agent ? [String(req.query.agent)] : [])]) as { n: number };
   const rooms = db.prepare('SELECT COUNT(DISTINCT room_name) AS n, COUNT(DISTINCT room_sid) AS sessions FROM sessions WHERE started_at >= ?').get(since(hours)) as any;
   const people = db.prepare('SELECT COUNT(DISTINCT identity) AS n FROM participants WHERE joined_at >= ?').get(since(hours)) as { n: number };
   const bucketMs = hours <= 48 ? 3600 * 1000 : 24 * 3600 * 1000;
@@ -128,6 +132,26 @@ history.get('/sessions/:sid/participants/:psid', (req, res) => {
     tracks: [...tracks.values()],
     events: events.map(({ id, ts, type }) => ({ id, ts, type })),
   });
+});
+
+history.get('/agents', (req, res) => {
+  const hours = intParam(req.query.hours, 168, 24 * 90);
+  const now = Date.now();
+  const rows = db
+    .prepare(`SELECT p.room_sid, p.attributes, p.joined_at, p.left_at FROM participants p WHERE p.kind IN ${AGENT} AND p.joined_at >= ? ORDER BY p.joined_at`)
+    .all(since(hours)) as { room_sid: string; attributes: string; joined_at: number; left_at: number | null }[];
+  const byName = new Map<string, { name: string; sessions: Set<string>; jobs: number; ms: number; active: number; lastSeenAt: number; firstSeenAt: number }>();
+  for (const r of rows) {
+    const name = agentNameOf(JSON.parse(r.attributes || '{}'));
+    const a = byName.get(name) ?? { name, sessions: new Set(), jobs: 0, ms: 0, active: 0, lastSeenAt: 0, firstSeenAt: r.joined_at };
+    a.sessions.add(r.room_sid);
+    a.jobs++;
+    a.ms += (r.left_at ?? now) - r.joined_at;
+    if (!r.left_at) a.active++;
+    a.lastSeenAt = Math.max(a.lastSeenAt, r.left_at ?? now);
+    byName.set(name, a);
+  }
+  res.json([...byName.values()].map((a) => ({ name: a.name, sessions: a.sessions.size, jobs: a.jobs, minutes: Math.round(a.ms / 60000), avgMs: a.jobs ? a.ms / a.jobs : 0, activeNow: a.active, lastSeenAt: a.lastSeenAt, firstSeenAt: a.firstSeenAt })).sort((x, y) => y.lastSeenAt - x.lastSeenAt));
 });
 
 history.get('/calls', (req, res) => {
