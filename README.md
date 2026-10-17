@@ -4,6 +4,15 @@ A self-hostable admin console for a **self-hosted LiveKit** server, modeled on t
 (which has no open-source equivalent). React + Vite + TypeScript frontend; a small Express backend that holds the
 API key/secret so the browser never sees them, receives LiveKit webhooks and stores history in SQLite.
 
+## Screenshots
+Taken from a demo instance with simulated data (`server/scripts/simulate-webhooks.ts`).
+
+| | |
+|---|---|
+| ![Overview](docs/screenshots/overview.jpg) | ![Agents](docs/screenshots/agents.jpg) |
+| ![Agent detail](docs/screenshots/agent-detail.jpg) | ![Calls](docs/screenshots/calls.jpg) |
+| ![Sessions](docs/screenshots/sessions.jpg) | |
+
 ## What it covers
 | Area | Source |
 |---|---|
@@ -22,6 +31,10 @@ server (port 8081 by default: `GET /` health, `GET /worker` name, job type, load
 **Running** and a stopped one as **Dead**, with its last ping and last healthy time. Each agent's page has an Overview
 (sessions served, join latency, uptime, load), a **Worker** tab and a Sessions tab. The worker ID (`AW_...`) is not exposed
 by the status server, so it only shows if a worker reports one.
+
+## Repo traffic
+GitHub keeps only 14 days of clone and view counts. Set `GITHUB_TOKEN` (push access to the repo) and optionally `GITHUB_REPO`
+and the console copies the daily counts into its database every 6 hours; **Tools → Repo traffic** charts them over any range.
 
 ## Access control
 Sign in with the admin from `.env` (always works, as a fallback), then add teammates under **Settings → Team members**.

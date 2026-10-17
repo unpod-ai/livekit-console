@@ -16,6 +16,9 @@ export const config = {
   adminPassword: need('ADMIN_PASSWORD'),
   sessionSecret: need('SESSION_SECRET'),
   sipUri: process.env.SIP_URI ?? '',
+  // GitHub repo whose clone/view traffic is recorded daily; the token needs push access to read traffic.
+  githubRepo: process.env.GITHUB_REPO ?? 'unpod-ai/livekit-console',
+  githubToken: process.env.GITHUB_TOKEN ?? '',
   // Base URLs of agent workers' built-in status servers (the LiveKit Agents framework serves them on :8081).
   workerUrls: (process.env.AGENT_WORKER_URLS ?? '').split(',').map((u) => u.trim().replace(/\/+$/, '')).filter(Boolean),
 };

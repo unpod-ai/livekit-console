@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { statSync } from 'node:fs';
 import { config } from './config.js';
 import { db } from './db.js';
+import { trafficState } from './traffic.js';
 import { workerStatuses } from './workers.js';
 import { redactCredentials } from './twirp.js';
 
@@ -205,6 +206,22 @@ history.get('/agent-workers', (req, res) => {
     }),
     former: retired.map((url) => ({ url, ok: false, ...(last.get(url) as object | undefined), ...describe(url) })),
   });
+});
+
+// Daily GitHub clone/view counts that the traffic sync (traffic.ts) has copied into the database.
+history.get('/repo-traffic', (req, res) => {
+  const days = intParam(req.query.days, 30, 365);
+  const from = Date.now() - days * 86400_000;
+  const rows = db.prepare('SELECT day AS t, kind, count, uniques FROM repo_traffic WHERE day >= ? ORDER BY day').all(from) as { t: number; kind: string; count: number; uniques: number }[];
+  const byDay = new Map<number, Record<string, number>>();
+  const totals = { clones: 0, uniqueCloners: 0, views: 0, uniqueVisitors: 0 };
+  for (const r of rows) {
+    const d = byDay.get(r.t) ?? { t: r.t, clones: 0, uniqueCloners: 0, views: 0, uniqueVisitors: 0 };
+    if (r.kind === 'clones') { d.clones = r.count; d.uniqueCloners = r.uniques; totals.clones += r.count; totals.uniqueCloners += r.uniques; }
+    else { d.views = r.count; d.uniqueVisitors = r.uniques; totals.views += r.count; totals.uniqueVisitors += r.uniques; }
+    byDay.set(r.t, d);
+  }
+  res.json({ ...trafficState(), bucketMs: 86400_000, totals, series: [...byDay.values()] });
 });
 
 history.get('/agents/:name/overview', (req, res) => {

@@ -13,6 +13,7 @@ import { Overview } from './pages/Overview';
 import { PhoneNumbers } from './pages/PhoneNumbers';
 import { RoomDetail, Rooms } from './pages/Rooms';
 import { ParticipantDetail, SessionDetail, Sessions } from './pages/Sessions';
+import { RepoTraffic } from './pages/RepoTraffic';
 import { Settings } from './pages/Settings';
 import { Tokens } from './pages/Tokens';
 import { Trunks } from './pages/Trunks';
@@ -47,6 +48,7 @@ export function App() {
         <Route path="egress/:id" element={<EgressDetail />} />
         <Route path="ingress" element={<Ingress />} />
         <Route path="tokens" element={<Tokens />} />
+        <Route path="repo-traffic" element={<RepoTraffic />} />
         <Route path="settings" element={<Settings />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>

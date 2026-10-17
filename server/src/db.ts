@@ -33,6 +33,10 @@ db.exec(`
     ok INTEGER NOT NULL, load REAL, active_jobs INTEGER, latency_ms INTEGER
   );
   CREATE INDEX IF NOT EXISTS agent_worker_samples_at ON agent_worker_samples(url, at);
+  CREATE TABLE IF NOT EXISTS repo_traffic (
+    day INTEGER NOT NULL, kind TEXT NOT NULL, count INTEGER NOT NULL, uniques INTEGER NOT NULL,
+    PRIMARY KEY (day, kind)
+  );
   CREATE TABLE IF NOT EXISTS egress (
     egress_id TEXT PRIMARY KEY, room_sid TEXT, room_name TEXT, status TEXT,
     started_at INTEGER, ended_at INTEGER, info TEXT NOT NULL

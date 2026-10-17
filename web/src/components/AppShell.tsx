@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import {
-  Activity, BarChart3, Bot, Cable, CircleDot, DoorOpen, Download, GitBranch, Hash, KeyRound,
+  Activity, BarChart3, GitFork, Bot, Cable, CircleDot, DoorOpen, Download, GitBranch, Hash, KeyRound,
   LayoutDashboard, LogOut, PanelLeftClose, PanelLeftOpen, PhoneCall, Search, Settings, Waypoints,
 } from 'lucide-react';
 import { api } from '../lib/api';
@@ -26,7 +26,7 @@ const GROUPS: { title: string; items: Item[] }[] = [
     { to: '/egress', label: 'Egress', icon: CircleDot },
     { to: '/ingress', label: 'Ingress', icon: Download },
   ] },
-  { title: 'Tools', items: [{ to: '/tokens', label: 'Token generator', icon: KeyRound }] },
+  { title: 'Tools', items: [{ to: '/tokens', label: 'Token generator', icon: KeyRound }, { to: '/repo-traffic', label: 'Repo traffic', icon: GitFork }] },
 ];
 const ALL: Item[] = [...GROUPS.flatMap((g) => g.items), { to: '/settings', label: 'Settings', icon: Settings }];
 
