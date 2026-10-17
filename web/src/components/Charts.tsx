@@ -22,6 +22,7 @@ function niceMax(v: number): number {
 
 const fmtTick = (t: number, spanMs: number): string => {
   const d = new Date(t);
+  if (spanMs <= 15 * 60000) return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
   return spanMs <= 2 * 86400000 ? d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }) : d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 };
 
@@ -76,11 +77,12 @@ function Axes({ w, h, max, t0, t1, fmt }: { w: number; h: number; max: number; t
 export type BarSeries = { key: string; label: string; color: string };
 
 /** Stacked bars over time buckets. `data` rows carry `t` (bucket start, ms) plus one number per series key. */
-export function BarsChart({ data, series, bucketMs, height = 190, format = (n) => String(Math.round(n)) }: { data: Record<string, number>[]; series: BarSeries[]; bucketMs: number; height?: number; format?: (n: number) => string }) {
+export function BarsChart({ data, series, bucketMs, from, to, height = 190, format = (n) => String(Math.round(n)) }: { data: Record<string, number>[]; series: BarSeries[]; bucketMs: number; from?: number; to?: number; height?: number; format?: (n: number) => string }) {
   const [tip, setTip] = useState<Tip | null>(null);
-  const empty = data.length === 0;
-  const t0 = empty ? 0 : Math.min(...data.map((d) => d.t));
-  const t1 = empty ? 0 : Math.max(...data.map((d) => d.t)) + bucketMs;
+  const empty = data.length === 0 && from == null;
+  // With an explicit range the axis spans all of it, so sparse data doesn't stretch into one giant bar.
+  const t0 = from != null ? Math.floor(from / bucketMs) * bucketMs : empty ? 0 : Math.min(...data.map((d) => d.t));
+  const t1 = to != null ? Math.floor(to / bucketMs) * bucketMs + bucketMs : empty ? 0 : Math.max(...data.map((d) => d.t)) + bucketMs;
   const count = Math.min(600, Math.max(1, Math.round((t1 - t0) / bucketMs)));
   const byT = new Map(data.map((d) => [d.t, d]));
   const buckets = Array.from({ length: count }, (_, i) => t0 + i * bucketMs);

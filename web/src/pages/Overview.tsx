@@ -43,7 +43,7 @@ export function Overview() {
         <div className="alert warn">No webhook events have been received. History pages stay empty until LiveKit is configured to send webhooks to this console (<span className="mono">./deploy.sh webhook</span>).</div>
       )}
       <Panel title="Insights" actions={<RangeSelect value={hours} onChange={setHours} />}>
-        <div className="kpis" style={{ padding: 14, marginBottom: 0 }}>
+        <div className="kpis">
           <Kpi label="Sessions served" value={i?.sessions?.toLocaleString() ?? '…'} />
           <Kpi label="With agents" value={i?.sessionsWithAgents?.toLocaleString() ?? '…'} />
           <Kpi label="With telephony" value={i?.sessionsWithTelephony?.toLocaleString() ?? '…'} />
@@ -51,7 +51,7 @@ export function Overview() {
           <Kpi label="Agent session minutes" value={i?.agentSessionMinutes?.toLocaleString() ?? '…'} />
           <Kpi label="Participants" value={i?.participants?.toLocaleString() ?? '…'} />
         </div>
-        <BarsChart data={(i?.series ?? []).map((p: Json) => ({ t: p.t, sessions: p.n }))} series={[{ key: 'sessions', label: 'Sessions', color: 'var(--accent)' }]} bucketMs={i?.bucketMs ?? 3600000} />
+        <BarsChart data={(i?.series ?? []).map((p: Json) => ({ t: p.t, sessions: p.n }))} series={[{ key: 'sessions', label: 'Sessions', color: 'var(--accent)' }]} bucketMs={i?.bucketMs ?? 3600000} from={Date.now() - hours * 3600000} to={Date.now()} />
       </Panel>
       <Panel title="Recent sessions" actions={<Link className="btn ghost sm" to="/sessions">View all <ArrowRight size={13} /></Link>}>
         <DataTable rows={recent.data?.rows} cols={cols} rowKey={(s) => s.room_sid} search={false} pageSize={false} loading={recent.isLoading} onRow={(s) => navigate(`/sessions/${s.room_sid}`)} empty={{ title: 'No sessions yet' }} />

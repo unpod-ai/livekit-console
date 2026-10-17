@@ -34,7 +34,10 @@ export function durationMs(start?: number | null, end?: number | null): string {
 
 // protobuf JSON gives enum names; the numeric forms are accepted too in case the SDK emits them.
 const KINDS: Record<string, string> = { '0': 'Standard', '1': 'Ingress', '2': 'Egress', '3': 'SIP', '4': 'Agent' };
-export const kindLabel = (k?: string | null): string => (k ? KINDS[k] ?? k.charAt(0) + k.slice(1).toLowerCase() : 'Standard');
+export const kindLabel = (k?: string | null): string => {
+  const name = k ? (KINDS[k] ?? k.charAt(0) + k.slice(1).toLowerCase()) : 'Standard';
+  return name.toUpperCase() === 'SIP' ? 'SIP' : name;
+};
 
 export const fmtNum = (n?: number | null): string => (n == null ? '—' : n.toLocaleString());
 

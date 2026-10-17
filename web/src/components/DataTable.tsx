@@ -68,7 +68,7 @@ export function DataTable<T>({ rows, cols, rowKey, onRow, rowActions, loading, e
 
   return (
     <div>
-      <div className="panel-head" style={{ borderTop: 0 }}>
+      {(search || toolbar) && <div className="panel-head" style={{ borderTop: 0 }}>
         <div className="table-tools">{toolbar}</div>
         <div className="table-tools">
           {search && (
@@ -90,7 +90,7 @@ export function DataTable<T>({ rows, cols, rowKey, onRow, rowActions, loading, e
             )}
           </div>
         </div>
-      </div>
+      </div>}
       <ErrorMsgInline error={error} />
       {loading && !rows ? (
         <SkeletonRows />
