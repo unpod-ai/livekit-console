@@ -37,6 +37,8 @@ function sipCall(row: any) {
     callStatus: a['sip.callStatus'] ?? null,
     trunkId: a['sip.trunkID'] ?? null,
     ruleId: a['sip.ruleID'] ?? null,
+    providerCallId: a['sip.callIDFull'] ?? null,
+    sipHost: a['sip.hostname'] ?? null,
     roomSid: row.room_sid as string,
     roomName: row.room_name as string,
     identity: row.identity as string,

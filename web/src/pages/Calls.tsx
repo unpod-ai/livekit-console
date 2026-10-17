@@ -77,13 +77,13 @@ export function CallDetail() {
         <>
           <Panel title="Call overview"><KV items={[['Call ID', <span className="mono">{c.callId ?? '—'}</span>], ['Started at', fromMs(c.joinedAt)], ['Ended at', fromMs(c.leftAt)], ['Duration', durationMs(c.joinedAt, c.leftAt)], ['Session', <Link to={`/sessions/${c.roomSid}`}>{c.roomName}</Link>], ['Status', <StatusBadge status={c.state} />]]} /></Panel>
           <div className="grid-2">
-            <Panel title="SIP details"><KV items={[['Direction', <DirectionBadge d={c.direction} />], ['Trunk ID', c.trunkId ? <Link className="mono" to={`/telephony/trunks?q=${c.trunkId}`}>{c.trunkId}</Link> : '—'], ['Dispatch rule', c.ruleId ? <Link className="mono" to={`/telephony/dispatch?q=${c.ruleId}`}>{c.ruleId}</Link> : '—'], ['Last call status', c.callStatus ?? '—']]} /></Panel>
+            <Panel title="SIP details"><KV items={[['Direction', <DirectionBadge d={c.direction} />], ['Trunk ID', c.trunkId ? <Link className="mono" to={`/telephony/trunks?q=${c.trunkId}`}>{c.trunkId}</Link> : '—'], ['Dispatch rule', c.ruleId ? <Link className="mono" to={`/telephony/dispatch?q=${c.ruleId}`}>{c.ruleId}</Link> : '—'], ['Last call status', c.callStatus ?? '—'], ['Provider call ID', <span className="mono">{c.providerCallId ?? '—'}</span>], ['SIP host', <span className="mono">{c.sipHost ?? '—'}</span>]]} /></Panel>
             <Panel title="Call details"><KV items={[['From number', c.from ?? '—'], ['To number', c.to ?? '—'], ['Participant', <Link to={`/sessions/${c.roomSid}/participants/${c.id}`} className="mono">{c.identity}</Link>]]} /></Panel>
           </div>
           <Panel title={`SIP attributes (${attrs.length})`}>
             <DataTable rows={attrs} search={attrs.length > 8} pageSize={false} rowKey={([k]) => k} cols={[{ key: 'k', header: 'Key', cell: ([k]) => <span className="mono">{k}</span>, text: ([k]) => k }, { key: 'v', header: 'Value', cell: ([, v]) => <span className="mono">{String(v)}</span>, text: ([, v]) => String(v), wrap: true }]} />
           </Panel>
-          <Alert><Info size={14} style={{ verticalAlign: -2, marginRight: 6 }} />Codec, SIP response code, source host and PCAP capture are collected by the SIP service itself and are not available over the API. Enable <span className="mono">include_headers</span> on the trunk to copy SIP headers into the attributes above.</Alert>
+          <Alert><Info size={14} style={{ verticalAlign: -2, marginRight: 6 }} />Codec, SIP response code and PCAP capture are collected by the SIP service itself and are not available over the API. Enable <span className="mono">include_headers</span> on the trunk to copy SIP headers into the attributes above.</Alert>
         </>
       )}
       {c && tab === 'events' && (
