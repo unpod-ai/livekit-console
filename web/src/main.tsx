@@ -9,6 +9,7 @@ import '@fontsource/fira-code/400.css';
 import { App } from './App';
 import { ConfirmProvider } from './lib/confirm';
 import { LiveProvider } from './lib/live';
+import { RangeProvider } from './lib/range';
 import { ToastProvider } from './lib/toast';
 import './styles.css';
 
@@ -18,6 +19,7 @@ createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <QueryClientProvider client={client}>
       <LiveProvider>
+        <RangeProvider>
         <ToastProvider>
           <ConfirmProvider>
             <BrowserRouter>
@@ -25,6 +27,7 @@ createRoot(document.getElementById('root')!).render(
             </BrowserRouter>
           </ConfirmProvider>
         </ToastProvider>
+        </RangeProvider>
       </LiveProvider>
     </QueryClientProvider>
   </StrictMode>,

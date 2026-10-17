@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useRange } from '../lib/range';
 import { useNavigate, useParams, useSearchParams, Link } from 'react-router-dom';
 import { Info, Radio } from 'lucide-react';
 import { type Json } from '../lib/api';
@@ -8,7 +9,7 @@ import { fromMs, fromMsPrecise, durationMs, kindLabel } from '../lib/format';
 import { DataTable, type Col } from '../components/DataTable';
 import { Spark, StepChart } from '../components/Charts';
 import { Recording } from '../components/Recording';
-import { Alert, Badge, KV, Kpi, Kpis, PageHeader, Panel, RangeSelect, ServerPager, StatusBadge, Tabs } from '../components/ui';
+import { Alert, Badge, KV, Kpi, Kpis, PageHeader, Panel, ServerPager, StatusBadge, Tabs } from '../components/ui';
 import { DirectionBadge } from './Calls';
 
 const LIMIT = 50;
@@ -17,7 +18,7 @@ const enc = encodeURIComponent;
 
 export function Sessions() {
   const navigate = useNavigate();
-  const [hours, setHours] = useState(24);
+  const { hours } = useRange();
   const [q, setQ] = useState(useInitialQuery());
   const [status, setStatus] = useState('');
   const [params] = useSearchParams();
@@ -26,6 +27,7 @@ export function Sessions() {
   const [offset, setOffset] = useState(0);
   const res = useApi<{ total: number; rows: Json[]; uniqueParticipants: number; totalRooms: number; bucketMs: number; series: { t: number; n: number }[]; peopleSeries: { t: number; n: number }[] }>(['sessions', hours, q, status, feature, agent, offset], `/history/sessions?hours=${hours}&q=${enc(q)}&status=${status}&feature=${feature}&agent=${enc(agent)}&limit=${LIMIT}&offset=${offset}`);
   const reset = <T,>(f: (v: T) => void) => (v: T) => { f(v); setOffset(0); };
+  useEffect(() => setOffset(0), [hours]);
 
   const cols: Col<Json>[] = [
     { key: 'sid', header: 'Session ID', cell: (s) => <Link className="rowlink mono" to={`/sessions/${s.room_sid}`} onClick={stop}>{s.room_sid}</Link> },
@@ -46,7 +48,7 @@ export function Sessions() {
 
   return (
     <>
-      <PageHeader crumbs={[{ label: 'Project' }, { label: 'Sessions' }]} title="Sessions" sub="Room sessions recorded from LiveKit webhooks since the collector started" />
+      <PageHeader crumbs={[{ label: 'Project' }, { label: 'Sessions' }]} title="Sessions" sub="Room sessions recorded from LiveKit webhooks since the collector started" range />
       <Kpis>
         <Kpi label="Unique participants" value={res.data?.uniqueParticipants ?? '…'} spark={res.data && <Spark points={res.data.peopleSeries} from={Date.now() - hours * 3600000} to={Date.now()} bucketMs={res.data.bucketMs} />} />
         <Kpi label="Total rooms" value={res.data?.totalRooms ?? '…'} spark={res.data && <Spark points={res.data.series} from={Date.now() - hours * 3600000} to={Date.now()} bucketMs={res.data.bucketMs} color="#dc85ff" />} />
@@ -60,7 +62,6 @@ export function Sessions() {
             <input className="input" style={{ width: 240 }} placeholder="Search room name or session ID" aria-label="Search sessions" value={q} onChange={(e) => reset(setQ)(e.target.value)} />
             <select className="select" style={{ width: 'auto' }} aria-label="Status" value={status} onChange={(e) => reset(setStatus)(e.target.value)}><option value="">All statuses</option><option value="active">Active</option><option value="closed">Closed</option></select>
             <select className="select" style={{ width: 'auto' }} aria-label="Feature" value={feature} onChange={(e) => reset(setFeature)(e.target.value)}><option value="">All features</option><option value="agents">Agents</option><option value="sip">SIP</option><option value="egress">Egress</option></select>
-            <RangeSelect value={hours} onChange={reset(setHours)} />
           </>}
           empty={{ title: 'No sessions in this range', hint: 'Sessions appear once LiveKit webhooks reach this console.' }}
           footer={<><ServerPager offset={offset} limit={LIMIT} total={res.data?.total ?? 0} onChange={setOffset} /><div className="pager" style={{ justifyContent: 'flex-start', borderTop: 0, paddingTop: 0 }}>* started before the collector was running, so the start time is the first event seen. “Reconstructed” sessions were rebuilt from LiveKit's retained egress records (name, ID and times only; no participants).</div></>} />
@@ -91,7 +92,7 @@ export function SessionDetail() {
       <div className="badges" onClick={stop}>
         {p.kind === 'SIP' && <Link className="badge" to={`/telephony/calls/${p.sid}`} title="Open this call">SIP call</Link>}
         {p.kind === 'EGRESS' && isEgressIdentity(p.identity) && <Link className="badge" to={`/egress/${p.identity}`} title="Open this egress">Egress</Link>}
-        {p.kind === 'AGENT' && <Link className="badge info" to={`/agents?q=${enc(p.attributes?.['lk.agent.name'] ?? p.identity)}`} title="Open this agent">{p.attributes?.['lk.agent.name'] ?? 'Agent'}</Link>}
+        {p.kind === 'AGENT' && <Link className="badge info" to={`/agents/${enc(p.attributes?.['lk.agent.name'] ?? 'unknown')}`} title="Open this agent">{p.attributes?.['lk.agent.name'] ?? 'Agent'}</Link>}
       </div>
     ) },
   ];

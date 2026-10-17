@@ -1,14 +1,14 @@
-import { useState } from 'react';
+import { useRange } from '../lib/range';
 import { type Json } from '../lib/api';
 import { useApi } from '../lib/hooks';
 import { fmtMs } from '../lib/format';
 import { BarsChart } from '../components/Charts';
-import { Alert, Kpi, Kpis, PageHeader, Panel, RangeSelect } from '../components/ui';
+import { Alert, Kpi, Kpis, PageHeader, Panel } from '../components/ui';
 
 const C = { a: '#20d5f9', b: '#dc85ff', c: '#1fb66a', d: '#ffa424' };
 
 export function Usage() {
-  const [hours, setHours] = useState(168);
+  const { hours } = useRange();
   const { data } = useApi<Json>(['usage', hours], `/history/usage?hours=${hours}`);
   const t = data?.totals;
   const s: Json[] = data?.series ?? [];
@@ -17,7 +17,7 @@ export function Usage() {
   const n = (v?: number) => (v == null ? '…' : v.toLocaleString());
   return (
     <>
-      <PageHeader crumbs={[{ label: 'Project' }, { label: 'Usage' }]} title="Usage" sub="Computed from webhook history and attributed to the time each session or participant started" actions={<RangeSelect value={hours} onChange={setHours} />} refresh={false} />
+      <PageHeader crumbs={[{ label: 'Project' }, { label: 'Usage' }]} title="Usage" sub="Computed from webhook history and attributed to the time each session or participant started" refresh={false} range />
       <div className="grid-2">
         <Panel title="Agents">
           <Kpis><Kpi label="Agent session minutes" value={n(t?.agentSessionMinutes)} /></Kpis>

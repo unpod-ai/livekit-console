@@ -18,6 +18,26 @@ const egressStatus = (s: string | null): string | null => (s == null ? s : EGRES
 // Agent participants carry the name of the agent they run as in their attributes.
 const agentNameOf = (attrs: Record<string, string>): string => attrs['lk.agent.name'] ?? attrs['lk.agent_name'] ?? attrs['agent.name'] ?? 'unknown';
 
+// Country by the calling code of a SIP participant's phone number: the closest self-hosted analogue of Cloud's
+// "Top countries" (which uses client geolocation that SIP callers don't have).
+const CALLING_CODES: Record<string, string> = {
+  '1': 'United States / Canada', '7': 'Russia / Kazakhstan', '20': 'Egypt', '27': 'South Africa', '30': 'Greece', '31': 'Netherlands', '32': 'Belgium',
+  '33': 'France', '34': 'Spain', '36': 'Hungary', '39': 'Italy', '40': 'Romania', '41': 'Switzerland', '43': 'Austria', '44': 'United Kingdom',
+  '45': 'Denmark', '46': 'Sweden', '47': 'Norway', '48': 'Poland', '49': 'Germany', '51': 'Peru', '52': 'Mexico', '54': 'Argentina', '55': 'Brazil',
+  '56': 'Chile', '57': 'Colombia', '58': 'Venezuela', '60': 'Malaysia', '61': 'Australia', '62': 'Indonesia', '63': 'Philippines', '64': 'New Zealand',
+  '65': 'Singapore', '66': 'Thailand', '81': 'Japan', '82': 'South Korea', '84': 'Vietnam', '86': 'China', '90': 'Turkey', '91': 'India', '92': 'Pakistan',
+  '93': 'Afghanistan', '94': 'Sri Lanka', '95': 'Myanmar', '98': 'Iran', '212': 'Morocco', '213': 'Algeria', '234': 'Nigeria', '254': 'Kenya',
+  '351': 'Portugal', '353': 'Ireland', '358': 'Finland', '380': 'Ukraine', '420': 'Czechia', '880': 'Bangladesh', '960': 'Maldives', '966': 'Saudi Arabia',
+  '971': 'United Arab Emirates', '972': 'Israel', '973': 'Bahrain', '974': 'Qatar', '975': 'Bhutan', '977': 'Nepal',
+};
+function countryOf(phone: string | undefined): string {
+  const digits = (phone ?? '').replace(/\D/g, '');
+  if (!digits || digits.startsWith('0')) return 'Unknown';
+  return CALLING_CODES[digits.slice(0, 3)] ?? CALLING_CODES[digits.slice(0, 2)] ?? CALLING_CODES[digits.slice(0, 1)] ?? 'Unknown';
+}
+const percentile = (sorted: number[], p: number): number | null => (sorted.length ? sorted[Math.min(sorted.length - 1, Math.max(0, Math.ceil(p * sorted.length) - 1))] : null);
+const bucketFor = (hours: number): number => (hours <= 48 ? 3600 * 1000 : 24 * 3600 * 1000);
+
 const intParam = (v: unknown, dflt: number, max: number): number => {
   const n = Number(v);
   return Number.isFinite(n) && n > 0 ? Math.min(n, max) : dflt;
@@ -169,6 +189,59 @@ history.get('/agent-workers', (req, res) => {
   });
 });
 
+history.get('/agents/:name/overview', (req, res) => {
+  const name = req.params.name;
+  const hours = intParam(req.query.hours, 24, 24 * 90);
+  const from = since(hours);
+  const bucketMs = bucketFor(hours);
+  const rows = db
+    .prepare(
+      `SELECT p.room_sid, p.joined_at, s.started_at FROM participants p JOIN sessions s ON s.room_sid = p.room_sid
+       WHERE p.kind IN ${AGENT} AND p.joined_at >= ? AND p.attributes LIKE '%"lk.agent.name":' || json_quote(?) || '%'`,
+    )
+    .all(from, name) as { room_sid: string; joined_at: number; started_at: number }[];
+  const bySessions = new Map<number, Set<string>>();
+  const joinByBucket = new Map<number, number[]>();
+  for (const r of rows) {
+    const t = Math.floor(r.joined_at / bucketMs) * bucketMs;
+    (bySessions.get(t) ?? bySessions.set(t, new Set()).get(t)!).add(r.room_sid);
+    const join = r.joined_at - r.started_at;
+    if (join >= 0 && join < 120_000) (joinByBucket.get(t) ?? joinByBucket.set(t, []).get(t)!).push(join);
+  }
+  const all: number[] = [];
+  joinByBucket.forEach((v) => all.push(...v));
+  all.sort((a, b) => a - b);
+  const samples = db
+    .prepare(`SELECT (at / ${bucketMs}) * ${bucketMs} AS t, AVG(ok) AS up, AVG(CASE WHEN ok = 1 THEN load END) AS load FROM agent_worker_samples WHERE agent_name = ? AND at >= ? GROUP BY t ORDER BY t`)
+    .all(name, from) as { t: number; up: number; load: number | null }[];
+  const tot = db.prepare('SELECT COUNT(*) AS n, COALESCE(SUM(ok),0) AS up, AVG(CASE WHEN ok = 1 THEN load END) AS load FROM agent_worker_samples WHERE agent_name = ? AND at >= ?').get(name, from) as { n: number; up: number; load: number | null };
+  res.json({
+    bucketMs,
+    sessions: [...bySessions.entries()].sort((a, b) => a[0] - b[0]).map(([t, set]) => ({ t, n: set.size })),
+    joinLatency: [...joinByBucket.entries()].sort((a, b) => a[0] - b[0]).map(([t, v]) => {
+      const sorted = [...v].sort((a, b) => a - b);
+      return { t, p50: percentile(sorted, 0.5), p90: percentile(sorted, 0.9), p95: percentile(sorted, 0.95) };
+    }),
+    joinLatencyTotals: { p50: percentile(all, 0.5), p90: percentile(all, 0.9), p95: percentile(all, 0.95), count: all.length },
+    uptime: samples.map((x) => ({ t: x.t, n: Math.round(x.up * 1000) / 10 })),
+    load: samples.map((x) => ({ t: x.t, n: x.load == null ? 0 : Math.round(x.load * 1000) / 10 })),
+    uptimePct: tot.n ? Math.round((tot.up / tot.n) * 1000) / 10 : null,
+    avgLoadPct: tot.load == null ? null : Math.round(tot.load * 1000) / 10,
+    samples: tot.n,
+  });
+});
+
+// One agent: the sessions it has run in.
+history.get('/agents/:name', (req, res) => {
+  const sessions = db
+    .prepare(
+      `SELECT s.room_sid, s.room_name, p.joined_at, p.left_at FROM participants p JOIN sessions s ON s.room_sid = p.room_sid
+       WHERE p.kind IN ${AGENT} AND p.attributes LIKE '%"lk.agent.name":' || json_quote(?) || '%' ORDER BY p.joined_at DESC LIMIT 10`,
+    )
+    .all(req.params.name);
+  res.json({ sessions });
+});
+
 history.get('/calls', (req, res) => {
   const hours = intParam(req.query.hours, 24, 24 * 90);
   const limit = intParam(req.query.limit, 50, 200);
@@ -263,6 +336,7 @@ history.get('/egress/:id', (req, res) => {
 history.get('/insights', (req, res) => {
   const hours = intParam(req.query.hours, 168, 24 * 90);
   const from = since(hours);
+  const bucketMs = bucketFor(hours);
   const one = (sql: string): any => db.prepare(sql).get(from);
   const sessions = one('SELECT COUNT(*) AS n, AVG(ended_at - started_at) AS avg_ms FROM sessions WHERE started_at >= ?');
   const withAgents = one(`SELECT COUNT(DISTINCT room_sid) AS n FROM participants WHERE kind IN ${AGENT} AND joined_at >= ?`);
@@ -271,10 +345,25 @@ history.get('/insights', (req, res) => {
   const agentMs = db
     .prepare(`SELECT COALESCE(SUM(COALESCE(left_at, ?) - joined_at),0) AS ms FROM participants WHERE kind IN ${AGENT} AND joined_at >= ?`)
     .get(Date.now(), from) as { ms: number };
-  const bucket = hours <= 48 ? 3600 * 1000 : 24 * 3600 * 1000;
-  const series = db
-    .prepare(`SELECT (started_at / ${bucket}) * ${bucket} AS t, COUNT(*) AS n FROM sessions WHERE started_at >= ? GROUP BY t ORDER BY t`)
-    .all(from);
+  const grp = (sql: string) => db.prepare(sql.replaceAll('{B}', String(bucketMs))).all(from) as { t: number; n: number }[];
+  const series = grp('SELECT (started_at / {B}) * {B} AS t, COUNT(*) AS n FROM sessions WHERE started_at >= ? GROUP BY t ORDER BY t');
+  const agentSeries = grp(`SELECT (joined_at / {B}) * {B} AS t, COUNT(DISTINCT room_sid) AS n FROM participants WHERE kind IN ${AGENT} AND joined_at >= ? GROUP BY t ORDER BY t`);
+  const sipSeries = grp(`SELECT (joined_at / {B}) * {B} AS t, COUNT(DISTINCT room_sid) AS n FROM participants WHERE kind IN ${SIP} AND joined_at >= ? GROUP BY t ORDER BY t`);
+  const peopleSeries = grp('SELECT (joined_at / {B}) * {B} AS t, COUNT(DISTINCT identity) AS n FROM participants WHERE joined_at >= ? GROUP BY t ORDER BY t');
+  const agentMinSeries = db
+    .prepare(`SELECT (joined_at / ${bucketMs}) * ${bucketMs} AS t, ROUND(SUM(COALESCE(left_at, ?) - joined_at) / 60000.0, 1) AS n FROM participants WHERE kind IN ${AGENT} AND joined_at >= ? GROUP BY t ORDER BY t`)
+    .all(Date.now(), from) as { t: number; n: number }[];
+
+  const kinds: Record<string, number> = {};
+  const countries: Record<string, number> = {};
+  for (const p of db.prepare('SELECT kind, attributes FROM participants WHERE joined_at >= ?').all(from) as { kind: string | null; attributes: string }[]) {
+    const k = kindName(p.kind);
+    kinds[k] = (kinds[k] ?? 0) + 1;
+    if (k === 'SIP') {
+      const c = countryOf(JSON.parse(p.attributes || '{}')['sip.phoneNumber']);
+      countries[c] = (countries[c] ?? 0) + 1;
+    }
+  }
   res.json({
     hours,
     sessions: sessions.n,
@@ -284,7 +373,13 @@ history.get('/insights', (req, res) => {
     agentSessionMinutes: Math.round((agentMs.ms ?? 0) / 60000),
     participants: people.n,
     series,
-    bucketMs: bucket,
+    agentSeries,
+    sipSeries,
+    peopleSeries,
+    agentMinSeries,
+    kinds: Object.entries(kinds).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count),
+    countries: Object.entries(countries).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count).slice(0, 10),
+    bucketMs,
   });
 });
 

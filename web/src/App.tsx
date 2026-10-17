@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { api } from './lib/api';
 import { AppShell } from './components/AppShell';
+import { AgentDetail } from './pages/AgentDetail';
 import { Agents } from './pages/Agents';
 import { CallDetail, Calls } from './pages/Calls';
 import { Dispatch } from './pages/Dispatch';
@@ -35,6 +36,7 @@ export function App() {
         <Route path="rooms" element={<Rooms />} />
         <Route path="rooms/:name" element={<RoomDetail />} />
         <Route path="agents" element={<Agents />} />
+        <Route path="agents/:name" element={<AgentDetail />} />
         <Route path="usage" element={<Usage />} />
         <Route path="telephony/calls" element={<Calls />} />
         <Route path="telephony/calls/:id" element={<CallDetail />} />

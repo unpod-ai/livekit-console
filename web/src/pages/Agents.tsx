@@ -1,15 +1,16 @@
-import { useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useMemo } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { Radio } from 'lucide-react';
 import { type Json } from '../lib/api';
 import { useApi, useLkList } from '../lib/hooks';
 import { useInitialQuery } from '../lib/useTab';
-import { durationMs, fmtMs, fromMs, relTime } from '../lib/format';
-import { Drawer } from '../components/Drawer';
+import { durationMs, fromMs, relTime } from '../lib/format';
+import { BarsChart, PALETTE } from '../components/Charts';
+import { useRange } from '../lib/range';
 import { DataTable, type Col } from '../components/DataTable';
-import { Alert, Badge, KV, Kpi, Kpis, PageHeader, Panel, RangeSelect } from '../components/ui';
+import { Alert, Badge, Kpi, Kpis, PageHeader, Panel } from '../components/ui';
 
-type Worker = { url: string; ok: boolean; agentName: string | null; workerType: string | null; load: number | null; activeJobs: number | null; sdkVersion: string | null; projectType: string | null; latencyMs: number | null; checkedAt: number; error: string | null; uptimePct: number | null; avgLoadPct: number | null };
+export type Worker = { url: string; ok: boolean; agentName: string | null; workerType: string | null; load: number | null; activeJobs: number | null; sdkVersion: string | null; projectType: string | null; latencyMs: number | null; checkedAt: number; error: string | null; uptimePct: number | null; avgLoadPct: number | null };
 type Row = { name: string; sessions: number; jobs: number; minutes: number; avgMs: number; running: number; lastSeenAt: number | null; rules: Json[]; worker?: Worker };
 
 const STATE_TONE: Record<string, 'ok' | 'warn' | 'info' | undefined> = { listening: 'ok', speaking: 'info', thinking: 'warn', initializing: 'warn' };
@@ -21,14 +22,14 @@ const pct = (v: number | null | undefined, digits = 1) => (v == null ? '—' : `
  * running worker shows as RUNNING without any test jobs. Live jobs and past sessions come from LiveKit and webhooks.
  */
 export function Agents() {
-  const [hours, setHours] = useState(168);
+  const navigate = useNavigate();
+  const { hours } = useRange();
   const initialQuery = useInitialQuery();
   const seen = useApi<Json[]>(['agents', hours], `/history/agents?hours=${hours}`);
   const live = useApi<Json[]>(['agents-live'], '/agents/live');
   const workers = useApi<{ configured: boolean; workers: Worker[] }>(['agent-workers', hours], `/history/agent-workers?hours=${hours}`);
   const rules = useLkList('sip', 'ListSIPDispatchRule');
-  const [selected, setSelected] = useState<string | null>(null);
-  const detail = useApi<{ sessions: Json[] }>(['agent', selected], `/history/agents/${encodeURIComponent(selected ?? '')}`, { enabled: !!selected, live: false });
+  const insights = useApi<Json>(['insights', hours], `/history/insights?hours=${hours}`);
 
   const rows = useMemo<Row[]>(() => {
     const m = new Map<string, Row>();
@@ -59,7 +60,7 @@ export function Agents() {
     : configured && (workers.data?.workers.length ?? 0) > 0 ? <Badge>No worker endpoint</Badge> : <Badge>Unknown</Badge>;
 
   const cols: Col<Row>[] = [
-    { key: 'name', header: 'Agent name', cell: (a) => <Link className="rowlink" to={`/sessions?agent=${encodeURIComponent(a.name)}`} title="View this agent's sessions"><b>{a.name}</b></Link>, text: (a) => a.name, sort: (a) => a.name },
+    { key: 'name', header: 'Agent name', cell: (a) => <Link className="rowlink" to={`/agents/${encodeURIComponent(a.name)}`} onClick={(e) => e.stopPropagation()}><b>{a.name}</b></Link>, text: (a) => a.name, sort: (a) => a.name },
     { key: 'status', header: 'Status', cell: status, sort: (a) => (a.worker ? (a.worker.ok ? 2 : 0) : a.running ? 1 : -1) },
     { key: 'load', header: 'Load', cell: (a) => pct(a.worker?.load), sort: (a) => a.worker?.load ?? -1 },
     { key: 'jobs', header: 'Active jobs', cell: (a) => a.worker?.activeJobs ?? (a.running || '—'), sort: (a) => a.worker?.activeJobs ?? a.running },
@@ -84,7 +85,7 @@ export function Agents() {
 
   return (
     <>
-      <PageHeader crumbs={[{ label: 'Project' }, { label: 'Agents' }]} title="Agents" sub="Worker status, agents running in calls, and agents seen in sessions" actions={<RangeSelect value={hours} onChange={setHours} />} />
+      <PageHeader crumbs={[{ label: 'Project' }, { label: 'Agents' }]} title="Agents" sub="Worker status, agents running in calls, and agents seen in sessions" range />
       {!configured && (
         <Alert kind="warn">No agent worker endpoints are configured, so worker status is unknown. Each worker serves its status on port 8081 (<span className="mono">GET /worker</span>). Set <span className="mono">AGENT_WORKER_URLS</span> (comma-separated base URLs, e.g. <span className="mono">http://127.0.0.1:18081</span>) on the console.</Alert>
       )}
@@ -100,54 +101,13 @@ export function Agents() {
           empty={{ title: 'No agent is in a call right now', hint: 'Agents appear here while they are inside a room.' }} />
       </Panel>
       <Panel title="All agents">
-        <DataTable rows={rows} cols={cols} rowKey={(a) => a.name} loading={seen.isLoading || rules.isLoading} error={seen.error} storageKey="agents" initialQuery={initialQuery} onRow={(a) => setSelected(a.name)}
+        <DataTable rows={rows} cols={cols} rowKey={(a) => a.name} loading={seen.isLoading || rules.isLoading} error={seen.error} storageKey="agents" initialQuery={initialQuery} onRow={(a) => navigate(`/agents/${encodeURIComponent(a.name)}`)}
           empty={{ title: 'No agents yet', hint: 'An agent shows up when its worker endpoint is configured, after it joins a session, or when a dispatch rule names it.' }} />
       </Panel>
 
-      <Drawer open={!!selected} wide title={selected ?? ''} subtitle="Agent details" onClose={() => setSelected(null)}>
-        {selected && (() => {
-          const row = rows.find((r) => r.name === selected);
-          const w = row?.worker;
-          const jobs = (live.data ?? []).filter((l) => l.agentName === selected);
-          return (
-            <>
-              <Panel title="Worker">
-                {w ? (
-                  <KV items={[
-                    ['Status', w.ok ? <Badge tone="ok" dot>Running</Badge> : <Badge tone="bad" dot>Down</Badge>],
-                    ['Agent name', <span className="mono">{w.agentName}</span>],
-                    ['Worker type', w.workerType ?? '—'],
-                    ['Load', pct(w.load)],
-                    ['Active jobs', w.activeJobs ?? '—'],
-                    ['SDK', w.sdkVersion ? `${w.projectType ?? ''} ${w.sdkVersion}`.trim() : '—'],
-                    [`Uptime (${hours >= 168 ? `${hours / 24}d` : `${hours}h`})`, w.uptimePct == null ? '—' : `${w.uptimePct}%`],
-                    ['Average load', w.avgLoadPct == null ? '—' : `${w.avgLoadPct}%`],
-                    ['Endpoint', <span className="mono">{w.url}</span>],
-                    ['Response time', w.latencyMs != null ? `${w.latencyMs} ms` : '—'],
-                    ['Last checked', relTime(w.checkedAt)],
-                    ...(w.error ? [['Error', w.error] as [string, string]] : []),
-                  ]} />
-                ) : <div className="panel-body muted">No worker endpoint is configured for this agent. Add its status URL to <span className="mono">AGENT_WORKER_URLS</span> to see its load, active jobs, SDK version and uptime.</div>}
-              </Panel>
-              <Panel title={`Running now (${jobs.length})`}>
-                <DataTable rows={jobs} search={false} pageSize={false} rowKey={(l) => l.identity} empty={{ title: 'Not in any call right now' }} cols={[
-                  { key: 'room', header: 'Room', cell: (l) => <Link className="rowlink" to={`/rooms/${encodeURIComponent(l.roomName)}`}>{l.roomName}</Link> },
-                  { key: 'state', header: 'State', cell: (l) => (l.state ? <Badge tone={STATE_TONE[l.state]}>{l.state}</Badge> : '—') },
-                  { key: 'dur', header: 'Running for', cell: (l) => durationMs(l.joinedAt, null) },
-                ]} />
-              </Panel>
-              <Panel title="Recent sessions">
-                <DataTable rows={detail.data?.sessions ?? []} search={false} pageSize={false} rowKey={(s) => `${s.room_sid}-${s.joined_at}`} loading={detail.isLoading} empty={{ title: 'No sessions recorded for this agent' }} cols={[
-                  { key: 'room', header: 'Room', cell: (s) => <Link className="rowlink" to={`/sessions/${s.room_sid}`}>{s.room_name}</Link> },
-                  { key: 'j', header: 'Joined', cell: (s) => fromMs(s.joined_at) },
-                  { key: 'd', header: 'Duration', cell: (s) => durationMs(s.joined_at, s.left_at) },
-                ]} />
-              </Panel>
-              {row && row.sessions > 0 && <p className="muted" style={{ margin: 0 }}>{row.sessions} sessions · {row.minutes} agent minutes · average {fmtMs(row.avgMs)} over the selected range.</p>}
-            </>
-          );
-        })()}
-      </Drawer>
+      <Panel title="Session activity">
+        <BarsChart data={insights.data?.agentSeries ?? []} series={[{ key: 'n', label: 'Agent sessions', color: PALETTE.cyan }]} bucketMs={insights.data?.bucketMs ?? 3600000} from={Date.now() - hours * 3600000} to={Date.now()} height={170} />
+      </Panel>
     </>
   );
 }

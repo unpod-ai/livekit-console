@@ -1,11 +1,11 @@
 import { Fragment, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { Check, ChevronRight, Copy, HelpCircle, Inbox } from 'lucide-react';
-import { RefreshSelect } from '../lib/live';
+import { HeaderControls } from './HeaderControls';
 
 export type Crumb = { label: string; to?: string };
 
-export function PageHeader({ crumbs, title, sub, actions, refresh = true }: { crumbs?: Crumb[]; title: string; sub?: ReactNode; actions?: ReactNode; refresh?: boolean }) {
+export function PageHeader({ crumbs, title, sub, actions, refresh = true, range = false }: { crumbs?: Crumb[]; title: string; sub?: ReactNode; actions?: ReactNode; refresh?: boolean; range?: boolean }) {
   return (
     <header className="page-head">
       <div>
@@ -24,7 +24,7 @@ export function PageHeader({ crumbs, title, sub, actions, refresh = true }: { cr
       </div>
       <div className="head-actions">
         {actions}
-        {refresh && <RefreshSelect />}
+        <HeaderControls range={range} refresh={refresh} />
       </div>
     </header>
   );

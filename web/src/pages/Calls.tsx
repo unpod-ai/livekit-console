@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useRange } from '../lib/range';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ArrowDownLeft, ArrowUpRight, Info } from 'lucide-react';
 import { type Json } from '../lib/api';
@@ -7,7 +8,7 @@ import { useInitialQuery, useTab } from '../lib/useTab';
 import { fromMs, fromMsPrecise, durationMs, fmtMs } from '../lib/format';
 import { DataTable, type Col } from '../components/DataTable';
 import { Spark } from '../components/Charts';
-import { Alert, Badge, KV, Kpi, Kpis, PageHeader, Panel, RangeSelect, ServerPager, StatusBadge, Tabs } from '../components/ui';
+import { Alert, Badge, KV, Kpi, Kpis, PageHeader, Panel, ServerPager, StatusBadge, Tabs } from '../components/ui';
 
 const LIMIT = 50;
 export const DirectionBadge = ({ d }: { d: string | null }) =>
@@ -15,7 +16,7 @@ export const DirectionBadge = ({ d }: { d: string | null }) =>
 
 export function Calls() {
   const navigate = useNavigate();
-  const [hours, setHours] = useState(24);
+  const { hours } = useRange();
   const [q, setQ] = useState(useInitialQuery());
   const [direction, setDirection] = useState('');
   const [params] = useSearchParams();
@@ -24,6 +25,7 @@ export function Calls() {
   const res = useApi<Json>(['calls', hours, q, direction, state, offset], `/history/calls?hours=${hours}&q=${encodeURIComponent(q)}&direction=${direction}&state=${state}&limit=${LIMIT}&offset=${offset}`);
   const reset = <T,>(f: (v: T) => void) => (v: T) => { f(v); setOffset(0); };
   const d = res.data;
+  useEffect(() => setOffset(0), [hours]);
 
   const cols: Col<Json>[] = [
     { key: 'id', header: 'Call ID', cell: (c) => <Link className="rowlink mono" to={`/telephony/calls/${c.id}`} onClick={(e) => e.stopPropagation()}>{c.callId ?? c.id}</Link> },
@@ -39,7 +41,7 @@ export function Calls() {
 
   return (
     <>
-      <PageHeader crumbs={[{ label: 'Telephony' }, { label: 'Calls' }]} title="Calls" sub="SIP calls reconstructed from SIP participants in your rooms" />
+      <PageHeader crumbs={[{ label: 'Telephony' }, { label: 'Calls' }]} title="Calls" sub="SIP calls reconstructed from SIP participants in your rooms" range />
       <Kpis>
         <Kpi label="Total calls" value={d?.total?.toLocaleString() ?? '…'} />
         <Kpi label="Total call duration" value={d ? fmtMs(d.totalDurationMs) : '…'} />
@@ -52,7 +54,6 @@ export function Calls() {
             <input className="input" style={{ width: 240 }} placeholder="Search number, call ID or room" aria-label="Search calls" value={q} onChange={(e) => reset(setQ)(e.target.value)} />
             <select className="select" style={{ width: 'auto' }} aria-label="Direction" value={direction} onChange={(e) => reset(setDirection)(e.target.value)}><option value="">All directions</option><option value="inbound">Inbound</option><option value="outbound">Outbound</option></select>
             <select className="select" style={{ width: 'auto' }} aria-label="Status" value={state} onChange={(e) => reset(setState)(e.target.value)}><option value="">All statuses</option><option value="active">Active</option><option value="completed">Completed</option></select>
-            <RangeSelect value={hours} onChange={reset(setHours)} />
           </>}
           empty={{ title: 'No calls in this range', hint: 'Calls appear once a SIP participant joins a room and LiveKit webhooks reach this console.' }}
           footer={<ServerPager offset={offset} limit={LIMIT} total={d?.total ?? 0} onChange={setOffset} />} />
