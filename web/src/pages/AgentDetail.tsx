@@ -7,8 +7,8 @@ import { useTab } from '../lib/useTab';
 import { durationMs, fromMs } from '../lib/format';
 import { AreaChart, BarsChart, PALETTE, Spark } from '../components/Charts';
 import { DataTable, type Col } from '../components/DataTable';
-import { Alert, Badge, Help, Kpi, Kpis, PageHeader, Panel, Tabs } from '../components/ui';
-import type { Worker } from './Agents';
+import { Alert, Badge, Help, KV, Kpi, Kpis, PageHeader, Panel, Tabs } from '../components/ui';
+import { jobType, sdkLabel, WorkersPanel, type FormerWorker, type Worker } from './Agents';
 
 const STATE_TONE: Record<string, 'ok' | 'warn' | 'info' | undefined> = { listening: 'ok', speaking: 'info', thinking: 'warn', initializing: 'warn' };
 const ms = (n: number) => (n >= 1000 ? `${+(n / 1000).toFixed(1)}k ms` : `${Math.round(n)} ms`);
@@ -18,10 +18,10 @@ export function AgentDetail() {
   const { name = '' } = useParams();
   const navigate = useNavigate();
   const { hours } = useRange();
-  const [tab, setTab] = useTab('overview', ['overview', 'sessions'] as const);
+  const [tab, setTab] = useTab('overview', ['overview', 'worker', 'sessions'] as const);
   const enc = encodeURIComponent(name);
   const ov = useApi<Json>(['agent-overview', name, hours], `/history/agents/${enc}/overview?hours=${hours}`);
-  const wk = useApi<{ configured: boolean; workers: Worker[] }>(['agent-workers', hours], `/history/agent-workers?hours=${hours}`);
+  const wk = useApi<{ configured: boolean; workers: Worker[]; former: FormerWorker[] }>(['agent-workers', hours], `/history/agent-workers?hours=${hours}`);
   const live = useApi<Json[]>(['agents-live'], '/agents/live');
   const detail = useApi<{ sessions: Json[] }>(['agent', name], `/history/agents/${enc}`, { live: false });
 
@@ -48,13 +48,13 @@ export function AgentDetail() {
     <>
       <PageHeader crumbs={[{ label: 'Project' }, { label: 'Agents', to: '/agents' }, { label: name }, { label: 'Overview' }]} title={name} range
         actions={<div style={{ textAlign: 'right', lineHeight: 1.2 }}><div className="mono muted" style={{ fontSize: 9.5, letterSpacing: 0.5 }}>CURRENT STATUS</div>{statusEl}</div>} />
-      <Tabs value={tab} onChange={setTab} tabs={[{ id: 'overview', label: 'Overview' }, { id: 'sessions', label: 'Sessions', count: detail.data?.sessions.length }]} />
+      <Tabs value={tab} onChange={setTab} tabs={[{ id: 'overview', label: 'Overview' }, { id: 'worker', label: 'Worker' }, { id: 'sessions', label: 'Sessions', count: detail.data?.sessions.length }]} />
 
       {tab === 'overview' && (
         <>
           <Kpis>
             <Kpi label="Agent name" value={<span style={{ fontSize: 15, color: 'var(--text)' }}>{name}</span>} />
-            <Kpi label="Worker" help="Reported by the worker's own status server" value={<span style={{ fontSize: 15, color: 'var(--text)' }}>{worker ? `${worker.workerType ?? '—'} · ${worker.projectType ?? ''} ${worker.sdkVersion ?? ''}` : '—'}</span>} />
+            <Kpi label="Worker" help="Reported by the worker's own status server" value={<span style={{ fontSize: 15, color: 'var(--text)' }}>{worker ? `${jobType(worker.workerType)} · ${sdkLabel(worker)}` : '—'}</span>} />
             <Kpi label="Concurrent sessions" value={<span style={{ fontSize: 22 }}>{worker?.activeJobs ?? jobs.length}</span>} />
             <Kpi label="Worker endpoint" value={<span className="mono" style={{ fontSize: 13, color: 'var(--text)' }}>{worker?.url ?? 'Not configured'}</span>} />
           </Kpis>
@@ -82,6 +82,31 @@ export function AgentDetail() {
               {o && o.load.length > 0 && <Spark points={o.load} from={from} to={to} bucketMs={bucketMs} />}
             </div>
           </div>
+        </>
+      )}
+
+      {tab === 'worker' && (
+        <>
+          <Panel title="Worker status" actions={worker ? <Badge tone={worker.ok ? 'ok' : 'bad'} dot>{worker.ok ? 'Running' : 'Dead'}</Badge> : undefined}>
+            {worker ? (
+              <KV items={[
+                ['Endpoint', <span className="mono">{worker.url}</span>],
+                ['Agent name', name],
+                ['Job type', <span title="What one job is scoped to: JT_ROOM = one job per room (the agent handles the whole room); JT_PUBLISHER = one per publishing participant">{jobType(worker.workerType)}</span>],
+                ['SDK', <span className="mono">{sdkLabel(worker)}</span>],
+                ['Load', worker.load == null ? '—' : `${(worker.load * 100).toFixed(1)}%`],
+                ['Active jobs', worker.activeJobs ?? '—'],
+                ['Status latency', worker.latencyMs == null ? '—' : `${worker.latencyMs} ms`],
+                ['Last ping', fromMs(worker.checkedAt)],
+                ['Last healthy', worker.ok ? 'now' : fromMs(worker.lastOkAt)],
+                ['First seen', fromMs(worker.firstSeenAt)],
+                ['Uptime (range)', worker.uptimePct == null ? '—' : `${worker.uptimePct}% of ${worker.samples} checks`],
+                ['Average load (range)', worker.avgLoadPct == null ? '—' : `${worker.avgLoadPct}%`],
+                ['Last error', worker.error ?? '—'],
+              ]} />
+            ) : <div className="muted" style={{ padding: 16 }}>No worker endpoint is configured for this agent.</div>}
+          </Panel>
+          <WorkersPanel workers={wk.data?.workers ?? []} former={wk.data?.former ?? []} agent={name} />
         </>
       )}
 

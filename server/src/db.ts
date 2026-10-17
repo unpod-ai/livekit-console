@@ -42,5 +42,9 @@ db.exec(`
 // The manual agent ping was replaced by worker status polling.
 db.exec('DROP TABLE IF EXISTS agent_pings');
 
+// Older databases lack the worker's type/SDK columns; they let a worker that has since died still show what it was.
+const sampleCols = (db.prepare('PRAGMA table_info(agent_worker_samples)').all() as { name: string }[]).map((c) => c.name);
+for (const col of ['worker_type', 'sdk_version', 'project_type']) if (!sampleCols.includes(col)) db.exec(`ALTER TABLE agent_worker_samples ADD COLUMN ${col} TEXT`);
+
 // Timestamps are unix milliseconds throughout.
 export const nowMs = (): number => Date.now();

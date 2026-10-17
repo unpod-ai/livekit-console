@@ -10,7 +10,44 @@ import { useRange } from '../lib/range';
 import { DataTable, type Col } from '../components/DataTable';
 import { Alert, Badge, Kpi, Kpis, PageHeader, Panel } from '../components/ui';
 
-export type Worker = { url: string; ok: boolean; agentName: string | null; workerType: string | null; load: number | null; activeJobs: number | null; sdkVersion: string | null; projectType: string | null; latencyMs: number | null; checkedAt: number; error: string | null; uptimePct: number | null; avgLoadPct: number | null };
+export type Worker = { url: string; ok: boolean; agentName: string | null; workerType: string | null; load: number | null; activeJobs: number | null; sdkVersion: string | null; projectType: string | null; latencyMs: number | null; checkedAt: number; error: string | null; uptimePct: number | null; avgLoadPct: number | null; firstSeenAt: number | null; lastOkAt: number | null; lastCheckedAt: number | null; samples: number };
+export type FormerWorker = Pick<Worker, 'url' | 'agentName' | 'workerType' | 'sdkVersion' | 'projectType' | 'uptimePct' | 'avgLoadPct' | 'firstSeenAt' | 'lastOkAt' | 'lastCheckedAt' | 'samples'>;
+
+const JOB_TYPES: Record<string, string> = { JT_ROOM: 'Room', JT_PUBLISHER: 'Publisher', JT_PARTICIPANT: 'Participant' };
+/** The job type a worker registered for (what one job is scoped to), spelled out. */
+export const jobType = (t?: string | null) => (t ? `${JOB_TYPES[t] ?? t} (${t})` : '—');
+export const sdkLabel = (w: Pick<Worker, 'projectType' | 'sdkVersion'>) => (w.sdkVersion ? `livekit-agents ${w.projectType ?? ''} ${w.sdkVersion}`.replace('  ', ' ') : '—');
+
+type WorkerRow = (Worker | (FormerWorker & { ok: false; latencyMs: null; load: null; activeJobs: null; error: null })) & { retired?: boolean };
+
+/** Every worker the console has polled, including dead ones, with when each was last pinged and last healthy. */
+export function WorkersPanel({ workers, former, agent }: { workers: Worker[]; former: FormerWorker[]; agent?: string }) {
+  const rows: WorkerRow[] = [
+    ...workers.map((w) => ({ ...w })),
+    ...former.map((w) => ({ ...w, ok: false as const, latencyMs: null, load: null, activeJobs: null, error: null, retired: true })),
+  ].filter((w) => !agent || w.agentName === agent);
+  const dead = rows.filter((w) => !w.ok).length;
+  const cols: Col<WorkerRow>[] = [
+    { key: 'status', header: 'Status', cell: (w) => (w.ok ? <Badge tone="ok" dot>Running</Badge> : <Badge tone="bad" dot>{w.retired ? 'Dead · removed' : 'Dead'}</Badge>), sort: (w) => Number(w.ok), text: (w) => (w.ok ? 'running' : 'dead') },
+    { key: 'agent', header: 'Agent', cell: (w) => (w.agentName ? <Link className="rowlink" to={`/agents/${encodeURIComponent(w.agentName)}`}><b>{w.agentName}</b></Link> : '—'), text: (w) => w.agentName ?? '', sort: (w) => w.agentName ?? '' },
+    { key: 'url', header: 'Endpoint', cell: (w) => <span className="mono">{w.url}</span>, text: (w) => w.url },
+    { key: 'ping', header: 'Last ping', cell: (w) => (w.lastCheckedAt ? <span title={fromMs(w.lastCheckedAt)}>{relTime(w.lastCheckedAt)}</span> : '—'), sort: (w) => w.lastCheckedAt ?? 0 },
+    { key: 'ok', header: 'Last healthy', cell: (w) => (w.lastOkAt ? <span title={fromMs(w.lastOkAt)}>{w.ok ? 'now' : relTime(w.lastOkAt)}</span> : 'Never'), sort: (w) => w.lastOkAt ?? 0 },
+    { key: 'type', header: 'Job type', cell: (w) => jobType(w.workerType), text: (w) => w.workerType ?? '' },
+    { key: 'sdk', header: 'SDK', cell: sdkLabelCell, text: (w) => w.sdkVersion ?? '' },
+    { key: 'lat', header: 'Latency', cell: (w) => (w.latencyMs == null ? '—' : `${w.latencyMs} ms`) },
+    { key: 'up', header: 'Uptime', cell: (w) => (w.uptimePct == null ? '—' : `${w.uptimePct}%`), sort: (w) => w.uptimePct ?? -1 },
+    { key: 'err', header: 'Last error', hidden: !agent, cell: (w) => (w.error ? <span className="muted">{w.error}</span> : '—'), text: (w) => w.error ?? '' },
+    { key: 'first', header: 'First seen', hidden: true, cell: (w) => fromMs(w.firstSeenAt), sort: (w) => w.firstSeenAt ?? 0 },
+  ];
+  return (
+    <Panel title={`${agent ? 'Workers' : 'All workers'} (${rows.length})`} actions={dead ? <Badge tone="bad" dot>{dead} dead</Badge> : undefined}>
+      <DataTable rows={rows} cols={cols} rowKey={(w) => w.url} search={false} pageSize={false} storageKey={agent ? undefined : 'workers'}
+        empty={{ title: 'No workers polled yet', hint: 'Workers appear after the first status check of an endpoint in AGENT_WORKER_URLS.' }} />
+    </Panel>
+  );
+}
+const sdkLabelCell = (w: WorkerRow) => (w.sdkVersion ? <span className="mono">{sdkLabel(w)}</span> : '—');
 type Row = { name: string; sessions: number; jobs: number; minutes: number; avgMs: number; running: number; lastSeenAt: number | null; rules: Json[]; worker?: Worker };
 
 const STATE_TONE: Record<string, 'ok' | 'warn' | 'info' | undefined> = { listening: 'ok', speaking: 'info', thinking: 'warn', initializing: 'warn' };
@@ -27,7 +64,7 @@ export function Agents() {
   const initialQuery = useInitialQuery();
   const seen = useApi<Json[]>(['agents', hours], `/history/agents?hours=${hours}`);
   const live = useApi<Json[]>(['agents-live'], '/agents/live');
-  const workers = useApi<{ configured: boolean; workers: Worker[] }>(['agent-workers', hours], `/history/agent-workers?hours=${hours}`);
+  const workers = useApi<{ configured: boolean; workers: Worker[]; former: FormerWorker[] }>(['agent-workers', hours], `/history/agent-workers?hours=${hours}`);
   const rules = useLkList('sip', 'ListSIPDispatchRule');
   const insights = useApi<Json>(['insights', hours], `/history/insights?hours=${hours}`);
 
@@ -91,7 +128,7 @@ export function Agents() {
       )}
       <Kpis>
         <Kpi label="Agents" value={rows.length} />
-        <Kpi label="Workers running" value={workers.data ? `${running}/${workers.data.workers.length}` : '…'} accent foot={configured ? 'From each worker\'s own status' : 'Not configured'} />
+        <Kpi label="Workers running" value={workers.data ? `${running}/${workers.data.workers.length + workers.data.former.length}` : '…'} accent foot={configured ? 'From each worker\'s own status' : 'Not configured'} />
         <Kpi label="In calls now" value={live.data ? live.data.length : '…'} foot={live.isError ? 'Could not reach LiveKit' : 'Agents inside live rooms'} />
         <Kpi label="Agent sessions" value={total('sessions').toLocaleString()} />
         <Kpi label="Agent minutes" value={total('minutes').toLocaleString()} />
@@ -104,6 +141,8 @@ export function Agents() {
         <DataTable rows={rows} cols={cols} rowKey={(a) => a.name} loading={seen.isLoading || rules.isLoading} error={seen.error} storageKey="agents" initialQuery={initialQuery} onRow={(a) => navigate(`/agents/${encodeURIComponent(a.name)}`)}
           empty={{ title: 'No agents yet', hint: 'An agent shows up when its worker endpoint is configured, after it joins a session, or when a dispatch rule names it.' }} />
       </Panel>
+
+      <WorkersPanel workers={workers.data?.workers ?? []} former={workers.data?.former ?? []} />
 
       <Panel title="Session activity">
         <BarsChart data={insights.data?.agentSeries ?? []} series={[{ key: 'n', label: 'Agent sessions', color: PALETTE.cyan }]} bucketMs={insights.data?.bucketMs ?? 3600000} from={Date.now() - hours * 3600000} to={Date.now()} height={170} />

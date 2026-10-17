@@ -24,7 +24,7 @@ const TIMEOUT_MS = 3000;
 let latest: WorkerStatus[] = [];
 const knownNames = new Map<string, string>(); // so a worker that goes down keeps its agent name
 
-const insert = db.prepare('INSERT INTO agent_worker_samples (url, agent_name, at, ok, load, active_jobs, latency_ms) VALUES (?,?,?,?,?,?,?)');
+const insert = db.prepare('INSERT INTO agent_worker_samples (url, agent_name, at, ok, load, active_jobs, latency_ms, worker_type, sdk_version, project_type) VALUES (?,?,?,?,?,?,?,?,?,?)');
 
 async function probe(url: string): Promise<WorkerStatus> {
   const started = Date.now();
@@ -52,7 +52,7 @@ async function probe(url: string): Promise<WorkerStatus> {
 
 export async function pollWorkers(): Promise<void> {
   latest = await Promise.all(config.workerUrls.map(probe));
-  for (const w of latest) insert.run(w.url, w.agentName, w.checkedAt, w.ok ? 1 : 0, w.load, w.activeJobs, w.latencyMs);
+  for (const w of latest) insert.run(w.url, w.agentName, w.checkedAt, w.ok ? 1 : 0, w.load, w.activeJobs, w.latencyMs, w.workerType, w.sdkVersion, w.projectType);
 }
 
 export const workerStatuses = (): WorkerStatus[] => latest;

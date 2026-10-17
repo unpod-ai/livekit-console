@@ -177,15 +177,33 @@ history.get('/agents', (req, res) => {
 });
 
 // Worker status polled from each configured agent worker (see workers.ts), with uptime and load over the range.
+// `former` lists workers that were polled in the past but are no longer configured; both kinds carry when they were
+// last checked and last healthy, so a dead worker still shows when it stopped answering.
 history.get('/agent-workers', (req, res) => {
   const hours = intParam(req.query.hours, 168, 24 * 90);
   const stats = db.prepare('SELECT COUNT(*) AS n, COALESCE(SUM(ok),0) AS up, AVG(CASE WHEN ok = 1 THEN load END) AS avgLoad FROM agent_worker_samples WHERE url = ? AND at >= ?');
+  const seen = db.prepare('SELECT MIN(at) AS firstSeenAt, MAX(CASE WHEN ok = 1 THEN at END) AS lastOkAt, MAX(at) AS lastCheckedAt FROM agent_worker_samples WHERE url = ?');
+  const last = db.prepare('SELECT agent_name AS agentName, worker_type AS workerType, sdk_version AS sdkVersion, project_type AS projectType FROM agent_worker_samples WHERE url = ? AND agent_name IS NOT NULL ORDER BY at DESC LIMIT 1');
+  const describe = (url: string) => {
+    const x = stats.get(url, since(hours)) as { n: number; up: number; avgLoad: number | null };
+    return {
+      ...(seen.get(url) as { firstSeenAt: number | null; lastOkAt: number | null; lastCheckedAt: number | null }),
+      uptimePct: x.n ? Math.round((x.up / x.n) * 1000) / 10 : null,
+      avgLoadPct: x.avgLoad == null ? null : Math.round(x.avgLoad * 1000) / 10,
+      samples: x.n,
+    };
+  };
+  const current = workerStatuses();
+  const known = new Set([...config.workerUrls, ...current.map((w) => w.url)]);
+  const retired = (db.prepare('SELECT DISTINCT url FROM agent_worker_samples').all() as { url: string }[]).map((r) => r.url).filter((u) => !known.has(u));
   res.json({
     configured: config.workerUrls.length > 0,
-    workers: workerStatuses().map((w) => {
-      const x = stats.get(w.url, since(hours)) as { n: number; up: number; avgLoad: number | null };
-      return { ...w, uptimePct: x.n ? Math.round((x.up / x.n) * 1000) / 10 : null, avgLoadPct: x.avgLoad == null ? null : Math.round(x.avgLoad * 1000) / 10, samples: x.n };
+    // a dead worker can't report its type/SDK any more, so fall back to what it last reported
+    workers: current.map((w) => {
+      const was = (last.get(w.url) ?? {}) as { workerType?: string; sdkVersion?: string; projectType?: string };
+      return { ...w, workerType: w.workerType ?? was.workerType ?? null, sdkVersion: w.sdkVersion ?? was.sdkVersion ?? null, projectType: w.projectType ?? was.projectType ?? null, ...describe(w.url) };
     }),
+    former: retired.map((url) => ({ url, ok: false, ...(last.get(url) as object | undefined), ...describe(url) })),
   });
 });
 
