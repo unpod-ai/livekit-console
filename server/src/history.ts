@@ -227,7 +227,7 @@ history.get('/agent-workers', (req, res) => {
 
 // Daily GitHub clone/view counts that the traffic sync (traffic.ts) has copied into the database.
 history.get('/repo-traffic', (req, res) => {
-  const days = intParam(req.query.days, 30, 365);
+  const days = intParam(req.query.days, 30, 3650);
   const from = Date.now() - days * 86400_000;
   const rows = db.prepare('SELECT day AS t, kind, count, uniques FROM repo_traffic WHERE day >= ? ORDER BY day').all(from) as { t: number; kind: string; count: number; uniques: number }[];
   const byDay = new Map<number, Record<string, number>>();

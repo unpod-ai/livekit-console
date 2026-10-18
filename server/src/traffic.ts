@@ -3,7 +3,7 @@ import { db } from './db.js';
 
 /**
  * GitHub only keeps 14 days of clone/view traffic, so this copies it into the console's database on a schedule
- * (every 6 hours; overlapping days are overwritten with the latest numbers). Needs GITHUB_TOKEN with push access.
+ * (every hour, since GitHub updates today's counts through the day; overlapping days are overwritten with the latest numbers). Needs GITHUB_TOKEN with push access.
  */
 const KINDS = ['clones', 'views'] as const;
 type Day = { timestamp: string; count: number; uniques: number };
@@ -40,5 +40,5 @@ export const trafficState = () => ({ configured: !!config.githubToken, repo: con
 export function startTrafficSync(): void {
   if (!config.githubToken) return;
   void syncTraffic();
-  setInterval(() => void syncTraffic(), 6 * 3600_000).unref();
+  setInterval(() => void syncTraffic(), 3600_000).unref();
 }

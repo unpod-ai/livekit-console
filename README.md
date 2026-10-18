@@ -40,7 +40,7 @@ by the status server, so it only shows if a worker reports one.
 
 ## Repo traffic
 GitHub keeps only 14 days of clone and view counts. Set `GITHUB_TOKEN` (push access to the repo) and optionally `GITHUB_REPO`
-and the console copies the daily counts into its database every 6 hours; **Tools → Repo traffic** charts them over any range.
+and the console copies the daily counts into its database every hour; **Tools → Repo traffic** charts them over any range.
 
 ## Access control
 Sign in with the admin from `.env` (always works, as a fallback), then add teammates under **Settings → Team members**.
