@@ -157,71 +157,89 @@ history.get('/sessions/:sid/participants/:psid', (req, res) => {
   });
 });
 
+// Every agent ever seen. Counts are for the range; an agent with no activity in it still appears (inactive), with
+// when it was first and last seen, so renamed or retired agents stay visible.
 history.get('/agents', (req, res) => {
   const hours = intParam(req.query.hours, 168, 24 * 90);
+  const from = since(hours);
   const now = Date.now();
   const rows = db
-    .prepare(`SELECT p.room_sid, p.attributes, p.joined_at, p.left_at FROM participants p WHERE p.kind IN ${AGENT} AND p.joined_at >= ? ORDER BY p.joined_at`)
-    .all(since(hours)) as { room_sid: string; attributes: string; joined_at: number; left_at: number | null }[];
-  const byName = new Map<string, { name: string; sessions: Set<string>; jobs: number; ms: number; active: number; lastSeenAt: number; firstSeenAt: number }>();
+    .prepare(`SELECT p.room_sid, p.attributes, p.joined_at, p.left_at FROM participants p WHERE p.kind IN ${AGENT} ORDER BY p.joined_at`)
+    .all() as { room_sid: string; attributes: string; joined_at: number; left_at: number | null }[];
+  const byName = new Map<string, { name: string; sessions: Set<string>; jobs: number; ms: number; active: number; lastSeenAt: number; firstSeenAt: number; totalSessions: Set<string> }>();
   for (const r of rows) {
     const name = agentNameOf(JSON.parse(r.attributes || '{}'));
-    const a = byName.get(name) ?? { name, sessions: new Set(), jobs: 0, ms: 0, active: 0, lastSeenAt: 0, firstSeenAt: r.joined_at };
-    a.sessions.add(r.room_sid);
-    a.jobs++;
-    a.ms += (r.left_at ?? now) - r.joined_at;
-    if (!r.left_at) a.active++;
+    const a = byName.get(name) ?? { name, sessions: new Set(), jobs: 0, ms: 0, active: 0, lastSeenAt: 0, firstSeenAt: r.joined_at, totalSessions: new Set() };
+    a.totalSessions.add(r.room_sid);
     a.lastSeenAt = Math.max(a.lastSeenAt, r.left_at ?? now);
+    a.firstSeenAt = Math.min(a.firstSeenAt, r.joined_at);
+    if (!r.left_at) a.active++;
+    if (r.joined_at >= from) {
+      a.sessions.add(r.room_sid);
+      a.jobs++;
+      a.ms += (r.left_at ?? now) - r.joined_at;
+    }
     byName.set(name, a);
   }
-  res.json([...byName.values()].map((a) => ({ name: a.name, sessions: a.sessions.size, jobs: a.jobs, minutes: Math.round(a.ms / 60000), avgMs: a.jobs ? a.ms / a.jobs : 0, activeNow: a.active, lastSeenAt: a.lastSeenAt, firstSeenAt: a.firstSeenAt })).sort((x, y) => y.lastSeenAt - x.lastSeenAt));
+  res.json([...byName.values()].map((a) => ({ name: a.name, sessions: a.sessions.size, jobs: a.jobs, minutes: Math.round(a.ms / 60000), avgMs: a.jobs ? a.ms / a.jobs : 0, activeNow: a.active, lastSeenAt: a.lastSeenAt, firstSeenAt: a.firstSeenAt, totalSessions: a.totalSessions.size })).sort((x, y) => y.lastSeenAt - x.lastSeenAt));
 });
 
 // Worker status polled from each configured agent worker (see workers.ts), with uptime and load over the range.
-// `former` lists workers that were polled in the past but are no longer configured; both kinds carry when they were
-// last checked and last healthy, so a dead worker still shows when it stopped answering.
+// Workers are keyed by endpoint AND agent name: renaming an agent on the same endpoint keeps the old agent's history.
+// `former` lists every (endpoint, agent) pair that is no longer live, with why: "renamed" (the endpoint now runs another
+// agent) or "removed" (the endpoint is no longer polled). Both carry when they were last checked and last healthy.
 history.get('/agent-workers', (req, res) => {
   const hours = intParam(req.query.hours, 168, 24 * 90);
-  const stats = db.prepare('SELECT COUNT(*) AS n, COALESCE(SUM(ok),0) AS up, AVG(CASE WHEN ok = 1 THEN load END) AS avgLoad FROM agent_worker_samples WHERE url = ? AND at >= ?');
-  const seen = db.prepare('SELECT MIN(at) AS firstSeenAt, MAX(CASE WHEN ok = 1 THEN at END) AS lastOkAt, MAX(at) AS lastCheckedAt FROM agent_worker_samples WHERE url = ?');
-  const last = db.prepare('SELECT agent_name AS agentName, worker_type AS workerType, sdk_version AS sdkVersion, project_type AS projectType FROM agent_worker_samples WHERE url = ? AND agent_name IS NOT NULL ORDER BY at DESC LIMIT 1');
+  const stats = db.prepare('SELECT COUNT(*) AS n, COALESCE(SUM(ok),0) AS up, AVG(CASE WHEN ok = 1 THEN load END) AS avgLoad FROM agent_worker_samples WHERE url = ? AND agent_name IS ? AND at >= ?');
+  const seen = db.prepare('SELECT MIN(at) AS firstSeenAt, MAX(CASE WHEN ok = 1 THEN at END) AS lastOkAt, MAX(at) AS lastCheckedAt FROM agent_worker_samples WHERE url = ? AND agent_name IS ?');
+  const last = db.prepare('SELECT worker_type AS workerType, sdk_version AS sdkVersion, project_type AS projectType FROM agent_worker_samples WHERE url = ? AND agent_name IS ? AND worker_type IS NOT NULL ORDER BY at DESC LIMIT 1');
   // A worker's outages in the range: each run of failed checks, with when it began and when the worker came back.
-  const samplesOf = db.prepare('SELECT at, ok FROM agent_worker_samples WHERE url = ? AND at >= ? ORDER BY at');
-  const outagesOf = (url: string) => {
+  const samplesOf = db.prepare('SELECT at, ok FROM agent_worker_samples WHERE url = ? AND agent_name IS ? AND at >= ? ORDER BY at');
+  const outagesOf = (url: string, agent: string | null, replaced: boolean) => {
     const out: { from: number; to: number | null; checks: number }[] = [];
     let open: { from: number; to: number | null; checks: number } | null = null;
-    for (const s of samplesOf.all(url, since(hours)) as { at: number; ok: number }[]) {
-      if (!s.ok) {
-        if (!open) out.push((open = { from: s.at, to: null, checks: 0 }));
+    const rows = samplesOf.all(url, agent, since(hours)) as { at: number; ok: number }[];
+    for (const r of rows) {
+      if (!r.ok) {
+        if (!open) out.push((open = { from: r.at, to: null, checks: 0 }));
         open.checks++;
       } else if (open) {
-        open.to = s.at;
+        open.to = r.at;
         open = null;
       }
     }
+    // After a rename the old agent's last checks are just the restart gap before the new one came up, not an ongoing outage.
+    if (replaced && open) out.pop();
     return out.reverse().slice(0, 25);
   };
-  const describe = (url: string) => {
-    const x = stats.get(url, since(hours)) as { n: number; up: number; avgLoad: number | null };
+  const describe = (url: string, agent: string | null, replaced = false) => {
+    const x = stats.get(url, agent, since(hours)) as { n: number; up: number; avgLoad: number | null };
     return {
-      ...(seen.get(url) as { firstSeenAt: number | null; lastOkAt: number | null; lastCheckedAt: number | null }),
+      ...(seen.get(url, agent) as { firstSeenAt: number | null; lastOkAt: number | null; lastCheckedAt: number | null }),
       uptimePct: x.n ? Math.round((x.up / x.n) * 1000) / 10 : null,
       avgLoadPct: x.avgLoad == null ? null : Math.round(x.avgLoad * 1000) / 10,
       samples: x.n,
-      outages: outagesOf(url),
+      outages: outagesOf(url, agent, replaced),
     };
   };
   const current = workerStatuses();
-  const known = new Set([...config.workerUrls, ...current.map((w) => w.url)]);
-  const retired = (db.prepare('SELECT DISTINCT url FROM agent_worker_samples').all() as { url: string }[]).map((r) => r.url).filter((u) => !known.has(u));
+  const liveUrls = new Set([...config.workerUrls, ...current.map((w) => w.url)]);
+  const isLive = (url: string, agent: string | null) => current.some((w) => w.url === url && w.agentName === agent);
+  const pairs = db.prepare('SELECT url, agent_name AS agentName FROM agent_worker_samples GROUP BY url, agent_name').all() as { url: string; agentName: string | null }[];
+  const named = new Set(pairs.filter((p) => p.agentName).map((p) => p.url));
   res.json({
     configured: config.workerUrls.length > 0,
     // a dead worker can't report its type/SDK any more, so fall back to what it last reported
     workers: current.map((w) => {
-      const was = (last.get(w.url) ?? {}) as { workerType?: string; sdkVersion?: string; projectType?: string };
-      return { ...w, workerType: w.workerType ?? was.workerType ?? null, sdkVersion: w.sdkVersion ?? was.sdkVersion ?? null, projectType: w.projectType ?? was.projectType ?? null, ...describe(w.url) };
+      const was = (last.get(w.url, w.agentName) ?? {}) as { workerType?: string; sdkVersion?: string; projectType?: string };
+      return { ...w, workerType: w.workerType ?? was.workerType ?? null, sdkVersion: w.sdkVersion ?? was.sdkVersion ?? null, projectType: w.projectType ?? was.projectType ?? null, ...describe(w.url, w.agentName) };
     }),
-    former: retired.map((url) => ({ url, ok: false, ...(last.get(url) as object | undefined), ...describe(url) })),
+    former: pairs
+      .filter((p) => !isLive(p.url, p.agentName) && !(p.agentName == null && named.has(p.url)))
+      .map((p) => {
+        const reason = liveUrls.has(p.url) ? 'renamed' : 'removed';
+        return { url: p.url, ok: false, agentName: p.agentName, reason, ...(last.get(p.url, p.agentName) as object | undefined), ...describe(p.url, p.agentName, reason === 'renamed') };
+      }),
   });
 });
 

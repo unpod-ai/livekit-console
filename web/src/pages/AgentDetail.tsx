@@ -27,6 +27,7 @@ export function AgentDetail() {
   const detail = useApi<{ sessions: Json[] }>(['agent', name], `/history/agents/${enc}`, { live: false });
 
   const worker = wk.data?.workers.find((w) => w.agentName === name);
+  const retired = (wk.data?.former ?? []).find((w) => w.agentName === name);
   const outages = [...(wk.data?.workers ?? []), ...(wk.data?.former ?? [])].filter((w) => w.agentName === name).flatMap((w) => w.outages.map((o) => ({ ...o, url: w.url }))).sort((a, b) => b.from - a.from);
   const jobs = (live.data ?? []).filter((l) => l.agentName === name);
   const o = ov.data;
@@ -36,6 +37,7 @@ export function AgentDetail() {
   const statusEl = worker
     ? <span className="mono" style={{ color: worker.ok ? 'var(--ok)' : 'var(--bad)', fontWeight: 600, fontSize: 11 }}>■ {worker.ok ? 'RUNNING' : 'DOWN'}</span>
     : jobs.length ? <span className="mono" style={{ color: 'var(--ok)', fontWeight: 600, fontSize: 11 }}>■ IN A CALL</span>
+    : retired ? <span className="mono muted" style={{ fontSize: 11 }}>■ {retired.reason === 'renamed' ? 'RETIRED' : 'WORKER REMOVED'}</span>
     : <span className="mono muted" style={{ fontSize: 11 }}>■ UNKNOWN</span>;
 
   const liveCols: Col<Json>[] = [
@@ -60,7 +62,8 @@ export function AgentDetail() {
             <Kpi label="Concurrent sessions" value={<span style={{ fontSize: 22 }}>{worker?.activeJobs ?? jobs.length}</span>} />
             <Kpi label="Worker endpoint" value={<span className="mono" style={{ fontSize: 13, color: 'var(--text)' }}>{worker?.url ?? 'Not configured'}</span>} />
           </Kpis>
-          {wk.data && !worker && <Alert kind="warn">No worker endpoint is configured for this agent, so uptime and load are unknown. Add its status URL to <span className="mono">AGENT_WORKER_URLS</span>.</Alert>}
+          {wk.data && !worker && retired && <Alert>{retired.reason === 'renamed' ? 'This agent was renamed: its endpoint now runs another agent.' : 'This agent\'s worker endpoint is no longer polled.'} Its history is kept. Last healthy {fromMs(retired.lastOkAt)}.</Alert>}
+          {wk.data && !worker && !retired && <Alert kind="warn">No worker endpoint is configured for this agent, so uptime and load are unknown. Add its status URL to <span className="mono">AGENT_WORKER_URLS</span>.</Alert>}
 
           <WorkersPanel workers={wk.data?.workers ?? []} former={wk.data?.former ?? []} agent={name} />
 
@@ -109,7 +112,7 @@ export function AgentDetail() {
                 ['Average load (range)', worker.avgLoadPct == null ? '—' : `${worker.avgLoadPct}%`],
                 ['Last error', worker.error ?? '—'],
               ]} />
-            ) : <div className="muted" style={{ padding: 16 }}>No worker endpoint is configured for this agent.</div>}
+            ) : <div className="muted" style={{ padding: 16 }}>{retired ? 'No live worker: see the table below for this agent\'s retired worker.' : 'No worker endpoint is configured for this agent.'}</div>}
           </Panel>
           <Panel title={`Outages (${outages.length})`} actions={<Help text="Each period the worker stopped answering its status checks" />}>
             <OutageTable rows={outages} search={false} pageSize={false} rowKey={(o) => `${o.url}-${o.from}`} empty={{ title: 'No outages in this range', hint: 'The worker answered every status check.' }} cols={[

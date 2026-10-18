@@ -12,7 +12,7 @@ import { Alert, Badge, Kpi, Kpis, PageHeader, Panel } from '../components/ui';
 
 export type Worker = { url: string; ok: boolean; agentName: string | null; workerId: string | null; workerType: string | null; load: number | null; activeJobs: number | null; sdkVersion: string | null; projectType: string | null; latencyMs: number | null; checkedAt: number; error: string | null; uptimePct: number | null; avgLoadPct: number | null; outages: Outage[]; firstSeenAt: number | null; lastOkAt: number | null; lastCheckedAt: number | null; samples: number };
 export type Outage = { from: number; to: number | null; checks: number };
-export type FormerWorker = Pick<Worker, 'url' | 'agentName' | 'workerType' | 'sdkVersion' | 'projectType' | 'uptimePct' | 'avgLoadPct' | 'outages' | 'firstSeenAt' | 'lastOkAt' | 'lastCheckedAt' | 'samples'>;
+export type FormerWorker = { reason: 'renamed' | 'removed' } & Pick<Worker, 'url' | 'agentName' | 'workerType' | 'sdkVersion' | 'projectType' | 'uptimePct' | 'avgLoadPct' | 'outages' | 'firstSeenAt' | 'lastOkAt' | 'lastCheckedAt' | 'samples'>;
 
 const JOB_TYPES: Record<string, string> = { JT_ROOM: 'Room', JT_PUBLISHER: 'Publisher', JT_PARTICIPANT: 'Participant' };
 /** The job type a worker registered for (what one job is scoped to), spelled out. */
@@ -29,7 +29,7 @@ export function WorkersPanel({ workers, former, agent }: { workers: Worker[]; fo
   ].filter((w) => !agent || w.agentName === agent);
   const dead = rows.filter((w) => !w.ok).length;
   const cols: Col<WorkerRow>[] = [
-    { key: 'status', header: 'Status', cell: (w) => (w.ok ? <Badge tone="ok" dot>Running</Badge> : <Badge tone="bad" dot>{w.retired ? 'Dead · removed' : 'Dead'}</Badge>), sort: (w) => Number(w.ok), text: (w) => (w.ok ? 'running' : 'dead') },
+    { key: 'status', header: 'Status', cell: (w) => (w.ok ? <Badge tone="ok" dot>Running</Badge> : <Badge tone={w.retired && 'reason' in w && w.reason === 'renamed' ? undefined : 'bad'} dot>{!w.retired ? 'Dead' : 'reason' in w && w.reason === 'renamed' ? 'Retired · agent renamed' : 'Dead · removed'}</Badge>), sort: (w) => Number(w.ok), text: (w) => (w.ok ? 'running' : 'dead') },
     { key: 'agent', header: 'Agent', cell: (w) => (w.agentName ? <Link className="rowlink" to={`/agents/${encodeURIComponent(w.agentName)}`}><b>{w.agentName}</b></Link> : '—'), text: (w) => w.agentName ?? '', sort: (w) => w.agentName ?? '' },
     { key: 'id', header: 'Worker ID', cell: (w) => (('workerId' in w && w.workerId) ? <span className="mono">{w.workerId}</span> : <span className="muted">—</span>), text: (w) => ('workerId' in w && w.workerId) || '' },
     { key: 'url', header: 'Endpoint', cell: (w) => <span className="mono">{w.url}</span>, text: (w) => w.url },
@@ -44,13 +44,13 @@ export function WorkersPanel({ workers, former, agent }: { workers: Worker[]; fo
   ];
   return (
     <Panel title={`${agent ? 'Workers' : 'All workers'} (${rows.length})`} actions={dead ? <Badge tone="bad" dot>{dead} dead</Badge> : undefined}>
-      <DataTable rows={rows} cols={cols} rowKey={(w) => w.url} search={false} pageSize={false} storageKey={agent ? undefined : 'workers'}
+      <DataTable rows={rows} cols={cols} rowKey={(w) => `${w.url}|${w.agentName ?? ''}`} search={false} pageSize={false} storageKey={agent ? undefined : 'workers'}
         empty={{ title: 'No workers polled yet', hint: 'Workers appear after the first status check of an endpoint in AGENT_WORKER_URLS.' }} />
     </Panel>
   );
 }
 const sdkLabelCell = (w: WorkerRow) => (w.sdkVersion ? <span className="mono">{sdkLabel(w)}</span> : '—');
-type Row = { name: string; sessions: number; jobs: number; minutes: number; avgMs: number; running: number; lastSeenAt: number | null; rules: Json[]; worker?: Worker };
+type Row = { totalSessions: number; firstSeenAt: number | null; name: string; sessions: number; jobs: number; minutes: number; avgMs: number; running: number; lastSeenAt: number | null; rules: Json[]; worker?: Worker; former?: FormerWorker };
 
 const STATE_TONE: Record<string, 'ok' | 'warn' | 'info' | undefined> = { listening: 'ok', speaking: 'info', thinking: 'warn', initializing: 'warn' };
 const pct = (v: number | null | undefined, digits = 1) => (v == null ? '—' : `${(v * 100).toFixed(digits)}%`);
@@ -72,8 +72,8 @@ export function Agents() {
 
   const rows = useMemo<Row[]>(() => {
     const m = new Map<string, Row>();
-    const blank = (name: string): Row => ({ name, sessions: 0, jobs: 0, minutes: 0, avgMs: 0, running: 0, lastSeenAt: null, rules: [] as Json[] });
-    (seen.data ?? []).forEach((a) => m.set(a.name, { ...blank(a.name), sessions: a.sessions, jobs: a.jobs, minutes: a.minutes, avgMs: a.avgMs, running: a.activeNow, lastSeenAt: a.lastSeenAt }));
+    const blank = (name: string): Row => ({ totalSessions: 0, firstSeenAt: null, name, sessions: 0, jobs: 0, minutes: 0, avgMs: 0, running: 0, lastSeenAt: null, rules: [] as Json[] });
+    (seen.data ?? []).forEach((a) => m.set(a.name, { ...blank(a.name), sessions: a.sessions, jobs: a.jobs, minutes: a.minutes, avgMs: a.avgMs, running: a.activeNow, lastSeenAt: a.lastSeenAt, firstSeenAt: a.firstSeenAt, totalSessions: a.totalSessions }));
     (rules.data ?? []).forEach((r) => (r.roomConfig?.agents ?? []).forEach((a: Json) => {
       const row = m.get(a.agentName) ?? blank(a.agentName);
       row.rules.push(r);
@@ -89,13 +89,24 @@ export function Agents() {
       row.worker = w;
       m.set(w.agentName, row);
     });
+    // agents whose worker is gone (renamed or removed) still count and keep their history
+    (workers.data?.former ?? []).forEach((f) => {
+      if (!f.agentName) return;
+      const row = m.get(f.agentName) ?? blank(f.agentName);
+      row.former = f;
+      m.set(f.agentName, row);
+    });
     return [...m.values()].sort((a, b) => Number(!!b.worker?.ok) - Number(!!a.worker?.ok) || b.running - a.running || (b.lastSeenAt ?? 0) - (a.lastSeenAt ?? 0) || a.name.localeCompare(b.name));
   }, [seen.data, rules.data, live.data, workers.data]);
 
+  // Inactive: nothing running it and no worker answering. It stays listed with its history.
+  const inactive = (a: Row) => !a.worker?.ok && !a.running;
   const configured = workers.data?.configured ?? true;
   const status = (a: Row) => a.worker
     ? (a.worker.ok ? <Badge tone="ok" dot pulse={(a.worker.activeJobs ?? 0) > 0}>Running</Badge> : <Badge tone="bad" dot>Down</Badge>)
     : a.running ? <Badge tone="ok" dot pulse>Running · in a call</Badge>
+    : a.former ? <Badge dot>{a.former.reason === 'renamed' ? 'Retired' : 'Worker removed'}</Badge>
+    : a.totalSessions > 0 ? <Badge dot>Inactive</Badge>
     : configured && (workers.data?.workers.length ?? 0) > 0 ? <Badge>No worker endpoint</Badge> : <Badge>Unknown</Badge>;
 
   const cols: Col<Row>[] = [
@@ -103,11 +114,13 @@ export function Agents() {
     { key: 'status', header: 'Status', cell: status, sort: (a) => (a.worker ? (a.worker.ok ? 2 : 0) : a.running ? 1 : -1) },
     { key: 'load', header: 'Load', cell: (a) => pct(a.worker?.load), sort: (a) => a.worker?.load ?? -1 },
     { key: 'jobs', header: 'Active jobs', cell: (a) => a.worker?.activeJobs ?? (a.running || '—'), sort: (a) => a.worker?.activeJobs ?? a.running },
-    { key: 'sdk', header: 'SDK', cell: (a) => (a.worker?.sdkVersion ? <span className="mono">{a.worker.projectType ?? ''} {a.worker.sdkVersion}</span> : '—') },
-    { key: 'uptime', header: 'Uptime', cell: (a) => (a.worker?.uptimePct == null ? '—' : `${a.worker.uptimePct}%`), sort: (a) => a.worker?.uptimePct ?? -1 },
+    { key: 'sdk', header: 'SDK', cell: (a) => { const w = a.worker ?? a.former; return w?.sdkVersion ? <span className="mono">{w.projectType ?? ''} {w.sdkVersion}</span> : '—'; } },
+    { key: 'uptime', header: 'Uptime', cell: (a) => { const u = (a.worker ?? a.former)?.uptimePct; return u == null ? '—' : `${u}%`; }, sort: (a) => (a.worker ?? a.former)?.uptimePct ?? -1 },
     { key: 'sessions', header: 'Sessions', cell: (a) => a.sessions.toLocaleString(), sort: (a) => a.sessions },
     { key: 'minutes', header: 'Agent minutes', cell: (a) => a.minutes.toLocaleString(), sort: (a) => a.minutes },
-    { key: 'last', header: 'Last seen in a call', hidden: true, cell: (a) => (a.lastSeenAt ? relTime(a.lastSeenAt) : '—'), sort: (a) => a.lastSeenAt ?? 0 },
+    { key: 'first', header: 'First seen', hidden: true, cell: (a) => (a.firstSeenAt ? fromMs(a.firstSeenAt) : '—'), sort: (a) => a.firstSeenAt ?? 0 },
+    { key: 'total', header: 'All-time sessions', hidden: true, cell: (a) => a.totalSessions.toLocaleString(), sort: (a) => a.totalSessions },
+    { key: 'last', header: 'Last seen in a call', hidden: false, cell: (a) => (a.lastSeenAt ? relTime(a.lastSeenAt) : '—'), sort: (a) => a.lastSeenAt ?? 0 },
     { key: 'rules', header: 'Dispatch rules', hidden: true, cell: (a) => (a.rules.length ? <div className="badges">{a.rules.slice(0, 3).map((r) => <Link key={r.sipDispatchRuleId} className="badge" to={`/telephony/dispatch?q=${r.sipDispatchRuleId}`}>{r.name || r.sipDispatchRuleId}</Link>)}{a.rules.length > 3 && <Badge>+{a.rules.length - 3}</Badge>}</div> : <span className="muted">None</span>), text: (a) => a.rules.map((r) => r.name).join(' ') },
   ];
   const liveCols: Col<Json>[] = [
@@ -129,7 +142,7 @@ export function Agents() {
         <Alert kind="warn">No agent worker endpoints are configured, so worker status is unknown. Each worker serves its status on port 8081 (<span className="mono">GET /worker</span>). Set <span className="mono">AGENT_WORKER_URLS</span> (comma-separated base URLs, e.g. <span className="mono">http://127.0.0.1:18081</span>) on the console.</Alert>
       )}
       <Kpis>
-        <Kpi label="Agents" value={rows.length} />
+        <Kpi label="Agents" value={rows.length} foot={`${rows.filter(inactive).length} inactive`} />
         <Kpi label="Workers running" value={workers.data ? `${running}/${workers.data.workers.length + workers.data.former.length}` : '…'} accent foot={configured ? 'From each worker\'s own status' : 'Not configured'} />
         <Kpi label="In calls now" value={live.data ? live.data.length : '…'} foot={live.isError ? 'Could not reach LiveKit' : 'Agents inside live rooms'} />
         <Kpi label="Agent sessions" value={total('sessions').toLocaleString()} />
