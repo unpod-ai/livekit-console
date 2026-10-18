@@ -76,6 +76,9 @@ Point LiveKit at `http://<console>/webhook` (signed with your API key, verified 
 The container binds to `127.0.0.1` on the VM; reach it through an SSH tunnel or the HTTPS step above.
 `scripts/simulate-webhooks.ts` and `scripts/check-livekit.ts` help with testing and verifying credentials.
 
+## Contributing
+See [CONTRIBUTING.md](CONTRIBUTING.md), the [Code of Conduct](CODE_OF_CONDUCT.md) and [SECURITY.md](SECURITY.md). The project is [MIT licensed](LICENSE).
+
 ## Star history
 [![Star History Chart](https://api.star-history.com/svg?repos=unpod-ai/livekit-console&type=Date)](https://star-history.com/#unpod-ai/livekit-console&Date)
 
