@@ -1,8 +1,14 @@
 # Changelog
 
-## Unreleased
+## 0.1.0-preview.1
 
-Initial public preview. The current package version is 0.1.0; a tagged release has not yet been published.
+Initial public preview. The private workspace packages use version 0.1.0.
+
+### Fixes and operations
+- Updated Vite and React Router to resolve the dependency audit findings.
+- Removed the fixed page width cap on wide displays.
+- Repository traffic defaults to 30 days, preserves saved All time, and shows loading/request failures while retaining cached data on refresh failure.
+- Added WAL-aware Docker backup/restore instructions and a Cloud coverage/validation checklist.
 
 ### Features
 - Live room and participant management, agent dispatch and token generation.

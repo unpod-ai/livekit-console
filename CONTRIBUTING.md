@@ -14,7 +14,7 @@ See the [roadmap](ROADMAP.md) and [good first issues](https://github.com/unpod-a
 for places to help. Comment on an issue before starting substantial work so contributors can coordinate.
 
 ## Set up
-Requirements: Node.js 22 or newer and a LiveKit server to point at (see [docs/getting-started.md](docs/getting-started.md)).
+Requirements: Node.js 22.13 or newer and a LiveKit server to point at (see [docs/getting-started.md](docs/getting-started.md)).
 ```bash
 cp .env.example .env     # fill in LIVEKIT_URL, the API key/secret, ADMIN_USER, ADMIN_PASSWORD, SESSION_SECRET
 npm install
