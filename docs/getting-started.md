@@ -5,7 +5,7 @@ React UI and a small Express backend. The backend keeps your API key and secret,
 receives LiveKit webhooks, and stores history in SQLite.
 
 ## Requirements
-- Node.js 22 or newer (the backend uses the built-in `node:sqlite`), or Docker
+- Node.js 22.13 or newer (the backend uses the built-in `node:sqlite`), or Docker
 - A running self-hosted LiveKit server and an API key/secret from its `keys:` config
 - Optional: LiveKit SIP, Egress and Agents workers, for the pages that cover them
 

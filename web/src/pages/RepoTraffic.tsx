@@ -4,7 +4,7 @@ import { type Json } from '../lib/api';
 import { useApi } from '../lib/hooks';
 import { BarsChart, PALETTE } from '../components/Charts';
 import { Dropdown } from '../components/Dropdown';
-import { Alert, Kpi, Kpis, PageHeader, Panel } from '../components/ui';
+import { Alert, Kpi, Kpis, PageHeader, Panel, errText } from '../components/ui';
 import { fromMs } from '../lib/format';
 
 // The repository is a different thing from the project, so it has its own range instead of the global one.
@@ -31,11 +31,11 @@ function bucketise(rows: Json[], days: number): { rows: Json[]; bucketMs: number
 /** Daily GitHub clone and view counts. GitHub keeps 14 days; the server copies them into its database so history keeps growing. */
 export function RepoTraffic() {
   const [days, setDays] = useState(() => {
-    const saved = Number(localStorage.getItem(KEY));
-    return OPTIONS.some(([d]) => d === saved) ? saved : 30;
+    const saved = localStorage.getItem(KEY);
+    return OPTIONS.find(([d]) => String(d) === saved)?.[0] ?? 30;
   });
   const choose = (d: number) => { localStorage.setItem(KEY, String(d)); setDays(d); };
-  const { data } = useApi<Json>(['repo-traffic', days], `/history/repo-traffic?days=${days || 3650}`);
+  const { data, error, isPending } = useApi<Json>(['repo-traffic', days], `/history/repo-traffic?days=${days || 3650}`);
   const series: Json[] = data?.series ?? [];
   const first = series[0]?.t as number | undefined;
   const from = days ? Date.now() - days * DAY : first ?? Date.now() - 30 * DAY;
@@ -52,9 +52,12 @@ export function RepoTraffic() {
       <PageHeader crumbs={[{ label: 'Tools' }, { label: 'Repo traffic' }]} title="Repo traffic"
         sub={data ? `${data.repo} · clones and views per ${grouped.unit} (UTC) · syncs hourly${data.lastSyncAt ? `, last ${fromMs(data.lastSyncAt)}` : ''}` : 'Clones and views'}
         actions={<Dropdown title="Repo traffic range" icon={<Clock size={14} aria-hidden />} label={OPTIONS.find(([d]) => d === days)?.[1]} value={days} onSelect={(d) => choose(Number(d))} items={OPTIONS.map(([id, label]) => ({ id, label }))} />} />
+      {isPending && <div className="empty" role="status">Loading repository traffic…</div>}
+      {error && <Alert kind="bad">Could not load repository traffic: {errText(error)}. {data && 'Showing the last loaded data. '}Use Refresh now to retry.</Alert>}
       {data && !data.configured && <Alert kind="warn">Not recording yet. Set <span className="mono">GITHUB_TOKEN</span> (a token with push access to the repository) in the console's environment; <span className="mono">GITHUB_REPO</span> defaults to <span className="mono">unpod-ai/livekit-console</span>.</Alert>}
       {data?.lastError && <Alert kind="bad">Last sync failed: {data.lastError}</Alert>}
       {covered && <Alert>History starts {fromMs(first)}: GitHub only keeps 14 days, so the console has only been able to record from when it started syncing.</Alert>}
+      {data && <>
       <Kpis>
         <Kpi label="Clones" value={n(t?.clones)} foot={`Today: ${(today?.clones ?? 0).toLocaleString()}`} />
         <Kpi label="Unique cloners" help="Summed per day, so someone cloning on two days counts twice" value={n(t?.uniqueCloners)} foot={`Today: ${(today?.uniqueCloners ?? 0).toLocaleString()}`} />
@@ -69,6 +72,7 @@ export function RepoTraffic() {
           <BarsChart data={grouped.rows} series={[{ key: 'views', label: 'Views', color: PALETTE.green }, { key: 'uniqueVisitors', label: 'Unique', color: PALETTE.amber }]} bucketMs={grouped.bucketMs} from={from} to={to} />
         </Panel>
       </div>
+      </>}
     </>
   );
 }

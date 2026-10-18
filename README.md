@@ -9,6 +9,7 @@ API key/secret so the browser never sees them, receives LiveKit webhooks and sto
 - [Features](docs/features.md): every page and what it shows
 - [Configuration](docs/configuration.md): all environment variables
 - [Deployment](docs/deployment.md): deploy to a VM with HTTPS and an IP allowlist
+- [Cloud coverage and validation](docs/parity-and-validation.md): supported capabilities and remaining acceptance checks
 
 ## Screenshots
 Taken from a demo instance with simulated data (`server/scripts/simulate-webhooks.ts`).
