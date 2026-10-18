@@ -4,10 +4,14 @@ Thanks for helping improve LiveKit Console. Bug reports, ideas and pull requests
 [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## Report a bug or ask for a feature
-Open an [issue](../../issues/new/choose) and use the template. For a bug, include the console version (commit), how
+Open an [issue](https://github.com/unpod-ai/livekit-console/issues/new/choose) and use the template. For a bug, include the console version (commit), how
 you run it (Docker, `npm start`, VM), your LiveKit server version, what you expected and what happened. Remove API
 keys, secrets, phone numbers and hostnames from anything you paste. For security problems, see
 [SECURITY.md](SECURITY.md) and do not open a public issue.
+
+For setup questions and general ideas, use [Discussions](https://github.com/unpod-ai/livekit-console/discussions).
+See the [roadmap](ROADMAP.md) and [good first issues](https://github.com/unpod-ai/livekit-console/labels/good%20first%20issue)
+for places to help. Comment on an issue before starting substantial work so contributors can coordinate.
 
 ## Set up
 Requirements: Node.js 22 or newer and a LiveKit server to point at (see [docs/getting-started.md](docs/getting-started.md)).

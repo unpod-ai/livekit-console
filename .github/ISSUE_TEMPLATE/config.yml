@@ -1,5 +1,8 @@
 blank_issues_enabled: false
 contact_links:
+  - name: Questions and support
+    url: https://github.com/unpod-ai/livekit-console/discussions
+    about: Ask setup questions and discuss ideas with the community.
   - name: Report a security vulnerability
     url: https://github.com/unpod-ai/livekit-console/security/advisories/new
     about: Please report security issues privately, not as a public issue.
