@@ -79,7 +79,9 @@ The container binds to `127.0.0.1` on the VM; reach it through an SSH tunnel or 
 ## Contributing
 See [CONTRIBUTING.md](CONTRIBUTING.md), the [Code of Conduct](CODE_OF_CONDUCT.md) and [SECURITY.md](SECURITY.md). The project is [MIT licensed](LICENSE).
 
+Ask questions in [Discussions](https://github.com/unpod-ai/livekit-console/discussions), report bugs through the
+[issue chooser](https://github.com/unpod-ai/livekit-console/issues/new/choose), or browse the [roadmap](ROADMAP.md)
+and [changelog](CHANGELOG.md).
+
 ## Star history
 [![Star History Chart](https://api.star-history.com/svg?repos=unpod-ai/livekit-console&type=Date)](https://star-history.com/#unpod-ai/livekit-console&Date)
-
-(The chart renders once the repository is public.)

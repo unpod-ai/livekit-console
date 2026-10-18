@@ -2,7 +2,7 @@
 
 ## Reporting a vulnerability
 Please do not open a public issue. Use **Report a vulnerability** under this repository's
-[Security tab](../../security/advisories/new) to send a private report to the maintainers. Include what you found,
+[Security tab](https://github.com/unpod-ai/livekit-console/security/advisories/new) to send a private report to the maintainers. Include what you found,
 how to reproduce it, and the impact. You should get a first reply within a few days.
 
 ## What to report

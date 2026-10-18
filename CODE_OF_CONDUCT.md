@@ -32,9 +32,10 @@ This Code of Conduct applies within all community spaces, and also when an indiv
 community in public spaces.
 
 ## Reporting
-Report unacceptable behavior privately to the maintainers: use **Report a vulnerability** under the repository's
-Security tab (a private channel that reaches the maintainers), or message an owner of the `unpod-ai` organization on
-GitHub. All reports are reviewed and investigated promptly and fairly, and the reporter's privacy is respected.
+Report unacceptable behavior privately to Anuj Singh at [anujk920@gmail.com](mailto:anujk920@gmail.com).
+Please do not post conduct reports in public issues or use the security vulnerability channel for them.
+Reports are reviewed fairly, and identifying information is kept confidential to the extent possible while
+investigating and responding to the report.
 
 ## Enforcement guidelines
 Maintainers follow these in determining consequences: (1) **Correction**: a private written warning for unprofessional
