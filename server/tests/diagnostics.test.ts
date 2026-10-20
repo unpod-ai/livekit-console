@@ -62,3 +62,7 @@ test('all durable SIP aliases have indexed point lookups',async()=>{
 test('call history does not confirm ambiguous pre-room service directions',async()=>{
  const data=await(await fetch(base+'/api/history/calls/PA_call',{headers:{cookie:await cookie()}})).json();assert.equal(data.call.directionSource,'unknown');
 });
+
+test('steady-state expiry cleanup uses the partial content-expiry index',async()=>{
+ const {DIAGNOSTIC_EXPIRY_SQL}=await import('../src/diagnostics.js');const plan=db.prepare('EXPLAIN QUERY PLAN '+DIAGNOSTIC_EXPIRY_SQL).all(Date.now()).map(r=>String(r.detail)).join('\n');assert.ok(plan.includes('diagnostic_expiry'));assert.equal(/SCAN diagnostic_records/.test(plan),false);
+});

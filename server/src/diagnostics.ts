@@ -7,7 +7,9 @@ import {requireAdmin,requireAuth} from './auth.js';
 import {normalizeDiagnostic} from './diagnostic-records.js';
 import {redactContent} from './telemetry-privacy.js';
 export const diagnosticIngest=Router(),diagnosticReads=Router();
-export function purgeDiagnostics(){db.prepare('UPDATE diagnostic_records SET content=NULL,room_sid=NULL,participant_sid=NULL,track_sid=NULL,call_id=NULL,sip_call_id=NULL,provider_call_id=NULL,instance_id=NULL WHERE expires_at<=? AND (content IS NOT NULL OR room_sid IS NOT NULL OR call_id IS NOT NULL OR instance_id IS NOT NULL)').run(Date.now());}
+export const DIAGNOSTIC_EXPIRY_SQL='UPDATE diagnostic_records SET content=NULL,room_sid=NULL,participant_sid=NULL,track_sid=NULL,call_id=NULL,sip_call_id=NULL,provider_call_id=NULL,instance_id=NULL WHERE expires_at<=? AND content IS NOT NULL';
+const expireDiagnostics=db.prepare(DIAGNOSTIC_EXPIRY_SQL);
+export function purgeDiagnostics(){expireDiagnostics.run(Date.now());}
 // Keep retry tombstones independent of content retention; a replay cannot restore expired records.
 diagnosticIngest.post('/',requireTelemetry,express.json({limit:'256kb'}),(req,res)=>{
  if(!config.diagnosticsEnabled){res.status(503).json({error:'Diagnostics collection is disabled'});return;}
