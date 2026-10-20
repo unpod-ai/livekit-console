@@ -12,11 +12,13 @@ import { api } from './routes.js';
 import { startReconciler } from './reconcile.js';
 import { startTrafficSync } from './traffic.js';
 import { startWorkerPolling } from './workers.js';
+import { agentInsights, telemetryIngest, startReportRetention } from './telemetry.js';
 
 const app = express();
 app.set('trust proxy', 1);
 // LiveKit signs webhooks itself, so this route sits outside the session login.
 app.post('/webhook', express.raw({ type: 'application/webhook+json' }), handleWebhook);
+app.use('/api/telemetry', telemetryIngest);
 app.use(express.json());
 app.use(cookieParser());
 
@@ -25,6 +27,7 @@ app.post('/api/auth/login', login);
 app.post('/api/auth/logout', logout);
 app.get('/api/auth/me', requireAuth, me);
 app.use('/api/users', requireAuth, requireAdmin, users);
+app.use('/api/agent-insights', requireAuth, requireAdmin, agentInsights);
 app.use('/api/history', requireAuth, history);
 app.use('/api', requireAuth, enforceRole, api);
 
@@ -38,5 +41,6 @@ if (existsSync(webDist)) {
 const host = process.env.HOST ?? '0.0.0.0';
 startReconciler();
 startWorkerPolling();
+startReportRetention();
 startTrafficSync();
 app.listen(config.port, host, () => console.log(`livekit-console listening on ${host}:${config.port}`));

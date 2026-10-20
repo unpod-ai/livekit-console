@@ -1,0 +1,123 @@
+import { after, test } from 'node:test';
+import assert from 'node:assert/strict';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import express from 'express';
+import cookieParser from 'cookie-parser';
+
+const dir = mkdtempSync(path.join(tmpdir(), 'lkc-telemetry-'));
+Object.assign(process.env, {
+  DB_PATH: path.join(dir, 'test.db'), LIVEKIT_URL: 'ws://127.0.0.1:1', LIVEKIT_API_KEY: 'test', LIVEKIT_API_SECRET: 'test',
+  ADMIN_USER: 'admin', ADMIN_PASSWORD: 'test-password', SESSION_SECRET: 'test-session-secret',
+  AGENT_TELEMETRY_TOKEN: 'test-service-token-with-at-least-32-characters',
+});
+const { telemetryIngest, agentInsights } = await import('../src/telemetry.js');
+const { login, requireAuth, requireAdmin, hashPassword } = await import('../src/auth.js');
+const { db } = await import('../src/db.js');
+const { config } = await import('../src/config.js');
+const app = express();
+app.use('/api/telemetry', telemetryIngest);
+app.use(express.json(), cookieParser());
+app.post('/api/auth/login', login);
+app.use('/api/agent-insights', requireAuth, requireAdmin, agentInsights);
+const server = app.listen(0, '127.0.0.1');
+await new Promise<void>((resolve) => server.once('listening', resolve));
+const base = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
+after(async () => { await new Promise<void>((resolve) => server.close(() => resolve())); db.close(); rmSync(dir, { recursive: true, force: true }); });
+const token = process.env.AGENT_TELEMETRY_TOKEN!;
+const envelope = (job = 'AJ_test') => ({
+  schemaVersion: 1, agentName: 'test-agent', participantSid: 'PA_agent', workerId: 'AW_worker',
+  report: { room_id: 'RM_report', room: 'test-room', job_id: job, sdk_version: '1.5.8', timestamp: Date.now() / 1000,
+    options: { secret: 'do-not-store' }, events: [{ secret: 'do-not-store' }], chat_history: { items: [
+      { type: 'message', id: 'system', role: 'system', content: ['hidden instructions'], created_at: 1000 },
+      { type: 'message', id: 'u', role: 'user', content: ['Hello'], created_at: 1001 },
+      { type: 'function_call', id: 'f', name: 'lookup', call_id: 'c', arguments: 'do-not-store', created_at: 1002 },
+      { type: 'function_call_output', id: 'o', name: 'lookup', call_id: 'c', output: 'do-not-store', is_error: true, created_at: 1003 },
+      { type: 'agent_handoff', id: 'h', old_agent_id: 'one', new_agent_id: 'two', created_at: 1004 },
+      { type: 'message', id: 'a', role: 'assistant', content: ['Welcome', { type: 'image_content', image: 'do-not-store' }], interrupted: true, created_at: 1005, metrics: { llm_node_ttft: 0.2, e2e_latency: 0, secret: 'do-not-store' } },
+    ] } },
+});
+const upload = (body: unknown, auth: string | null = token) => fetch(base + '/api/telemetry/session-reports', {
+  method: 'POST', headers: { 'content-type': 'application/json', ...(auth ? { Authorization: `Bearer ${auth}` } : {}) }, body: JSON.stringify(body),
+});
+async function cookie(username = 'admin') {
+  const r = await fetch(base + '/api/auth/login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ username, password: 'test-password' }) });
+  assert.equal(r.status, 200); return r.headers.get('set-cookie')!.split(';')[0];
+}
+
+test('uploads require a dedicated service token, including when a browser is signed in', async () => {
+  assert.equal((await upload(envelope(), null)).status, 401);
+  assert.equal((await upload(envelope(), 'wrong')).status, 401);
+  const r = await fetch(base + '/api/telemetry/session-reports', { method: 'POST', headers: { 'content-type': 'application/json', cookie: await cookie() }, body: JSON.stringify(envelope()) });
+  assert.equal(r.status, 401);
+});
+
+test('a final report arriving before room webhooks is readable by admins with only allowlisted content', async () => {
+  assert.equal((await upload(envelope())).status, 201);
+  const r = await fetch(base + '/api/agent-insights/sessions/RM_report', { headers: { cookie: await cookie() } });
+  assert.equal(r.status, 200); const data = await r.json();
+  assert.equal(data.reports.length, 1); assert.equal(data.selected.content.items.length, 5);
+  assert.equal(data.selected.content.items[4].metrics.e2e_latency, 0);
+  assert.equal(data.selected.content.items[4].at, 1005000);
+  assert.equal(JSON.stringify(data).includes('do-not-store'), false);
+  assert.equal(JSON.stringify(data).includes('hidden instructions'), false);
+  assert.equal(JSON.stringify(db.prepare('SELECT * FROM agent_session_reports').all()).includes('do-not-store'), false);
+  assert.equal(r.headers.get('cache-control'), 'no-store');
+  assert.equal(db.prepare("SELECT COUNT(*) AS n FROM sessions WHERE room_sid='RM_report'").get()!.n, 0);
+  db.prepare('INSERT INTO sessions(room_sid,room_name,started_at) VALUES (?,?,?)').run('RM_report', 'test-room', Date.now());
+  assert.equal((await (await fetch(base + '/api/agent-insights/sessions/RM_report', { headers: { cookie: await cookie() } })).json()).reports.length, 1);
+});
+
+test('normalized retries are idempotent; changed content for the same job is a conflict', async () => {
+  const e = envelope('AJ_retry'); assert.equal((await upload(e)).status, 201);
+  const row = db.prepare("SELECT received_at,expires_at FROM agent_session_reports WHERE job_id='AJ_retry'").get();
+  assert.equal((await upload(e)).status, 200);
+  e.report.options.secret = 'a-different-excluded-value'; assert.equal((await upload(e)).status, 200);
+  assert.deepEqual(db.prepare("SELECT received_at,expires_at FROM agent_session_reports WHERE job_id='AJ_retry'").get(), row);
+  e.report.chat_history.items[1].content = ['Changed']; assert.equal((await upload(e)).status, 409);
+});
+
+test('invalid versions, missing room correlation, malformed JSON and oversized bodies are rejected', async () => {
+  const e = envelope('AJ_invalid'); assert.equal((await upload({ ...e, schemaVersion: 2 })).status, 422);
+  assert.equal((await upload({ ...e, report: { ...e.report, room_id: '' } })).status, 422);
+  assert.equal((await upload({ ...e, report: { ...e.report, chat_history: {} } })).status, 422);
+  assert.equal((await upload({ ...e, report: { ...e.report, timestamp: 'not-a-time' } })).status, 422);
+  assert.equal((await upload({ ...e, report: { ...e.report, chat_history: { items: [{ type: { toString: null } }] } } })).status, 422);
+  const headers = { 'content-type': 'application/json', Authorization: `Bearer ${token}` };
+  assert.equal((await fetch(base + '/api/telemetry/session-reports', { method: 'POST', headers, body: '{' })).status, 400);
+  assert.equal((await fetch(base + '/api/telemetry/session-reports', { method: 'POST', headers, body: JSON.stringify({ padding: 'x'.repeat(2 * 1024 * 1024) }) })).status, 413);
+});
+
+test('multiple jobs and rooms remain isolated when selecting a report', async () => {
+  const e = envelope('AJ_other'); e.report.room_id = 'RM_other';
+  e.report.chat_history.items[1].content = ['Only in the other room'];
+  assert.equal((await upload(e)).status, 201);
+  const r = await fetch(base + '/api/agent-insights/sessions/RM_report?jobId=AJ_other', { headers: { cookie: await cookie() } });
+  const data = await r.json(); assert.equal(data.selected, null);
+  assert.equal(JSON.stringify(data).includes('Only in the other room'), false);
+});
+
+test('anonymous users and viewers cannot read report text, even with a valid service token', async () => {
+  const url = base + '/api/agent-insights/sessions/RM_report';
+  assert.equal((await fetch(url)).status, 401);
+  assert.equal((await fetch(url, { headers: { Authorization: `Bearer ${token}` } })).status, 401);
+  db.prepare('INSERT INTO users(username,password_hash,role,created_at) VALUES (?,?,?,?)').run('reader', hashPassword('test-password'), 'viewer', Date.now());
+  const r = await fetch(url, { headers: { cookie: await cookie('reader') } }); assert.equal(r.status, 403); assert.equal((await r.text()).includes('Hello'), false);
+});
+
+test('expired content is never returned and retry cannot resurrect it', async () => {
+  const e = envelope('AJ_expired'); assert.equal((await upload(e)).status, 201);
+  db.prepare("UPDATE agent_session_reports SET expires_at=0 WHERE job_id='AJ_expired'").run();
+  const r = await fetch(base + '/api/agent-insights/sessions/RM_report?jobId=AJ_expired', { headers: { cookie: await cookie() } });
+  const report = (await r.json()).selected;
+  assert.equal(report.state, 'expired'); assert.equal(report.content, null);
+  assert.equal((await upload(e)).status, 200);
+  assert.equal(db.prepare("SELECT content FROM agent_session_reports WHERE job_id='AJ_expired'").get()!.content, null);
+});
+
+test('collection is disabled without an explicitly configured service token', async () => {
+  const previous = config.telemetryToken; config.telemetryToken = '';
+  try { assert.equal((await upload(envelope('AJ_disabled'))).status, 503); }
+  finally { config.telemetryToken = previous; }
+});

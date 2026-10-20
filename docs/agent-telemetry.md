@@ -1,0 +1,111 @@
+# Agent session reports
+
+This opt-in integration adds post-session conversation reports to **Sessions → Agent insights**. It works with a
+self-hosted media server; it does not use Cloud observability APIs. Current support is the snake_case report from
+Python Agents `JobContext.make_session_report().to_dict()`. Other SDK formats need an explicit adapter.
+
+## Enable collection
+
+Set a separate, randomly generated `AGENT_TELEMETRY_TOKEN` of at least 32 characters on the console server. Leave it
+unset to disable uploads. This is not a LiveKit API secret, browser session cookie or user password. Set the same
+token and `CONSOLE_URL` on the agent. Use HTTPS for remote uploads, or a trusted loopback connection on the same host.
+The agent must be allowed to reach the console's upload route through your existing network allowlist.
+Ensure the reverse proxy also accepts the intended report body size, up to the application's 2 MiB limit.
+
+Restart the console after configuration changes. Setting `AGENT_TELEMETRY_RETENTION_DAYS` changes the retention of
+new reports (default 30 days, valid range 1–365); it does not extend existing reports.
+
+## Python integration
+
+Copy [the upload helper](../examples/agent_report_upload.py) into your agent project and call it from the existing
+session-end callback. It uses the standard library and your installed LiveKit Agents SDK; no new client package
+is required. Check that your SDK exposes `make_session_report()` before integrating.
+
+```python
+from livekit.agents import AgentServer, JobContext
+from agent_report_upload import upload_session_report
+
+server = AgentServer()
+AGENT_NAME = "my-agent"
+
+async def on_session_end(ctx: JobContext) -> None:
+    await upload_session_report(ctx, AGENT_NAME)
+
+@server.rtc_session(agent_name=AGENT_NAME, on_session_end=on_session_end)
+async def entrypoint(ctx: JobContext):
+    # Keep your existing agent/session setup here.
+    await ctx.connect()
+```
+
+Add this call to an existing callback rather than replacing application cleanup. Allow the callback enough time
+to upload; the helper makes two attempts with a 3-second request timeout and a short delay. It constructs the
+report once and reuses the body for retries. Upload failures are logged without payloads or credentials. This
+helper has no durable queue: a worker crash or prolonged outage can lose a report. Apply any transcript PII
+redaction before upload; automatic PII redaction is not implemented by the console.
+
+## Version 1 upload contract
+
+`POST /api/telemetry/session-reports` requires `Authorization: Bearer <AGENT_TELEMETRY_TOKEN>` and JSON of at most
+2 MiB. Browser login does not authorize uploads. The envelope is:
+
+```json
+{
+  "schemaVersion": 1,
+  "agentName": "my-agent",
+  "participantSid": "PA_optional",
+  "workerId": "AW_optional",
+  "report": {
+    "room_id": "RM_example",
+    "job_id": "AJ_example",
+    "sdk_version": "1.5.8",
+    "timestamp": 1700000010,
+    "chat_history": {
+      "items": [
+        {"id": "turn-1", "type": "message", "role": "user", "content": ["Hello"], "created_at": 1700000000},
+        {"id": "turn-2", "type": "message", "role": "assistant", "content": ["Welcome"], "created_at": 1700000001,
+         "metrics": {"llm_node_ttft": 0.2, "tts_node_ttfb": 0.1, "e2e_latency": 0.7}}
+      ]
+    }
+  }
+}
+```
+
+All SDK timestamps and durations in this input are seconds; stored timestamps are milliseconds. The room SID
+and job ID are required. Optional participant/worker IDs must come from your integration; the helper does not
+invent them. At most 5,000 history items and 64,000 text characters per message are accepted.
+
+A new report returns 201. An identical normalized report for the same room/job returns 200 without duplicating
+content or extending retention. Different normalized content or metadata for that room/job returns 409. A final
+report is immutable; this endpoint does not accept growing snapshots. Invalid shapes return 422, malformed JSON
+returns 400 and oversized bodies return 413. A missing/invalid service token returns 401; disabled collection returns 503.
+
+Reports are correlated by room SID even if they arrive before webhooks. Uploads do not fabricate sessions or
+participants. A session page becomes available once normal session history exists. Conversation item order follows
+the SDK report; timestamps are shown when present. Realtime models may omit pipeline-specific turn timings.
+
+## Stored content and access
+
+The database stores an allowlisted projection: user/assistant text, tool names/call IDs/error flags, handoff IDs,
+interruption flags and supported numeric turn timings. Raw report options/events, system/developer prompts,
+tool arguments/results, media, model usage summaries and arbitrary extra fields are discarded. Text itself can
+contain personal information or secrets; the allowlist is not transcript redaction. The collection token is an
+explicit opt-in to storing this content.
+
+Only signed-in administrators can read or download reports. Viewer accounts and the upload token cannot read
+them. Downloads contain the same normalized content displayed by the console, not the original SDK payload.
+The latest 100 report summaries are listed per room; only the selected report's content is returned.
+
+Content expires from the time it is first received. Reads enforce expiry immediately, and cleanup removes expired
+content on startup, during report access/uploads and hourly. Identifying metadata and a content digest remain so
+expired reports can be recognized and retries cannot restore them. Logical deletion does not scrub SQLite WAL,
+old backups or copies already downloaded; manage their retention separately.
+
+## Not included in this first slice
+
+Live event streaming, OTLP trace ingestion, runtime log collection, automatic PII redaction, model usage/cost
+aggregation, synchronized audio and agent-wide performance charts remain on the [Cloud parity checklist](cloud-parity-checklist.md).
+No historical transcripts can be reconstructed from room webhooks. Existing calls gain report data only if the
+agent collected and uploaded it.
+
+SDK references: [data hooks](https://docs.livekit.io/testing/observability/data/) and
+[session report source](https://github.com/livekit/agents/blob/main/livekit-agents/livekit/agents/voice/report.py).

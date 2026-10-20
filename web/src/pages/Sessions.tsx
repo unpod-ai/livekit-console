@@ -9,6 +9,7 @@ import { fromMs, fromMsPrecise, durationMs, kindLabel } from '../lib/format';
 import { DataTable, type Col } from '../components/DataTable';
 import { Spark, StepChart } from '../components/Charts';
 import { Recording } from '../components/Recording';
+import { AgentInsights } from '../components/AgentInsights';
 import { Alert, Badge, KV, Kpi, Kpis, PageHeader, Panel, ServerPager, StatusBadge, Tabs } from '../components/ui';
 import { DirectionBadge } from './Calls';
 
@@ -146,7 +147,7 @@ export function SessionDetail() {
       {s && tab === 'events' && (
         <Panel><DataTable rows={data!.events as Json[]} cols={ecols} rowKey={(e) => e.id} pageSize={50} storageKey="session-events" empty={{ title: 'No events' }} /></Panel>
       )}
-      {tab === 'insights' && <Alert>Agent insights (transcripts, turn timing, observability) are a LiveKit Cloud feature. Your agent worker can export its own traces; nothing is recorded by the server itself.</Alert>}
+      {tab === 'insights' && <AgentInsights key={sid} sid={sid} />}
     </>
   );
 }
