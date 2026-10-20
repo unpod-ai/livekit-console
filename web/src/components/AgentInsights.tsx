@@ -4,13 +4,14 @@ import { useApi } from '../lib/hooks';
 import { fromMs, fromMsPrecise } from '../lib/format';
 import { DataTable, type Col } from './DataTable';
 import { Alert, Badge, KV, Panel } from './ui';
+import { ModelUsage, type Usage } from './ModelUsage';
 
 type Item = {
   id: string; type: string; at: number | null; role?: string; text?: string; interrupted?: boolean;
   metrics?: Record<string, number>; name?: string | null; callId?: string | null;
   isError?: boolean; fromAgent?: string | null; toAgent?: string;
 };
-type Content = { schemaVersion: number; items: Item[]; omittedItems: number };
+type Content = { schemaVersion: number; items: Item[]; omittedItems: number; usage?: Usage[] | null; omittedUsage?: number };
 type TranscriptRow = Item & { rowKey: string };
 type Report = {
   roomSid: string; jobId: string; agentName: string; participantSid: string | null; workerId: string | null;
@@ -62,6 +63,7 @@ export function AgentInsights({ sid }: { sid: string }) {
     {report?.state === 'expired' && <Alert>Conversation content for this report has expired. Its identifying metadata is retained; uploading it again does not restore the content.</Alert>}
     {report?.content && <>
       <Alert>This is a post-session report. Timings are reported by the agent SDK and may be unavailable for some models. Live traces, runtime logs, audio playback and tool arguments/results are not collected by this integration.</Alert>
+      <ModelUsage usage={report.content.usage} omitted={report.content.omittedUsage} />
       <Panel title="Conversation and tool events" actions={<button className="btn secondary sm" onClick={download}>Download report</button>}>
         <DataTable rows={report.content.items.map((item, index) => ({ ...item, rowKey: String(index) }))} cols={columns} rowKey={(i) => i.rowKey} pageSize={50} empty={{ title: 'No conversation items in this report' }} />
       </Panel>

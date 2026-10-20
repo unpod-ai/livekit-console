@@ -37,9 +37,10 @@ responses and room lifecycle webhooks do not contain conversation transcripts or
 
 ### Collection and correlation
 
-Initial slice implemented locally: authenticated final-report uploads, Python integration example, admin-only
-report viewer/export, retry protection and configurable content retention. The complete Phase 1 collection
-pipeline remains open; a real agent upload has not yet been enabled or verified on the POC deployment.
+The final-report slice includes authenticated uploads, Python integration, an admin-only viewer/export, retry
+protection and configurable content retention. The worker integration is enabled and the native-SDK transport path
+has passed a synthetic probe. Verification of a real post-rollout report remains open; earlier calls cannot be backfilled.
+The complete Phase 1 collection pipeline remains open.
 
 - [x] Define and validate the version-1 Python post-session report envelope.
 - [x] Accept bounded uploads with a dedicated service token and persist reports independently of webhook arrival.
@@ -59,6 +60,8 @@ pipeline remains open; a real agent upload has not yet been enabled or verified 
 - [x] Add an Agent Insights view to session details.
 - [x] Display final-report user/assistant text, tool/error/handoff markers, interruption flags and reported timings.
 - [x] Download the normalized report shown in the console.
+- [x] Collect version-2 per-model token/cache/speech/request counters and display them per final report.
+- [x] Preserve version-1 retry compatibility and mark missing or unsupported usage explicitly.
 - [ ] Display timestamped user/agent transcripts, tool calls, handoffs and errors.
 - [ ] Display a span timeline for turns, STT, LLM, TTS and tools.
 - [ ] Search/filter session logs and correlate log lines with turns and traces.
