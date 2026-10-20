@@ -10,7 +10,7 @@ API key/secret so the browser never sees them, receives LiveKit webhooks and sto
 - [Configuration](docs/configuration.md): all environment variables
 - [Deployment](docs/deployment.md): deploy to a VM with HTTPS and an IP allowlist
 - [Cloud coverage and validation](docs/parity-and-validation.md): supported capabilities and remaining acceptance checks
-- [Agent session reports](docs/agent-telemetry.md): opt-in uploads and administrator-only transcripts/turn timings
+- [Agent session reports](docs/agent-telemetry.md): opt-in uploads, administrator-only transcripts/turn timings and per-agent model usage charts
 
 ## Screenshots
 Taken from a demo instance with simulated data (`server/scripts/simulate-webhooks.ts`).

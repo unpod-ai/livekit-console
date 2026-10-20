@@ -62,6 +62,7 @@ The complete Phase 1 collection pipeline remains open.
 - [x] Download the normalized report shown in the console.
 - [x] Collect version-2 per-model token/cache/speech/request counters and display them per final report.
 - [x] Preserve version-1 retry compatibility and mark missing or unsupported usage explicitly.
+- [x] Aggregate retained model usage per agent with time ranges, coverage gaps, model filters and paginated report drilldowns.
 - [ ] Display timestamped user/agent transcripts, tool calls, handoffs and errors.
 - [ ] Display a span timeline for turns, STT, LLM, TTS and tools.
 - [ ] Search/filter session logs and correlate log lines with turns and traces.
@@ -87,6 +88,7 @@ Acceptance:
 - [ ] Record which audio source is available; distinguish Egress media from agent-side recordings.
 - [ ] Add per-agent/project latency percentiles and stage breakdowns based on collected turn metrics.
 - [ ] Add model usage breakdowns; label optional rate-based costs as estimates rather than provider invoices.
+- [x] Show per-agent retained token and speech usage charts with links to contributing reports; exclude expired data.
 - [ ] Click a chart bucket or outlier to open the matching sessions.
 - [ ] Drag to select a time window and apply it consistently across the page.
 - [ ] Compare selected agents with the same range, filters and metric definitions.
@@ -158,6 +160,13 @@ self-hosted worker fleet.
 - [ ] Support rolling deployments, draining and rollback with visible progress/failures.
 - [ ] Add a browser test session with explicit agent selection and live transcript/telemetry.
 - [ ] Add repeatable agent scenarios and compare results across versions.
+
+## Final UI step before the combined production release
+
+- [ ] Add a day/night theme toggle in the top header.
+- [ ] Remember the selected theme across navigation and reloads.
+- [ ] Verify text, charts, tables, forms, dialogs and recordings in both themes on desktop and mobile.
+- [ ] Finish every phase's acceptance checks before publishing one combined production release; do not publish intermediate milestone releases.
 
 ## Scope boundary
 
