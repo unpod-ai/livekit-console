@@ -183,6 +183,9 @@ test('agent usage aggregates retained reports with stage/model isolation, filter
   assert.equal(filtered.series.reduce((s: number, b: any) => s + b.llmInput, 0), 0);
   assert.equal(filtered.series.reduce((s: number, b: any) => s + b.ttsAudio, 0), 5);
   assert.equal(filtered.totalContributingReports, 2);
+  // JSON escaping can expand otherwise valid 200-character provider/model names.
+  const escaped = encodeURIComponent(JSON.stringify(['llm_usage', '\u0000'.repeat(200), 'model']));
+  assert.equal((await fetch(url + '&model=' + escaped, { headers: auth })).status, 200);
   for (const query of ['hours=0', 'hours=NaN', 'hours=2161', 'page=-1', 'page=1.5', 'model=oops', 'model=%5B%22x%22%5D']) {
     assert.equal((await fetch(url.split('?')[0] + '?' + query, { headers: auth })).status, 422);
   }

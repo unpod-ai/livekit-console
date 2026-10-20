@@ -64,7 +64,7 @@ agentInsights.get('/agents/:name/usage', (req, res, next) => {
     const page = integer(req.query.page, 1, 1000000);
     let model: ModelKey | null = null;
     if (req.query.model !== undefined) {
-      if (typeof req.query.model !== 'string' || req.query.model.length > 700) throw new ReportValidationError('Invalid model filter');
+      if (typeof req.query.model !== 'string' || req.query.model.length > 4000) throw new ReportValidationError('Invalid model filter');
       try { model = JSON.parse(req.query.model); } catch { throw new ReportValidationError('Invalid model filter'); }
       if (!Array.isArray(model) || model.length !== 3 || model.some(v => typeof v !== 'string' || v.length > 200)) throw new ReportValidationError('Invalid model filter');
     }
