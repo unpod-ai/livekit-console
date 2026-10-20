@@ -153,7 +153,7 @@ export function SessionDetail() {
       )}
       {tab === 'insights' && <AgentInsights key={sid} sid={sid} />}
       {tab === 'logs' && <AgentLogs key={sid} sid={sid} />}
-      {tab === 'quality' && <ConnectionQuality sid={sid} />}
+      {tab === 'quality' && data?.session && <ConnectionQuality sid={sid} startedAt={data.session.started_at} endedAt={data.session.ended_at} />}
     </>
   );
 }
@@ -197,7 +197,7 @@ export function ParticipantDetail() {
           </Panel>
         </>
       )}
-      {tab === 'quality' && <ConnectionQuality sid={sid} participantSid={psid} />}
+      {tab === 'quality' && p && <ConnectionQuality sid={sid} participantSid={psid} startedAt={p.joined_at} endedAt={p.left_at} />}
       {p && tab === 'events' && (
         <Panel><DataTable rows={data!.events as Json[]} rowKey={(e) => e.id} pageSize={50} empty={{ title: 'No events' }} cols={[
           { key: 't', header: 'Timestamp', cell: (e) => <span className="mono">{fromMsPrecise(e.ts)}</span>, sort: (e) => e.ts }, { key: 'e', header: 'Event', cell: (e) => <span className="mono">{e.type}</span>, text: (e) => e.type },

@@ -22,7 +22,7 @@ export function useDiagnosticTab<T extends string>(fallback: T, valid: readonly 
 export type DiagnosticData = { rows: Json[]; total: number; limit: number; offset: number; from: number; to: number; lifecycle: Json[]; collectionEnabled: boolean; retentionDays: number };
 
 // Relative bounds are evaluated on every fetch, including automatic refresh.
-export function useDiagnostics(kind: 'quality' | 'services' | 'sip', scope: Record<string, string> = {}) {
+export function useDiagnostics(kind: 'quality' | 'services' | 'sip', scope: Record<string, string> = {}, bounds?: {from:number;to?:number}) {
   const me = useMe(), admin = me.data?.role === 'admin';
   const { hours } = useRange();
   const [params, setParams] = useSearchParams();
@@ -34,10 +34,10 @@ export function useDiagnostics(kind: 'quality' | 'services' | 'sip', scope: Reco
   const query = new URLSearchParams({ limit: '200', offset: String(offset) });
   for (const [key, value] of Object.entries(scope)) if (value) query.set(key, value);
   const from = params.get('from'), to = params.get('to');
-  const result = useApi<DiagnosticData>(['diagnostics', kind, query.toString(), hours, from, to], () => {
+  const result = useApi<DiagnosticData>(['diagnostics', kind, query.toString(), hours, from, to, bounds?.from, bounds?.to], () => {
     const next = new URLSearchParams(query), now = Date.now();
-    next.set('from', from ?? String(Math.max(0, (to ? Number(to) : now) - hours * 3600000)));
-    next.set('to', to ?? String(now));
+    next.set('from', from ?? String(bounds?.from ?? Math.max(0, (to ? Number(to) : now) - hours * 3600000)));
+    next.set('to', to ?? String(bounds?.to ?? now));
     return `/diagnostics/${kind}?${next}`;
   }, { enabled: admin });
   function filter(key: string, value: string) {
@@ -80,15 +80,15 @@ export function DiagnosticMetricChart({ rows, keys, title, unit }: { rows: Json[
   const values = [...buckets.values()];
   const measuredBuckets = values.filter(row => keys.some(key => row[key] != null));
   return <Panel title={`${title} (${unit})`}>
-    {measuredBuckets.length === 1 ? <div style={{ padding: 20 }}>Only one measured display point: {keys.map(key => `${key}: ${measuredBuckets[0][key] == null ? 'Not reported' : `${measuredBuckets[0][key]} ${unit}`}`).join(' · ')}. More observations are needed for a trend.</div> : measured ? <><AreaChart data={values} series={keys.map((key, i) => ({ key, label: key, color: [PALETTE.cyan, PALETTE.purple, PALETTE.orange][i % 3] }))} bucketMs={bucketMs} fill="none" gaps format={n => `${Number(n.toPrecision(4))} ${unit}`} /><div className="muted" style={{ padding: 12 }}>Page observations · last sample per display bucket · missing values are gaps. Exact measurements are listed below.</div></> : <div className="empty">No measured {title.toLowerCase()} on this page.</div>}
+    {measuredBuckets.length === 1 ? <div style={{ padding: 20 }}>Only one measured display point: {keys.map(key => `${key}: ${measuredBuckets[0][key] == null ? 'Not reported' : `${measuredBuckets[0][key]} ${unit}`}`).join(' · ')}. More observations are needed for a trend.</div> : measured ? <><AreaChart data={values} series={keys.map((key, i) => ({ key, label: key, color: [PALETTE.cyan, PALETTE.purple, PALETTE.orange][i % 3] }))} bucketMs={bucketMs} fill="none" gaps format={n => n>=1e9?`${+(n/1e9).toFixed(1)}G`:n>=1e6?`${+(n/1e6).toFixed(1)}M`:n>=1e3?`${+(n/1e3).toFixed(1)}k`:String(Number(n.toPrecision(3)))} /><div className="muted" style={{ padding: 12 }}>Page observations · last sample per display bucket · missing values are gaps. Exact measurements are listed below.</div></> : <div className="empty">No measured {title.toLowerCase()} on this page.</div>}
   </Panel>;
 }
 
 const streamKey = (r: Json) => JSON.stringify([r.participantSid, r.reporterId, r.trackSid ?? '', r.direction, r.statsId ?? '']);
-export function ConnectionQuality({ sid, participantSid }: { sid: string; participantSid?: string }) {
+export function ConnectionQuality({ sid, participantSid, startedAt, endedAt }: { sid: string; participantSid?: string; startedAt?:number; endedAt?:number|null }) {
   const [params] = useSearchParams();
   const trackSid = params.get('trackSid') ?? '', reporterId = params.get('reporterId') ?? '', direction = params.get('direction') ?? '';
-  const result = useDiagnostics('quality', { roomSid: sid, participantSid: participantSid ?? params.get('participantSid') ?? '', trackSid, reporterId, direction });
+  const result = useDiagnostics('quality', { roomSid: sid, participantSid: participantSid ?? params.get('participantSid') ?? '', trackSid, reporterId, direction },startedAt?{from:Math.max(0,startedAt-5000),to:endedAt?endedAt+5000:undefined}:undefined);
   const { data, filter } = result;
   const streams = new Map((data?.rows ?? []).map(r => [streamKey(r), r]));
   const requested = params.get('qualityStream') ?? '';
@@ -100,6 +100,7 @@ export function ConnectionQuality({ sid, participantSid }: { sid: string; partic
   if (!result.admin) return <Alert>Connection quality requires an administrator account.</Alert>;
   return <>
     <Alert>Native RTC measurements and connection events submitted by reporters. SDK quality is an indicator, not a packet-loss measurement. One exact participant/reporter/track/direction/stats ID stream is plotted at a time.</Alert>
+    {startedAt&&<Alert>Detail views default to the recorded lifecycle window. Use From / To to investigate another interval.</Alert>}
     <DiagnosticCoverage data={data} />
     {result.error && <Alert kind="bad">{(result.error as Error).message}</Alert>}
     <Panel title="Connection quality">

@@ -6,14 +6,15 @@ import { DiagnosticCoverage, DiagnosticPager, useDiagnostics } from './Connectio
 
 const hasPrefix = (value: unknown, prefix: string): value is string => typeof value === 'string' && value.startsWith(prefix);
 
-export function SipDiagnostics({ roomSid, participantSid, callId }: { roomSid?: string; participantSid?: string; callId?: string }) {
+export function SipDiagnostics({ roomSid, participantSid, callId, startedAt, endedAt }: { roomSid?: string; participantSid?: string; callId?: string; startedAt?:number; endedAt?:number|null }) {
   const [params] = useSearchParams();
   const fields = { roomSid: roomSid ?? params.get('roomSid') ?? '', participantSid: participantSid ?? params.get('participantSid') ?? '', callId: callId ?? params.get('callId') ?? '', q: params.get('q') ?? '' };
-  const result = useDiagnostics('sip', fields), { data, filter } = result;
+  const result = useDiagnostics('sip', fields,startedAt?{from:Math.max(0,startedAt-30*60000),to:endedAt?endedAt+5000:undefined}:undefined), { data, filter } = result;
   if (result.checking) return <Alert>Checking access…</Alert>;
   if (!result.admin) return <Alert>SIP diagnostics require an administrator account.</Alert>;
   return <>
     <Alert>SIP service observations include attempts that fail before joining a room, when the SIP log source is configured and submitting records. Missing observations can reflect source coverage or retention. Links use exact room/participant SIDs or API-resolved durable call IDs.</Alert>
+    {startedAt&&<Alert>Call details default to the recorded lifecycle window with a 30-minute setup margin. Use From / To to investigate another interval.</Alert>}
     <DiagnosticCoverage data={data} />
     {result.error && <Alert kind="bad">{(result.error as Error).message}</Alert>}
     <Panel title={fields.callId ? `SIP service timeline · ${fields.callId}` : 'SIP service attempts and events'}>
