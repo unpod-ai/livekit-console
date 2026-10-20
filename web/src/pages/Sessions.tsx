@@ -4,7 +4,7 @@ import { useNavigate, useParams, useSearchParams, Link } from 'react-router-dom'
 import { Info, Radio } from 'lucide-react';
 import { type Json } from '../lib/api';
 import { useApi } from '../lib/hooks';
-import { useInitialQuery, useTab } from '../lib/useTab';
+import { useInitialQuery } from '../lib/useTab';
 import { fromMs, fromMsPrecise, durationMs, kindLabel } from '../lib/format';
 import { DataTable, type Col } from '../components/DataTable';
 import { Spark, StepChart } from '../components/Charts';
@@ -12,6 +12,8 @@ import { Recording } from '../components/Recording';
 import { AgentInsights } from '../components/AgentInsights';
 import { AgentLogs } from '../components/AgentLogs';
 import { Alert, Badge, KV, Kpi, Kpis, PageHeader, Panel, ServerPager, StatusBadge, Tabs } from '../components/ui';
+import { useMe } from '../lib/me';
+import { ConnectionQuality, useDiagnosticTab } from '../components/ConnectionQuality';
 import { DirectionBadge } from './Calls';
 
 const LIMIT = 50;
@@ -78,7 +80,8 @@ const isEgressIdentity = (id: string) => /^EG_[A-Za-z0-9]+$/.test(id);
 export function SessionDetail() {
   const { sid = '' } = useParams();
   const navigate = useNavigate();
-  const [tab, setTab] = useTab('analytics', ['analytics', 'events', 'insights', 'logs'] as const);
+  const admin = useMe().data?.role === 'admin';
+  const [tab, setTab] = useDiagnosticTab('analytics', ['analytics', 'events', 'insights', 'logs', 'quality'] as const);
   const { data, error } = useApi<Json>(['session', sid], `/history/sessions/${sid}`);
   const s = data?.session;
   const end = s?.ended_at ?? Date.now();
@@ -106,12 +109,12 @@ export function SessionDetail() {
 
   return (
     <>
-      <PageHeader crumbs={[{ label: 'Project' }, { label: 'Sessions', to: '/sessions' }, { label: sid }]} title={s?.room_name ?? sid}
+      <PageHeader crumbs={[{ label: 'Project' }, { label: 'Sessions', to: '/sessions' }, { label: sid }]} title={s?.room_name ?? sid} range
         sub={s && <StatusBadge status={s.ended_at ? 'closed' : 'active'} />}
         actions={s && !s.ended_at ? <Link className="btn secondary" to={`/rooms/${enc(s.room_name)}`}><Radio size={14} />Open live room</Link> : undefined} />
       {error && <Alert kind="bad">{(error as Error).message}{' '}This session may predate the collector; only sessions seen since webhooks were enabled are recorded.</Alert>}
       {s?.partial === 2 && <Alert kind="warn">This session was reconstructed from LiveKit's egress record because it started before webhooks were enabled. Its name, ID, times and recording are known; participants and calls were not recorded.</Alert>}
-      <Tabs value={tab} onChange={setTab} tabs={[{ id: 'analytics', label: 'Session analytics' }, { id: 'events', label: 'Session events', count: data?.events.length }, { id: 'insights', label: 'Agent insights' }, { id: 'logs', label: 'Agent logs' }]} />
+      <Tabs value={tab} onChange={setTab} tabs={[{ id: 'analytics', label: 'Session analytics' }, { id: 'events', label: 'Session events', count: data?.events.length }, { id: 'insights', label: 'Agent insights' }, { id: 'logs', label: 'Agent logs' }, ...(admin ? [{ id: 'quality' as const, label: 'Quality' }] : [])]} />
       {s && tab === 'analytics' && (
         <>
           <Panel><KV items={[['Room name', s.room_name], ['Room session ID', <span className="mono">{s.room_sid}</span>], ['Unique participants', new Set((data!.participants as Json[]).map((p) => p.identity)).size], ['Start time', fromMs(s.started_at)], ['End time', fromMs(s.ended_at)], ['Duration', durationMs(s.started_at, s.ended_at)]]} /></Panel>
@@ -124,7 +127,7 @@ export function SessionDetail() {
               <DataTable rows={data!.calls as Json[]} search={false} pageSize={false} rowKey={(c) => c.id} onRow={(c) => navigate(`/telephony/calls/${c.id}`)}
                 cols={[
                   { key: 'id', header: 'Call ID', cell: (c) => <Link className="rowlink mono" to={`/telephony/calls/${c.id}`} onClick={stop}>{c.callId ?? c.id}</Link> },
-                  { key: 'dir', header: 'Direction', cell: (c) => <DirectionBadge d={c.direction} /> },
+                  { key: 'dir', header: 'Direction', cell: (c) => <DirectionBadge d={c.direction} source={c.directionSource} /> },
                   { key: 'from', header: 'From', cell: (c) => c.from ?? '—' }, { key: 'to', header: 'To', cell: (c) => c.to ?? '—' },
                   { key: 'dur', header: 'Duration', cell: (c) => durationMs(c.joinedAt, c.leftAt) }, { key: 'st', header: 'Status', cell: (c) => <StatusBadge status={c.state} /> },
                 ]} />
@@ -142,7 +145,7 @@ export function SessionDetail() {
                 ]} />
             </Panel>
           )}
-          <Alert><Info size={14} style={{ verticalAlign: -2, marginRight: 6 }} />Bandwidth, latency, packet loss and FPS graphs come from LiveKit Cloud's analytics pipeline. The open-source server does not expose them per session.</Alert>
+          <Alert><Info size={14} style={{ verticalAlign: -2, marginRight: 6 }} />Connection measurements are available in the administrator Quality tab when RTC reporters submit observations. Coverage depends on the configured sources.</Alert>
         </>
       )}
       {s && tab === 'events' && (
@@ -150,26 +153,28 @@ export function SessionDetail() {
       )}
       {tab === 'insights' && <AgentInsights key={sid} sid={sid} />}
       {tab === 'logs' && <AgentLogs key={sid} sid={sid} />}
+      {tab === 'quality' && <ConnectionQuality sid={sid} />}
     </>
   );
 }
 
 export function ParticipantDetail() {
   const { sid = '', psid = '' } = useParams();
-  const [tab, setTab] = useTab('overview', ['overview', 'events'] as const);
+  const admin = useMe().data?.role === 'admin';
+  const [tab, setTab] = useDiagnosticTab('overview', ['overview', 'events', 'quality'] as const);
   const { data, error } = useApi<Json>(['participant', sid, psid], `/history/sessions/${sid}/participants/${psid}`);
   const p = data?.participant;
   const attrs = Object.entries(p?.attributes ?? {});
   return (
     <>
-      <PageHeader crumbs={[{ label: 'Project' }, { label: 'Sessions', to: '/sessions' }, { label: sid, to: `/sessions/${sid}` }, { label: psid }]} title={p?.identity ?? psid} sub={p && <Badge>{kindLabel(p.kind)}</Badge>}
+      <PageHeader crumbs={[{ label: 'Project' }, { label: 'Sessions', to: '/sessions' }, { label: sid, to: `/sessions/${sid}` }, { label: psid }]} title={p?.identity ?? psid} range sub={p && <Badge>{kindLabel(p.kind)}</Badge>}
         actions={<>
           {p?.kind === 'SIP' && <Link className="btn secondary" to={`/telephony/calls/${p.sid}`}>View call</Link>}
           {p?.kind === 'EGRESS' && isEgressIdentity(p.identity) && <Link className="btn secondary" to={`/egress/${p.identity}`}>View egress</Link>}
           <Link className="btn secondary" to={`/sessions/${sid}`}>View session</Link>
         </>} />
       {error && <Alert kind="bad">{(error as Error).message}</Alert>}
-      <Tabs value={tab} onChange={setTab} tabs={[{ id: 'overview', label: 'Participant analytics' }, { id: 'events', label: 'Participant events', count: data?.events.length }]} />
+      <Tabs value={tab} onChange={setTab} tabs={[{ id: 'overview', label: 'Participant analytics' }, { id: 'events', label: 'Participant events', count: data?.events.length }, ...(admin ? [{ id: 'quality' as const, label: 'Quality' }] : [])]} />
       {p && tab === 'overview' && (
         <>
           <Panel><KV items={[['Participant identity', <span className="mono">{p.identity}</span>], ['Participant name', p.name || '—'], ['Participant session ID', <span className="mono">{p.sid}</span>], ['Session', <Link to={`/sessions/${sid}`} className="mono">{sid}</Link>], ['Joined at', fromMs(p.joined_at)], ['Left at', fromMs(p.left_at)], ['Duration', durationMs(p.joined_at, p.left_at)]]} /></Panel>
@@ -181,7 +186,7 @@ export function ParticipantDetail() {
           </Panel>
           <Panel title={`Published tracks (${data!.tracks.length})`}>
             <DataTable rows={data!.tracks as Json[]} search={false} pageSize={false} rowKey={(t) => t.sid} empty={{ title: 'No track events recorded', hint: 'Track events are recorded from webhooks.' }} cols={[
-              { key: 'sid', header: 'Track ID', cell: (t) => <span className="mono">{t.sid}</span> }, { key: 'name', header: 'Name', cell: (t) => t.name || '—' },
+              { key: 'sid', header: 'Track ID', cell: (t) => admin ? <Link className="rowlink mono" to={`?${new URLSearchParams({ tab: 'quality', trackSid: t.sid })}`}>{t.sid}</Link> : <span className="mono">{t.sid}</span> }, { key: 'name', header: 'Name', cell: (t) => t.name || '—' },
               { key: 'type', header: 'Type', cell: (t) => <Badge>{(t.type ?? '').toString().toLowerCase()}</Badge> }, { key: 'src', header: 'Source', cell: (t) => (t.source ?? '—').toString().toLowerCase() }, { key: 'mime', header: 'MIME', cell: (t) => t.mimeType ?? '—' },
             ]} />
           </Panel>
@@ -192,6 +197,7 @@ export function ParticipantDetail() {
           </Panel>
         </>
       )}
+      {tab === 'quality' && <ConnectionQuality sid={sid} participantSid={psid} />}
       {p && tab === 'events' && (
         <Panel><DataTable rows={data!.events as Json[]} rowKey={(e) => e.id} pageSize={50} empty={{ title: 'No events' }} cols={[
           { key: 't', header: 'Timestamp', cell: (e) => <span className="mono">{fromMsPrecise(e.ts)}</span>, sort: (e) => e.ts }, { key: 'e', header: 'Event', cell: (e) => <span className="mono">{e.type}</span>, text: (e) => e.type },

@@ -31,3 +31,10 @@ for upload setup, excluded fields, retention and redaction limitations.
 ## Deployment settings
 `.env.deploy` (git-ignored; template in `.env.deploy.example`) holds the VM target for `deploy.sh`; see
 [deployment.md](deployment.md).
+
+## Connection diagnostics
+
+`DIAGNOSTICS_ENABLED=true` enables the dedicated service-token upload route; it defaults off.
+`DIAGNOSTICS_RETENTION_DAYS` controls measured diagnostic content retention (default 30, range 1–365).
+`AGENT_QUALITY_ENABLED=true` enables the native helper on instrumented workers; defaults off.
+See [collection, permissions and host installation](connection-diagnostics.md).

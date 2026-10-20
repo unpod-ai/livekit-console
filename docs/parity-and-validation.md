@@ -17,7 +17,7 @@ See the [Cloud parity checklist](cloud-parity-checklist.md) for prioritized impl
 | Agent analytics | Sessions served, join latency, sampled uptime/load; admin-only reports, measured latency comparisons, model usage, structured logs and recording alignment | Opt-in retained SDK events/spans and configured Egress files only; unavailable stages remain explicit |
 | SIP configuration | Inbound/outbound trunks, dispatch rules, numbers referenced by configuration | Phone number purchasing and provider billing remain with the SIP provider |
 | Recordings and ingress | Egress/ingress admin APIs, egress history, recording location links | Admin-only configured S3 streaming, native playback/waveform/seek; other storage/playlist sources remain unsupported; media is not stored in SQLite |
-| Usage and charts | Counts and participant durations derived from stored events | No per-session bandwidth, packet loss, FPS or Cloud billing measurements |
+| Usage and charts | Counts and participant durations derived from stored events | Opt-in native participant/track quality is available under diagnostics; no retrospective reconstruction or Cloud billing measurements |
 | Accounts | Local admin/viewer accounts and bootstrap admin | No organization SSO or Cloud account management |
 
 LiveKit exposes room administration through its
@@ -73,3 +73,7 @@ used reported file-start timestamps and retained trace context. Independent nume
 percentiles and chart-bucket contributors. Browser checks also covered comparison, brush ranges, shared drawers,
 relative refresh windows and mobile layouts. Generated audio verifies media plumbing and time alignment, not speech
 intelligibility or provider billing. See [recordings and analytics](recordings-and-analytics.md) for limits and setup.
+
+## Connection diagnostics
+
+[Connection quality and SIP diagnostics](connection-diagnostics.md) adds opt-in native track samples, configured host resource snapshots and projected SIP logs. It preserves measured units, exact source identifiers and unavailable states. Service aggregates never stand in for participant/track quality. Browser checks cover scope, missing FPS, SIP failure timelines and administrator-only reads. Native quality acceptance used generated audio and impairment confined to a disposable test container; no production network interface was changed. Live deployment acceptance is tracked in the parity checklist.

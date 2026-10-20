@@ -5,6 +5,7 @@ import { AppShell } from './components/AppShell';
 import { AgentDetail } from './pages/AgentDetail';
 import { Agents } from './pages/Agents';
 import { CallDetail, Calls } from './pages/Calls';
+import { Diagnostics, TelephonyDiagnostics } from './pages/Diagnostics';
 import { Dispatch } from './pages/Dispatch';
 import { Egress, EgressDetail } from './pages/Egress';
 import { Ingress } from './pages/Ingress';
@@ -40,6 +41,8 @@ export function App() {
         <Route path="agent-analytics" element={<Performance />} />
         <Route path="agents" element={<Agents />} />
         <Route path="agents/:name" element={<AgentDetail />} />
+        <Route path="diagnostics" element={<Diagnostics />} />
+        <Route path="telephony/diagnostics" element={<TelephonyDiagnostics />} />
         <Route path="usage" element={<Usage />} />
         <Route path="telephony/calls" element={<Calls />} />
         <Route path="telephony/calls/:id" element={<CallDetail />} />

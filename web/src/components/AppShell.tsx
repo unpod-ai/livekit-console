@@ -7,7 +7,7 @@ import {
 import { api } from '../lib/api';
 import { useMe } from '../lib/me';
 
-type Item = { to: string; label: string; icon: typeof Activity };
+type Item = { to: string; label: string; icon: typeof Activity; admin?: boolean };
 const GROUPS: { title: string; items: Item[] }[] = [
   { title: 'Project', items: [
     { to: '/', label: 'Overview', icon: LayoutDashboard },
@@ -16,9 +16,11 @@ const GROUPS: { title: string; items: Item[] }[] = [
     { to: '/agents', label: 'Agents', icon: Bot },
     { to: '/agent-analytics', label: 'Agent analytics', icon: Activity },
     { to: '/usage', label: 'Usage', icon: BarChart3 },
+    { to: '/diagnostics', label: 'Diagnostics', icon: Activity, admin: true },
   ] },
   { title: 'Telephony', items: [
     { to: '/telephony/calls', label: 'Calls', icon: PhoneCall },
+    { to: '/telephony/diagnostics', label: 'SIP diagnostics', icon: Activity, admin: true },
     { to: '/telephony/dispatch', label: 'Dispatch rules', icon: GitBranch },
     { to: '/telephony/phone-numbers', label: 'Phone numbers', icon: Hash },
     { to: '/telephony/trunks', label: 'SIP trunks', icon: Cable },
@@ -35,7 +37,8 @@ function Palette({ onClose }: { onClose: () => void }) {
   const navigate = useNavigate();
   const [q, setQ] = useState('');
   const [i, setI] = useState(0);
-  const list = useMemo(() => ALL.filter((x) => x.label.toLowerCase().includes(q.toLowerCase())), [q]);
+  const me = useMe();
+  const list = useMemo(() => ALL.filter(x => (!x.admin || me.data?.role === 'admin') && x.label.toLowerCase().includes(q.toLowerCase())), [q, me.data?.role]);
   const go = (to: string) => { onClose(); navigate(to); };
   return (
     <>
@@ -91,7 +94,7 @@ export function AppShell() {
         {GROUPS.map((g) => (
           <div key={g.title}>
             <div className="nav-group">{g.title}</div>
-            {g.items.map((it) => (
+            {g.items.filter(it => !it.admin || me.data?.role === 'admin').map((it) => (
               <NavLink key={it.to} to={it.to} end={it.to === '/'} className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`} title={it.label}>
                 <it.icon size={16} aria-hidden /><span className="nav-label">{it.label}</span>
               </NavLink>

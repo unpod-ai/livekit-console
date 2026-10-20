@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>LiveKit Cloud parity checklist</title>
+<style>
+:root{font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#17212b;background:#f5f7fa;line-height:1.65}*{box-sizing:border-box}body{margin:0}header{background:#102c3b;color:#fff;padding:28px max(20px,calc((100% - 1100px)/2))}header p{margin:0;opacity:.9}a{color:#086182;text-underline-offset:3px}header a{color:#9fe6ff}main{display:grid;grid-template-columns:240px minmax(0,1fr);gap:28px;max-width:1140px;margin:28px auto;padding:0 20px}nav{align-self:start;position:sticky;top:20px;font-size:.9rem}nav ul{list-style:none;padding:0}nav li{margin:10px 0}article{min-width:0;background:#fff;border:1px solid #dbe3e9;border-radius:8px;padding:24px 32px}h1{font-size:1.9rem;line-height:1.25;margin:0 0 20px}h2{font-size:1.35rem;border-top:1px solid #dbe3e9;padding-top:24px;margin-top:32px;scroll-margin-top:20px}h3{font-size:1.1rem}ul{padding-left:24px}.task{list-style:none;margin:8px 0 8px -24px;display:block}.task input{margin:0 9px 0 0;width:16px;height:16px;vertical-align:-2px;accent-color:#12805b}.done{color:#275b46}.pending{color:#17212b}code{background:#eef3f6;padding:2px 4px;border-radius:3px;overflow-wrap:anywhere}p,li{overflow-wrap:anywhere}footer{max-width:1100px;margin:20px auto;padding:0 20px 30px;color:#536575;font-size:.9rem}@media(max-width:800px){main{display:block}nav{position:static}article{padding:20px}h1{font-size:1.6rem}}@media print{body{background:white}header,nav,footer{display:none}main{display:block;margin:0;padding:0}article{border:0;padding:0}h2{break-after:avoid}li{break-inside:avoid}}
+</style></head><body><header><p>LiveKit Console · implementation roadmap</p><a href="cloud-parity-checklist.md">Markdown source</a></header><main><nav aria-label="Checklist sections"><strong>On this page</strong><ul><li><a href="#existing-foundation">Existing foundation</a></li><li><a href="#before-calling-the-current-preview-verified">Before calling the current preview verified</a></li><li><a href="#phase-1-agent-telemetry-and-agent-insights">Phase 1 — Agent telemetry and Agent Insights</a></li><li><a href="#phase-2-recordings-and-interactive-analytics">Phase 2 — Recordings and interactive analytics</a></li><li><a href="#phase-3-connection-quality-and-telephony-diagnostics">Phase 3 — Connection quality and telephony diagnostics</a></li><li><a href="#phase-4-persistent-agent-and-worker-inventory">Phase 4 — Persistent agent and worker inventory</a></li><li><a href="#phase-5-project-administration-and-operations">Phase 5 — Project administration and operations</a></li><li><a href="#phase-6-deployment-management-and-agent-testing">Phase 6 — Deployment management and agent testing</a></li><li><a href="#final-ui-step-before-the-combined-production-release">Final UI step before the combined production release</a></li><li><a href="#scope-boundary">Scope boundary</a></li><li><a href="#reference-behavior">Reference behavior</a></li></ul></nav><article><h1 id="livekit-cloud-parity-checklist">LiveKit Cloud parity checklist</h1>
+<p>Baseline: 2026-10-20. Target: a Cloud-like administration and debugging experience for a self-hosted LiveKit stack.</p>
+<p>Checked items describe existing implementation, not certification of every production flow. Unchecked items need
+implementation or verification. See <a href="parity-and-validation.md">coverage and validation</a> for current evidence and limits.
+Complete the phases in order; telemetry-dependent screens require their collection path first.</p>
+<h2 id="existing-foundation">Existing foundation</h2>
+<ul>
+<li class="task done"><input type="checkbox" disabled aria-label="Completed" checked> Live rooms and participants, room actions, agent dispatch and token generation.</li>
+<li class="task done"><input type="checkbox" disabled aria-label="Completed" checked> Signature-verified lifecycle webhooks stored in SQLite.</li>
+<li class="task done"><input type="checkbox" disabled aria-label="Completed" checked> Session, participant, call, agent and egress cross-links.</li>
+<li class="task done"><input type="checkbox" disabled aria-label="Completed" checked> SIP trunk and dispatch-rule management, with referenced phone numbers.</li>
+<li class="task done"><input type="checkbox" disabled aria-label="Completed" checked> Egress/ingress administration and recording location links.</li>
+<li class="task done"><input type="checkbox" disabled aria-label="Completed" checked> Worker health, load, active jobs, last check and sampled history.</li>
+<li class="task done"><input type="checkbox" disabled aria-label="Completed" checked> Overview/usage charts, time ranges, manual refresh and automatic refresh.</li>
+<li class="task done"><input type="checkbox" disabled aria-label="Completed" checked> Local admin/viewer accounts with server-enforced permissions.</li>
+<li class="task done"><input type="checkbox" disabled aria-label="Completed" checked> Documented deployment and database backup/restore.</li>
+</ul>
+<h2 id="before-calling-the-current-preview-verified">Before calling the current preview verified</h2>
+<ul>
+<li class="task done"><input type="checkbox" disabled aria-label="Completed" checked> Verify a real inbound provider call reaches the intended room and agent.</li>
+<li class="task done"><input type="checkbox" disabled aria-label="Completed" checked> Verify inbound direction and trunk/rule references against that real call.</li>
+<li class="task done"><input type="checkbox" disabled aria-label="Completed" checked> Follow session ↔ call ↔ participant ↔ agent ↔ egress links on the real call.</li>
+<li class="task done"><input type="checkbox" disabled aria-label="Completed" checked> Open a private recording with storage authorization and verify anonymous access is denied.</li>
+<li class="task done"><input type="checkbox" disabled aria-label="Completed" checked> Verify the ended call/session duration and final egress status after hangup.</li>
+</ul>
+<p>Completed checks establish routing, navigation, final lifecycle state, storage access and file validity;
+in-console playback remains Phase 2. Operational evidence is retained privately. Deployers can repeat the
+<a href="validation/inbound-calls.md">acceptance procedure</a> on their own environment.</p>
+<h2 id="phase-1-agent-telemetry-and-agent-insights">Phase 1 — Agent telemetry and Agent Insights</h2>
+<p>Data source: agent SDK session reports, conversation events, metrics and OpenTelemetry. Worker <code>/worker</code> health
+responses and room lifecycle webhooks do not contain conversation transcripts or pipeline timings.</p>
+<h3 id="collection-and-correlation">Collection and correlation</h3>
+<p>Final reports and live events use separate authenticated upload routes. The native integrations and investigation
+UI are described in <a href="agent-live-telemetry.md">live telemetry</a>, including supported SDK versions and privacy limits.
+Isolated tests cover delivery, redaction, state, export and permissions; native RTC acceptance is tracked below.</p>
+<ul>
+<li>
+<p>[x] Define and validate the version-1 Python post-session report envelope.</p>
+</li>
+<li>
+<p>[x] Accept bounded uploads with a dedicated service token and persist reports independently of webhook arrival.</p>
+</li>
+<li>
+<p>[x] Make final-report retries idempotent and reject conflicting room/job reports.</p>
+</li>
+<li>
+<p>[x] Enforce administrator-only report reads and expiration without restoring content on retry.</p>
+</li>
+<li>
+<p>[x] Accept opt-in structured log batches independently of reports, with atomic retry/conflict handling and content retention.</p>
+</li>
+<li>
+<p>[x] Provide a Python log uploader and optional fixed job lifecycle events without collecting process-wide logs.</p>
+</li>
+<li>
+<p>[x] Define versioned telemetry records and supported Python/Node Agents SDK versions.</p>
+</li>
+<li>
+<p>[x] Provide authenticated ingestion separate from browser login sessions.</p>
+</li>
+<li>
+<p>[x] Add agent integration examples for session reports, live events, metrics, traces and structured logs.</p>
+</li>
+<li>
+<p>[x] Correlate room SID, participant SID, session/job identifiers, agent identity, worker and trace identifiers.</p>
+</li>
+<li>
+<p>[x] Handle retries, duplicate records, late/out-of-order events and interrupted uploads.</p>
+</li>
+<li>
+<p>[x] Show collection state: disabled, receiving, incomplete, complete or expired.</p>
+</li>
+<li>
+<p>[x] Configure collection, access permissions, retention and redaction before storing conversation content.</p>
+</li>
+</ul>
+<h3 id="session-experience">Session experience</h3>
+<ul>
+<li class="task done"><input type="checkbox" disabled aria-label="Completed" checked> Add an Agent Insights view to session details.</li>
+<li class="task done"><input type="checkbox" disabled aria-label="Completed" checked> Display final-report user/assistant text, tool/error/handoff markers, interruption flags and reported timings.</li>
+<li class="task done"><input type="checkbox" disabled aria-label="Completed" checked> Download the normalized report shown in the console.</li>
+<li class="task done"><input type="checkbox" disabled aria-label="Completed" checked> Collect version-2 per-model token/cache/speech/request counters and display them per final report.</li>
+<li class="task done"><input type="checkbox" disabled aria-label="Completed" checked> Preserve version-1 retry compatibility and mark missing or unsupported usage explicitly.</li>
+<li class="task done"><input type="checkbox" disabled aria-label="Completed" checked> Aggregate retained model usage per agent with time ranges, coverage gaps, model filters and paginated report drilldowns.</li>
+<li class="task done"><input type="checkbox" disabled aria-label="Completed" checked> Display timestamped user/agent transcripts, tool calls, handoffs and errors.</li>
+<li class="task done"><input type="checkbox" disabled aria-label="Completed" checked> Display a span timeline for turns, STT, LLM, TTS and tools.</li>
+<li class="task done"><input type="checkbox" disabled aria-label="Completed" checked> Search/filter session logs and correlate log lines with turns and traces.</li>
+<li class="task done"><input type="checkbox" disabled aria-label="Completed" checked> Browse structured logs by job, exact severity and message text; show supplied turn/trace/span IDs and link reports to job logs.</li>
+<li class="task done"><input type="checkbox" disabled aria-label="Completed" checked> Show response latency, stage timing, interruptions and model/token/speech usage where reported.</li>
+<li class="task done"><input type="checkbox" disabled aria-label="Completed" checked> Distinguish agent join latency from conversational response latency.</li>
+<li class="task done"><input type="checkbox" disabled aria-label="Completed" checked> Handle realtime-model and pipeline-model telemetry differences with explicit unavailable states.</li>
+<li class="task done"><input type="checkbox" disabled aria-label="Completed" checked> Export a session's available transcript, events, metrics, traces and logs.</li>
+</ul>
+<p>Acceptance:</p>
+<ul>
+<li class="task done"><input type="checkbox" disabled aria-label="Completed" checked> Run a real native SDK/RTC agent session and correlate its transcript, trace, logs and usage with the session page (deterministic local model).</li>
+<li class="task done"><input type="checkbox" disabled aria-label="Completed" checked> Verify tool calls, an interrupted turn, an agent error and incomplete telemetry remain understandable.</li>
+<li class="task done"><input type="checkbox" disabled aria-label="Completed" checked> Verify final-report retries do not duplicate conversation reports or extend retention (isolated HTTP tests).</li>
+<li class="task done"><input type="checkbox" disabled aria-label="Completed" checked> Verify report text is inaccessible to anonymous users/viewers (HTTP and browser checks).</li>
+<li class="task done"><input type="checkbox" disabled aria-label="Completed" checked> Verify duplicates in the live event/log/usage pipelines do not inflate totals.</li>
+<li class="task done"><input type="checkbox" disabled aria-label="Completed" checked> Verify all conversation telemetry categories obey their access rules.</li>
+</ul>
+<h2 id="phase-2-recordings-and-interactive-analytics">Phase 2 — Recordings and interactive analytics</h2>
+<ul>
+<li class="task done"><input type="checkbox" disabled aria-label="Completed" checked> Provide authorized access to private storage using short-lived signed URLs or a controlled streaming endpoint.</li>
+<li class="task done"><input type="checkbox" disabled aria-label="Completed" checked> Add in-console audio/video playback with seeking and clear loading, missing and expired-file states.</li>
+<li class="task done"><input type="checkbox" disabled aria-label="Completed" checked> Add audio waveform and timestamp synchronization with transcripts and selected turns.</li>
+<li class="task done"><input type="checkbox" disabled aria-label="Completed" checked> Record which audio source is available; distinguish Egress media from agent-side recordings.</li>
+<li class="task done"><input type="checkbox" disabled aria-label="Completed" checked> Add per-agent/project latency percentiles and stage breakdowns based on collected turn metrics.</li>
+<li class="task done"><input type="checkbox" disabled aria-label="Completed" checked> Add model usage breakdowns; label optional rate-based costs as estimates rather than provider invoices.</li>
+<li class="task done"><input type="checkbox" disabled aria-label="Completed" checked> Show per-agent retained token and speech usage charts with links to contributing reports; exclude expired data.</li>
+<li class="task done"><input type="checkbox" disabled aria-label="Completed" checked> Click a chart bucket or outlier to open the matching sessions.</li>
+<li class="task done"><input type="checkbox" disabled aria-label="Completed" checked> Drag to select a time window and apply it consistently across the page.</li>
+<li class="task done"><input type="checkbox" disabled aria-label="Completed" checked> Compare selected agents with the same range, filters and metric definitions.</li>
+<li class="task done"><input type="checkbox" disabled aria-label="Completed" checked> Preserve chart selections, filters and detail drawers in shareable URLs.</li>
+</ul>
+<p>Acceptance:</p>
+<ul>
+<li class="task done"><input type="checkbox" disabled aria-label="Completed" checked> Selecting a turn seeks to its matching recording timestamp and highlights its trace/log context.</li>
+<li class="task done"><input type="checkbox" disabled aria-label="Completed" checked> Chart drilldowns return the sessions that actually contributed to the selected metric.</li>
+<li class="task done"><input type="checkbox" disabled aria-label="Completed" checked> Chart values and percentiles agree with the underlying retained telemetry.</li>
+</ul>
+<h2 id="phase-3-connection-quality-and-telephony-diagnostics">Phase 3 — Connection quality and telephony diagnostics</h2>
+<p>Data sources: media-server metrics, client/participant statistics, SIP-service telemetry/logs and, where needed,
+provider integrations. Aggregate Prometheus metrics alone do not establish per-session or per-track quality.</p>
+<ul>
+<li class="task done"><input type="checkbox" disabled aria-label="Completed" checked> Collect server/SIP/egress service health and capacity metrics.</li>
+<li class="task done"><input type="checkbox" disabled aria-label="Completed" checked> Collect session/participant/track quality samples with durable identifiers.</li>
+<li class="task done"><input type="checkbox" disabled aria-label="Completed" checked> Show bandwidth, packet loss, jitter, RTT, FPS, reconnects and disconnect reasons where measured.</li>
+<li class="task done"><input type="checkbox" disabled aria-label="Completed" checked> Add participant and track quality charts alongside session lifecycle events.</li>
+<li class="task done"><input type="checkbox" disabled aria-label="Completed" checked> Collect SIP attempts and failures that occur before a participant joins a room.</li>
+<li class="task done"><input type="checkbox" disabled aria-label="Completed" checked> Correlate provider call IDs, SIP call IDs, trunks, dispatch rules, rooms and participants.</li>
+<li class="task done"><input type="checkbox" disabled aria-label="Completed" checked> Display SIP response codes, failure stages and termination reasons where available.</li>
+<li class="task done"><input type="checkbox" disabled aria-label="Completed" checked> Mark inferred call direction separately from confirmed provider/service data.</li>
+<li class="task done"><input type="checkbox" disabled aria-label="Completed" checked> Expose relevant service logs for failures without a room or session record.</li>
+</ul>
+<p>Acceptance:</p>
+<ul>
+<li class="task pending"><input type="checkbox" disabled aria-label="Pending"> Investigate a degraded connection using measured quality samples from the correct participant/track.</li>
+<li class="task pending"><input type="checkbox" disabled aria-label="Pending"> A failed pre-room SIP attempt appears with its available identifiers and failure reason.</li>
+<li class="task pending"><input type="checkbox" disabled aria-label="Pending"> Successful inbound and outbound calls retain correct component links after completion.</li>
+</ul>
+<h2 id="phase-4-persistent-agent-and-worker-inventory">Phase 4 — Persistent agent and worker inventory</h2>
+<ul>
+<li class="task pending"><input type="checkbox" disabled aria-label="Pending"> Introduce stable console identities for agents and worker instances; retain native IDs when reported.</li>
+<li class="task pending"><input type="checkbox" disabled aria-label="Pending"> Keep historical agent names/aliases so renaming does not hide earlier sessions or workers.</li>
+<li class="task pending"><input type="checkbox" disabled aria-label="Pending"> Persist worker IDs when available; clearly distinguish console IDs from LiveKit-native IDs.</li>
+<li class="task pending"><input type="checkbox" disabled aria-label="Pending"> Retain first seen, last seen, last healthy, stopped/dead state and deployment/version metadata.</li>
+<li class="task pending"><input type="checkbox" disabled aria-label="Pending"> Preserve archived inventory independently of the current 14-day worker sample cleanup.</li>
+<li class="task pending"><input type="checkbox" disabled aria-label="Pending"> Separate sampled endpoint availability from job registration/readiness and session-serving status.</li>
+<li class="task pending"><input type="checkbox" disabled aria-label="Pending"> Add long-range uptime/load rollups with configurable retention.</li>
+<li class="task pending"><input type="checkbox" disabled aria-label="Pending"> Link agents, worker instances, jobs, versions and sessions wherever source identifiers exist.</li>
+</ul>
+<p>Acceptance:</p>
+<ul>
+<li class="task pending"><input type="checkbox" disabled aria-label="Pending"> Rename an agent, restart its worker and restart the console; older history remains discoverable.</li>
+<li class="task pending"><input type="checkbox" disabled aria-label="Pending"> Removing an endpoint or expiring raw samples does not erase the archived worker inventory.</li>
+</ul>
+<h2 id="phase-5-project-administration-and-operations">Phase 5 — Project administration and operations</h2>
+<ul>
+<li class="task pending"><input type="checkbox" disabled aria-label="Pending"> Support multiple configured LiveKit projects with isolated credentials, data and permissions.</li>
+<li class="task pending"><input type="checkbox" disabled aria-label="Pending"> Add project-scoped access and configurable access to transcripts, recordings and logs.</li>
+<li class="task pending"><input type="checkbox" disabled aria-label="Pending"> Add SSO/OIDC if organizational access requires it.</li>
+<li class="task pending"><input type="checkbox" disabled aria-label="Pending"> Record administrative changes and destructive actions in an audit history.</li>
+<li class="task pending"><input type="checkbox" disabled aria-label="Pending"> Configure retention, deletion, export and redaction for each collected data category.</li>
+<li class="task pending"><input type="checkbox" disabled aria-label="Pending"> Show collector health, ingestion lag, last successful sync and collection failures.</li>
+<li class="task pending"><input type="checkbox" disabled aria-label="Pending"> Alert on worker outages, ingestion failures, call failures and measured latency/quality thresholds.</li>
+<li class="task pending"><input type="checkbox" disabled aria-label="Pending"> Monitor ingestion/storage growth and select indexes, rollups or external stores based on measured volume.</li>
+<li class="task pending"><input type="checkbox" disabled aria-label="Pending"> Verify backup and restore after adding each new telemetry store.</li>
+</ul>
+<h2 id="phase-6-deployment-management-and-agent-testing">Phase 6 — Deployment management and agent testing</h2>
+<p>Requires an explicit integration with our deployment infrastructure; Cloud deployment APIs do not manage our
+self-hosted worker fleet.</p>
+<ul>
+<li class="task pending"><input type="checkbox" disabled aria-label="Pending"> Display deployed agent image/version, environment, replicas and region/host where available.</li>
+<li class="task pending"><input type="checkbox" disabled aria-label="Pending"> Integrate build/runtime logs and deployment status with Docker/Kubernetes or the chosen orchestrator.</li>
+<li class="task pending"><input type="checkbox" disabled aria-label="Pending"> Manage deployment secrets through the chosen secret store.</li>
+<li class="task pending"><input type="checkbox" disabled aria-label="Pending"> Support rolling deployments, draining and rollback with visible progress/failures.</li>
+<li class="task pending"><input type="checkbox" disabled aria-label="Pending"> Add a browser test session with explicit agent selection and live transcript/telemetry.</li>
+<li class="task pending"><input type="checkbox" disabled aria-label="Pending"> Add repeatable agent scenarios and compare results across versions.</li>
+</ul>
+<h2 id="final-ui-step-before-the-combined-production-release">Final UI step before the combined production release</h2>
+<ul>
+<li class="task pending"><input type="checkbox" disabled aria-label="Pending"> Add a day/night theme toggle in the top header.</li>
+<li class="task pending"><input type="checkbox" disabled aria-label="Pending"> Remember the selected theme across navigation and reloads.</li>
+<li class="task pending"><input type="checkbox" disabled aria-label="Pending"> Verify text, charts, tables, forms, dialogs and recordings in both themes on desktop and mobile.</li>
+<li class="task pending"><input type="checkbox" disabled aria-label="Pending"> Finish every phase's acceptance checks before publishing one combined production release; do not publish intermediate milestone releases.</li>
+</ul>
+<h2 id="scope-boundary">Scope boundary</h2>
+<p>Phone number purchasing, telecom billing, managed inference, globally distributed hosting, autoscaling and
+Cloud account billing require their own provider/platform integrations. Treat these as separate projects rather
+than completed dashboard features.</p>
+<h2 id="reference-behavior">Reference behavior</h2>
+<ul>
+<li><a href="https://docs.livekit.io/testing/observability/insights/">LiveKit Agent Insights</a></li>
+<li><a href="https://docs.livekit.io/testing/observability/data/">Agent SDK data hooks and self-hosted session reports</a></li>
+<li><a href="https://docs.livekit.io/testing/observability/build/">Build your own observability</a></li>
+<li><a href="https://docs.livekit.io/deploy/agents/managing-deployments/">Cloud agent deployment management</a></li>
+</ul>
+</article></main><footer>HTML companion to the Markdown checklist. Checked items describe implementation and recorded validation; they are not certification of every production flow.</footer></body></html>

@@ -24,7 +24,12 @@ if (process.env.RECORDING_S3_ENDPOINT) {
 const recordingDays = Number(process.env.RECORDING_ACCESS_DAYS ?? 30);
 if (!Number.isInteger(recordingDays) || recordingDays < 1 || recordingDays > 3650) throw new Error('RECORDING_ACCESS_DAYS must be an integer from 1 to 3650');
 
+const diagnosticsRetentionDays=Number(process.env.DIAGNOSTICS_RETENTION_DAYS??30);
+if(!Number.isInteger(diagnosticsRetentionDays)||diagnosticsRetentionDays<1||diagnosticsRetentionDays>365)throw new Error('DIAGNOSTICS_RETENTION_DAYS must be an integer from 1 to 365');
+
 export const config = {
+  diagnosticsEnabled:process.env.DIAGNOSTICS_ENABLED==='true',
+  diagnosticsRetentionDays,
   port: Number(process.env.PORT ?? 8080),
   wsUrl: livekitUrl.replace(/^http/, 'ws'),
   httpUrl: livekitUrl.replace(/^ws/, 'http'),
