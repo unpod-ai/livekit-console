@@ -98,9 +98,9 @@ Acceptance:
 
 Acceptance:
 
-- [ ] Selecting a turn seeks to its matching recording timestamp and highlights its trace/log context.
-- [ ] Chart drilldowns return the sessions that actually contributed to the selected metric.
-- [ ] Chart values and percentiles agree with the underlying retained telemetry.
+- [x] Selecting a turn seeks to its matching recording timestamp and highlights its trace/log context.
+- [x] Chart drilldowns return the sessions that actually contributed to the selected metric.
+- [x] Chart values and percentiles agree with the underlying retained telemetry.
 
 ## Phase 3 — Connection quality and telephony diagnostics
 

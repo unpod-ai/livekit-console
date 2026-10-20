@@ -12,11 +12,13 @@ export function resolveRecording(row: EgressRow, index: number, storage: Storage
   const base={id:`${row.egress_id}/${index}`,egressId:row.egress_id,index,name:path.posix.basename(name),source:'egress',mime,
     startMs:ns(file?.startedAt),durationMs:ns(file?.duration),size:Number.isSafeInteger(Number(file?.size))&&Number(file?.size)>=0?Number(file.size):null};
   const invalidKey=!name||name.startsWith('/')||/[\\\x00-\x1f?#%]/.test(name)||name.includes('://')||name.split('/').some(p=>!p||p==='.'||p==='..');
+  const anchor=[row.ended_at,row.started_at,ns(file?.startedAt)].find(value=>value!=null&&Number.isFinite(value)&&value>0);
   let state='ready';
   if(!file)state='missing';
   else if(!storage.bucket||(!outputs.length||!outputs.every((o: any)=>o.s3?.bucket===storage.bucket))||!name.startsWith(storage.prefix))state='unconfigured';
   else if(invalidKey||!mime)state='unsupported';
-  else if((row.ended_at??row.started_at??Date.now())+storage.retentionDays*86400000<=Date.now())state='expired';
+  else if(anchor==null)state='unavailable';
+  else if(anchor+storage.retentionDays*86400000<=Date.now())state='expired';
   return {...base,state,key:state==='ready'?name:null};
 }
 export function validateRange(value: string | undefined): string | undefined {

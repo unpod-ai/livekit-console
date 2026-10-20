@@ -27,7 +27,7 @@ performance.get('/analytics',(req,res)=>{
       FROM agent_live_records r JOIN agent_live_jobs j ON j.room_sid=r.room_sid AND j.job_id=r.job_id WHERE r.content IS NOT NULL AND r.expires_at>? AND r.at>=? AND r.at<? AND r.kind IN ('message','span')${liveClause} ORDER BY r.received_at,r.rowid LIMIT 100001`).iterate(now,from,to,...agents);
    count=0;for(const r of live){if(++count>100000)throw new QueryError('Too many live records; narrow the range or selected agents',413);yield {kind:r.kind as string,roomSid:r.room_sid as string,jobId:r.job_id as string,agentName:r.agent_name as string,itemId:r.id as string,messageId:r.message_id as string|null,role:r.role as string,at:r.at as number,end:r.end as number|null,expiresAt:r.expires_at as number,receivedAt:r.received_at as number,metrics:r.metrics?JSON.parse(r.metrics as string):{},spanName:r.span_name as string,traceId:r.trace_id as string|null,spanId:r.span_id as string|null,turnId:r.turn_id as string|null,interrupted:!!r.interrupted,isError:r.status==='error'};}
   }
-  const measurements=canonicalMeasurements(inputs(),now),bucketMs=to-from<=6*3600000?300000:to-from<=48*3600000?3600000:86400000;
+  const measurements=canonicalMeasurements(inputs(),now),span=to-from,bucketMs=span<=300000?1000:span<=1800000?10000:span<=7200000?60000:span<=43200000?300000:span<=172800000?3600000:86400000;
   const summary=summarizeMeasurements(measurements,{from,to,metric,agents,bucketMs});
   const bucketFrom=req.query.bucket===undefined?null:integer(req.query.bucket,from);
   if(bucketFrom!==null&&(bucketFrom<Math.floor(from/bucketMs)*bucketMs||bucketFrom>=to||bucketFrom%bucketMs!==0))throw new QueryError('Invalid chart bucket');

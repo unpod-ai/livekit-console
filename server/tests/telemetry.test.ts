@@ -389,7 +389,7 @@ test('performance percentiles and bucket drilldowns use canonical retained sourc
   }
   const query=new URLSearchParams({from:String(start-1000),to:String(start+3000),agents:JSON.stringify(['perf-one','perf-two'])});
   const response=await fetch(base+path+'?'+query,{headers:auth});assert.equal(response.status,200);const data=await response.json();
-  assert.equal(data.totalSamples,4);assert.equal(data.groups.find((g:any)=>g.agentName==='perf-one').p50,100);assert.equal(data.groups.find((g:any)=>g.agentName==='perf-two').p95,400);assert.equal(data.models[0].metrics.input_tokens,20);assert.equal(JSON.stringify(data).includes('not-returned'),false);
+  assert.equal(data.bucketMs,1000);assert.equal(data.totalSamples,4);assert.equal(data.groups.find((g:any)=>g.agentName==='perf-one').p50,100);assert.equal(data.groups.find((g:any)=>g.agentName==='perf-two').p95,400);assert.equal(data.models[0].metrics.input_tokens,20);assert.equal(JSON.stringify(data).includes('not-returned'),false);
   query.set('bucket',String(data.series[0].t));const selected=await(await fetch(base+path+'?'+query,{headers:auth})).json();assert.equal(selected.totalContributors,selected.rows.length);assert.ok(selected.rows.every((s:any)=>s.at>=data.series[0].t&&s.at<data.series[0].t+data.bucketMs));
   query.set('sample',selected.rows[0].id);const drawer=await(await fetch(base+path+'?'+query,{headers:auth})).json();assert.equal(drawer.selected.id,selected.rows[0].id);
   assert.equal((await fetch(base+path+'?'+query)).status,401);assert.equal((await fetch(base+path+'?'+query,{headers:{cookie:await cookie('reader')}})).status,403);

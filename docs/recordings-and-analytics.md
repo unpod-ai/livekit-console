@@ -21,7 +21,8 @@ applies. Streaming playlists, arbitrary local paths and other cloud storage prov
 The source is labeled Egress; agent-side recording files are not collected or guessed from SDK paths.
 
 `RECORDING_ACCESS_DAYS` (default 30, integer 1–3650) limits console access after the Egress ends (or starts if
-its end is unknown). It does not delete storage objects or extend conversation retention. Missing objects,
+its end is unknown; a reported file start is used if lifecycle times are absent). Access is unavailable when no
+trustworthy age timestamp exists, so reads cannot keep renewing an unknown-age object. It does not delete storage objects or extend conversation retention. Missing objects,
 expired access, unsupported sources and unavailable/misconfigured storage produce distinct responses. A configured
 inventory entry does not prove the object still exists; actual storage access is checked when loading it.
 
@@ -54,7 +55,7 @@ updates; a live value can supply a metric missing from the final report. Native 
 again. Message timings and node-span durations are separate populations. Marked interrupted/error samples remain
 included and visible. Agent join latency remains a separate worker/session measurement.
 
-Timing buckets use event time. Usage uses finalized report time and excludes cumulative live snapshots. Token/cache
+Timing buckets use event time and refine from daily/hourly bins to one-second bins as the selected range narrows. Usage uses finalized report time and excludes cumulative live snapshots. Token/cache
 and speech counters remain per provider/model/stage; no provider invoice or optional rate-based cost is invented.
 Expired content and unavailable stages remain explicit coverage gaps.
 
@@ -79,3 +80,13 @@ transcript/span timestamps only when the recording has a reported start time. Do
 Use a dedicated RTC room and deterministic test agent/audio for recording acceptance; do not make a telephone call
 merely to test the player. Keep recordings, transcripts, object names and operational evidence private. Independently
 recompute chart counts/nearest-rank percentiles from retained measurements and compare each bucket's contributors.
+
+## Acceptance evidence
+
+Private playback and ranged seeking were verified against an existing retained Egress recording. A separate dedicated
+native Python SDK/RTC session published generated test audio and produced a completed private Egress file. Its
+conversation and span timestamps sought to the measured file offsets with retained trace context. The browser decoded
+actual audio waveforms, and independently extracted native LLM-node durations matched API nearest-rank percentiles
+and exact bucket contributors. The audio-free agent response path correctly omitted conversational audio latency;
+no missing response latency was fabricated from unrelated span timings. These tests did not place a telephone call.
+Operational recordings, identifiers, screenshots and numeric evidence remain private.
