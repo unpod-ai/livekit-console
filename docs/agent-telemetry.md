@@ -70,14 +70,14 @@ private network gateway and forward only `/api/telemetry/session-reports` to the
 retain bearer-token authentication, and limit the proxy's bind address and source network. The public admin UI
 does not need broader access for agent uploads.
 
-## Version 1 upload contract
+## Upload contract (versions 1 and 2)
 
 `POST /api/telemetry/session-reports` requires `Authorization: Bearer <AGENT_TELEMETRY_TOKEN>` and JSON of at most
 2 MiB. Browser login does not authorize uploads. The envelope is:
 
 ```json
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "agentName": "my-agent",
   "participantSid": "PA_optional",
   "workerId": "AW_optional",
@@ -86,6 +86,10 @@ does not need broader access for agent uploads.
     "job_id": "AJ_example",
     "sdk_version": "1.5.8",
     "timestamp": 1700000010,
+    "usage": [
+      {"type": "llm_usage", "provider": "example", "model": "my-model", "input_tokens": 120, "input_cached_tokens": 20, "output_tokens": 40},
+      {"type": "tts_usage", "provider": "example", "model": "my-voice", "characters_count": 80, "audio_duration": 3.5}
+    ],
     "chat_history": {
       "items": [
         {"id": "turn-1", "type": "message", "role": "user", "content": ["Hello"], "created_at": 1700000000},
@@ -113,8 +117,8 @@ the SDK report; timestamps are shown when present. Realtime models may omit pipe
 ## Stored content and access
 
 The database stores an allowlisted projection: user/assistant text, tool names/call IDs/error flags, handoff IDs,
-interruption flags and supported numeric turn timings. Raw report options/events, system/developer prompts,
-tool arguments/results, media, model usage summaries and arbitrary extra fields are discarded. Text itself can
+interruption flags, supported numeric turn timings and version-2 model usage counters. Raw report options/events,
+system/developer prompts, tool arguments/results, media and arbitrary extra fields are discarded. Text itself can
 contain personal information or secrets; the allowlist is not transcript redaction. The collection token is an
 explicit opt-in to storing this content.
 
@@ -127,10 +131,37 @@ content on startup, during report access/uploads and hourly. Identifying metadat
 expired reports can be recognized and retries cannot restore them. Logical deletion does not scrub SQLite WAL,
 old backups or copies already downloaded; manage their retention separately.
 
-## Not included in this first slice
+## Model usage (version 2)
 
-Live event streaming, OTLP trace ingestion, runtime log collection, automatic PII redaction, model usage/cost
-aggregation, synchronized audio and agent-wide performance charts remain on the [Cloud parity checklist](cloud-parity-checklist.md).
+Version 2 accepts the SDK's `report.usage` model summaries and displays them in the session's Agent Insights tab.
+Deploy the updated console before updating the Python upload helper. Version 1 uploads remain accepted with their
+original normalization and retry digest; usage in version 1 is still ignored. Existing reports are immutable:
+re-uploading a finalized version-1 job as version 2 returns 409 rather than changing its content or retention.
+
+Supported kinds are `llm_usage`, `tts_usage`, `stt_usage`, `interruption_usage` and `eot_usage`. Provider/model names
+may be empty when the SDK has no metadata; the UI labels them unknown. Up to 200 entries with names of at most
+200 characters are accepted. Duplicate type/provider/model combinations are rejected. Counters must be nonnegative
+safe integers; audio and session durations must be finite, nonnegative seconds within the safe numeric range.
+Unknown kinds are excluded and counted so the UI marks the result incomplete. Unknown fields are discarded.
+
+The SDK omits default zero counters when serializing known model rows, so absent counters in those rows normalize
+to zero. An absent/null usage collection means **not reported**; an empty collection means no model rows were
+reported. Neither state reconstructs historical consumption. These counters were checked against Python Agents
+1.5.8's usage schema; newer optional cache-creation, reasoning, STT-audio and end-of-turn counters are also accepted.
+Empty default counters do not establish that a provider exposes every breakdown.
+
+LLM input/output totals already include their cached/audio/text/image subsets; reasoning tokens are included in
+output tokens. Do not add these breakdowns again. Speech audio seconds belong to each STT/TTS stage, not to call
+duration. These are SDK usage counters, not monetary costs or provider invoices. The current view is per final
+report; project/agent rollups and estimated costs remain separate roadmap work.
+
+Usage has the same administrator-only access, export and content expiration as the conversation report. It is
+not retained in a separate long-term usage table after report expiry.
+
+## Not included in this slice
+
+Live event streaming, OTLP trace ingestion, runtime log collection, automatic PII redaction, project/agent usage
+aggregation, estimated costs, synchronized audio and agent-wide performance charts remain on the [Cloud parity checklist](cloud-parity-checklist.md).
 No historical transcripts can be reconstructed from room webhooks. Existing calls gain report data only if the
 agent collected and uploaded it.
 

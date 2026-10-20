@@ -28,7 +28,7 @@ async def upload_session_report(ctx: JobContext, agent_name: str) -> bool:
     # Build once so retries retain the same report timestamp and content.
     try:
         body = json.dumps({
-            "schemaVersion": 1,
+            "schemaVersion": 2,
             "agentName": agent_name,
             "report": ctx.make_session_report().to_dict(),
         }, allow_nan=False).encode("utf-8")

@@ -1,6 +1,9 @@
-/** Version 1 accepts the snake_case projection from Python Agents SessionReport.to_dict(). */
+import { normalizeUsage, type ModelUsage } from './model-usage.js';
+import { ReportValidationError } from './report-validation.js';
+export { ReportValidationError } from './report-validation.js';
+
+/** Both versions accept Python Agents SessionReport.to_dict(); v2 adds model usage. */
 type ObjectValue = Record<string, unknown>;
-export class ReportValidationError extends Error {}
 const invalid = (message: string): never => { throw new ReportValidationError(message); };
 function object(value: unknown, label: string): ObjectValue {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return invalid(`${label} must be an object`);
@@ -25,11 +28,11 @@ export type ReportItem = {
   role?: 'user' | 'assistant'; text?: string; interrupted?: boolean; metrics?: Record<string, number>;
   name?: string | null; callId?: string | null; isError?: boolean; fromAgent?: string | null; toAgent?: string;
 };
-export type ReportContent = { schemaVersion: 1; items: ReportItem[]; omittedItems: number };
+export type ReportContent = { schemaVersion: 1 | 2; items: ReportItem[]; omittedItems: number; usage?: ModelUsage[] | null; omittedUsage?: number };
 
 export function normalizeReport(value: unknown) {
   const envelope = object(value, 'request');
-  if (envelope.schemaVersion !== 1) invalid('schemaVersion must be 1');
+  if (envelope.schemaVersion !== 1 && envelope.schemaVersion !== 2) invalid('schemaVersion must be 1 or 2');
   const report = object(envelope.report, 'report');
   const roomSid = text(report.room_id, 'report.room_id', 100);
   const jobId = text(report.job_id, 'report.job_id', 100);
@@ -67,6 +70,6 @@ export function normalizeReport(value: unknown) {
     roomSid, jobId, agentName: text(envelope.agentName, 'agentName'),
     participantSid: optionalText(envelope.participantSid, 'participantSid'), workerId: optionalText(envelope.workerId, 'workerId'),
     sdkVersion: optionalText(report.sdk_version, 'sdk_version'), reportedAt: seconds(report.timestamp, 'report.timestamp', true)!,
-    content: { schemaVersion: 1, items, omittedItems } satisfies ReportContent,
+    content: { schemaVersion: envelope.schemaVersion, items, omittedItems, ...(envelope.schemaVersion === 2 ? normalizeUsage(report.usage) : {}) } as ReportContent,
   };
 }

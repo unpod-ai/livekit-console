@@ -43,6 +43,7 @@ class UploadTests(unittest.IsolatedAsyncioTestCase):
         self.ctx.make_session_report.assert_called_once()
         self.assertEqual(sent[0], sent[1])
         self.assertEqual(json.loads(sent[0])["agentName"], "example-agent")
+        self.assertEqual(json.loads(sent[0])["schemaVersion"], 2)
 
     async def test_rejected_authentication_is_not_retried(self):
         with patch.object(helper.urllib.request, "build_opener") as build, patch.object(helper.logger, "warning"):

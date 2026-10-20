@@ -74,12 +74,14 @@ test('normalized retries are idempotent; changed content for the same job is a c
   const row = db.prepare("SELECT received_at,expires_at FROM agent_session_reports WHERE job_id='AJ_retry'").get();
   assert.equal((await upload(e)).status, 200);
   e.report.options.secret = 'a-different-excluded-value'; assert.equal((await upload(e)).status, 200);
+  assert.equal((await upload({ ...e, report: { ...e.report, usage: [{ type: 'llm_usage', input_tokens: 100 }] } })).status, 200);
+  assert.equal((await upload({ ...e, schemaVersion: 2 })).status, 409);
   assert.deepEqual(db.prepare("SELECT received_at,expires_at FROM agent_session_reports WHERE job_id='AJ_retry'").get(), row);
   e.report.chat_history.items[1].content = ['Changed']; assert.equal((await upload(e)).status, 409);
 });
 
 test('invalid versions, missing room correlation, malformed JSON and oversized bodies are rejected', async () => {
-  const e = envelope('AJ_invalid'); assert.equal((await upload({ ...e, schemaVersion: 2 })).status, 422);
+  const e = envelope('AJ_invalid'); assert.equal((await upload({ ...e, schemaVersion: 3 })).status, 422);
   assert.equal((await upload({ ...e, report: { ...e.report, room_id: '' } })).status, 422);
   assert.equal((await upload({ ...e, report: { ...e.report, chat_history: {} } })).status, 422);
   assert.equal((await upload({ ...e, report: { ...e.report, timestamp: 'not-a-time' } })).status, 422);
@@ -114,6 +116,28 @@ test('expired content is never returned and retry cannot resurrect it', async ()
   assert.equal(report.state, 'expired'); assert.equal(report.content, null);
   assert.equal((await upload(e)).status, 200);
   assert.equal(db.prepare("SELECT content FROM agent_session_reports WHERE job_id='AJ_expired'").get()!.content, null);
+});
+
+test('v2 usage is retained once, read only by admins and removed with report content on expiry', async () => {
+  const e = { ...envelope('AJ_usage'), schemaVersion: 2, report: { ...envelope('AJ_usage').report,
+    usage: [{ type: 'llm_usage', provider: 'example', model: 'model', input_tokens: 20, input_cached_tokens: 5, output_tokens: 9, secret: 'do-not-store' }] } };
+  assert.equal((await upload(e)).status, 201);
+  assert.equal((await upload(e)).status, 200);
+  const url = base + '/api/agent-insights/sessions/RM_report?jobId=AJ_usage';
+  const read = () => fetch(url, { headers: { cookie: adminCookie } });
+  const adminCookie = await cookie();
+  const c = (await (await read()).json()).selected.content;
+  assert.equal(c.usage.length, 1);
+  assert.equal(c.usage[0].metrics.input_tokens, 20);
+  assert.equal(c.usage[0].metrics.input_cached_tokens, 5);
+  assert.equal(JSON.stringify(c).includes('do-not-store'), false);
+  assert.equal((await fetch(url, { headers: { cookie: await cookie('reader') } })).status, 403);
+  e.report.usage[0].input_tokens = 21;
+  assert.equal((await upload(e)).status, 409);
+  assert.equal((await upload({ ...e, report: { ...e.report, job_id: 'AJ_badusage', usage: [{ ...e.report.usage[0], input_tokens: -1 }] } })).status, 422);
+  db.prepare("UPDATE agent_session_reports SET expires_at=0 WHERE job_id='AJ_usage'").run();
+  assert.equal((await (await read()).json()).selected.content, null);
+  assert.equal(db.prepare("SELECT content FROM agent_session_reports WHERE job_id='AJ_usage'").get()!.content, null);
 });
 
 test('collection is disabled without an explicitly configured service token', async () => {
