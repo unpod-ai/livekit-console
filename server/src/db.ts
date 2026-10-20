@@ -76,6 +76,18 @@ db.exec(`
   );
   CREATE INDEX IF NOT EXISTS agent_live_room ON agent_live_records(room_sid,at);
   CREATE INDEX IF NOT EXISTS agent_live_expiry ON agent_live_records(expires_at) WHERE content IS NOT NULL;
+  CREATE TABLE IF NOT EXISTS diagnostic_records (
+    id TEXT PRIMARY KEY, kind TEXT NOT NULL, at INTEGER NOT NULL, received_at INTEGER NOT NULL,
+    expires_at INTEGER NOT NULL, room_sid TEXT, participant_sid TEXT, track_sid TEXT,
+    call_id TEXT, sip_call_id TEXT, provider_call_id TEXT, instance_id TEXT,
+    digest TEXT NOT NULL, content TEXT
+  );
+  CREATE INDEX IF NOT EXISTS diagnostic_time ON diagnostic_records(kind,at);
+  CREATE INDEX IF NOT EXISTS diagnostic_room ON diagnostic_records(room_sid,participant_sid,track_sid,at);
+  CREATE INDEX IF NOT EXISTS diagnostic_call ON diagnostic_records(call_id,at);
+  CREATE INDEX IF NOT EXISTS diagnostic_sip_call ON diagnostic_records(sip_call_id,at);
+  CREATE INDEX IF NOT EXISTS diagnostic_provider_call ON diagnostic_records(provider_call_id,at);
+  CREATE INDEX IF NOT EXISTS diagnostic_expiry ON diagnostic_records(expires_at) WHERE content IS NOT NULL;
   CREATE TABLE IF NOT EXISTS egress (
     egress_id TEXT PRIMARY KEY, room_sid TEXT, room_name TEXT, status TEXT,
     started_at INTEGER, ended_at INTEGER, info TEXT NOT NULL

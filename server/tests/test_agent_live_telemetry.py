@@ -117,3 +117,16 @@ class LiveTests(unittest.IsolatedAsyncioTestCase):
             session = Session()
             self.assertIs(helper.attach_session(self.ctx, session), collector)
             await collector.close()
+
+    async def test_quality_opt_in_attaches_once_and_closes_with_job(self):
+        import sys
+        from unittest.mock import Mock, AsyncMock
+        quality = types.SimpleNamespace(close=AsyncMock(return_value=True))
+        attach = Mock(return_value=quality)
+        self.ctx.room = types.SimpleNamespace()
+        with patch.dict(os.environ, {"AGENT_TELEMETRY_EVENTS_ENABLED":"true", "AGENT_QUALITY_ENABLED":"true", "AGENT_LOGS_ENABLED":"false"}), patch.dict(sys.modules, {"connection_quality":types.SimpleNamespace(attach_quality=attach)}), patch.object(helper.importlib.metadata,"version",return_value="1.5.8"), patch.object(helper.SessionTelemetry,"configure_tracing"):
+            collector=helper.start_collection(self.ctx,"test-agent",self.send)
+            self.assertIs(helper.start_collection(self.ctx,"test-agent",self.send),collector)
+            attach.assert_called_once_with(self.ctx.room,self.send,reporter_id="agent:AJ_test")
+            await collector.close()
+            quality.close.assert_awaited_once()

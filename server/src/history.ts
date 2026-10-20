@@ -49,15 +49,27 @@ const like = (v: unknown): string => (typeof v === 'string' && v ? `%${v}%` : '%
 
 // SIP participants carry call details as attributes. Inbound calls are matched by a dispatch rule (sip.ruleID);
 // outbound calls are placed through a trunk. LiveKit records no call detail records, so this is all there is.
+export const SIP_DIRECTION_SQL=`SELECT json_extract(d.content,'$.direction') direction FROM (
+  SELECT * FROM diagnostic_records INDEXED BY diagnostic_call WHERE call_id IN ($id,$full)
+  UNION ALL SELECT * FROM diagnostic_records INDEXED BY diagnostic_sip_call WHERE sip_call_id IN ($id,$full)
+  UNION ALL SELECT * FROM diagnostic_records INDEXED BY diagnostic_provider_call WHERE provider_call_id IN ($id,$full)
+) d WHERE d.kind='sip' AND d.content IS NOT NULL AND d.expires_at>$expires
+  AND json_extract(d.content,'$.direction') IN ('inbound','outbound')
+  AND (d.room_sid IS NULL OR d.room_sid=$room) AND (d.participant_sid IS NULL OR d.participant_sid=$participant)
+  AND (d.room_sid=$room OR d.participant_sid=$participant OR (SELECT COUNT(*) FROM participants p WHERE p.kind IN ('3','SIP') AND json_valid(p.attributes) AND (json_extract(p.attributes,'$."sip.callID"') IN (d.call_id,d.sip_call_id,d.provider_call_id) OR json_extract(p.attributes,'$."sip.callIDFull"') IN (d.call_id,d.sip_call_id,d.provider_call_id)))=1)
+  ORDER BY d.at DESC LIMIT 1`;
+const serviceDirection=db.prepare(SIP_DIRECTION_SQL);
 function sipCall(row: any) {
   const a = JSON.parse(row.attributes || '{}');
-  const direction: 'inbound' | 'outbound' | null = a['sip.ruleID'] ? 'inbound' : a['sip.trunkID'] ? 'outbound' : null;
+  const service=serviceDirection.get({$expires:Date.now(),$id:a['sip.callID']??null,$full:a['sip.callIDFull']??null,$room:row.room_sid,$participant:row.sid});
+  const direction: 'inbound' | 'outbound' | null = service?.direction as 'inbound'|'outbound'|undefined ?? (a['sip.ruleID'] ? 'inbound' : a['sip.trunkID'] ? 'outbound' : null);
   const remote = a['sip.phoneNumber'] ?? null; // the other party
   const ours = a['sip.trunkPhoneNumber'] ?? null; // our trunk number
   return {
     id: row.sid as string,
     callId: a['sip.callID'] ?? null,
     direction,
+    directionSource:service?'sip_service':direction?'participant_attributes_inferred':'unknown',
     from: direction === 'outbound' ? ours : remote,
     to: direction === 'outbound' ? remote : ours,
     callStatus: a['sip.callStatus'] ?? null,

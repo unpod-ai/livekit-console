@@ -48,6 +48,7 @@ class SessionTelemetry:
         self.closing, self.closed = False, False
         self.wake, self.lock, self.close_lock = asyncio.Event(), asyncio.Lock(), asyncio.Lock()
         self.provider, self.log_handler = None, None
+        self.quality_collector = None
         self.last_usage = {}
         self.last_heartbeat = time.monotonic()
         self.task = asyncio.create_task(self._run()) if background else None
@@ -275,6 +276,11 @@ class SessionTelemetry:
             if self.closed:
                 return self.dropped == 0
             self.closing = True
+            if self.quality_collector:
+                try:
+                    await asyncio.wait_for(self.quality_collector.close(), 8)
+                except Exception:
+                    logger.warning("Connection quality collector could not finish")
             self.wake.set()
             for session, event, callback in self.listeners:
                 session.off(event, callback)
@@ -316,6 +322,15 @@ def start_collection(ctx, agent_name, send, *, tracer_provider=None):
         logger.warning("Console OpenTelemetry integration unavailable")
     if os.environ.get("AGENT_LOGS_ENABLED") == "true":
         collector.capture_logs()
+    if os.environ.get("AGENT_QUALITY_ENABLED") == "true":
+        try:
+            try:
+                from .connection_quality import attach_quality
+            except ImportError:
+                from connection_quality import attach_quality
+            collector.quality_collector = attach_quality(ctx.room, send, reporter_id="agent:" + ctx.job.id)
+        except Exception:
+            logger.warning("Connection quality integration unavailable")
     collector.emit("collection", state="receiving", droppedCount=0)
     return collector
 

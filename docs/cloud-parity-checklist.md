@@ -107,15 +107,15 @@ Acceptance:
 Data sources: media-server metrics, client/participant statistics, SIP-service telemetry/logs and, where needed,
 provider integrations. Aggregate Prometheus metrics alone do not establish per-session or per-track quality.
 
-- [ ] Collect server/SIP/egress service health and capacity metrics.
-- [ ] Collect session/participant/track quality samples with durable identifiers.
-- [ ] Show bandwidth, packet loss, jitter, RTT, FPS, reconnects and disconnect reasons where measured.
-- [ ] Add participant and track quality charts alongside session lifecycle events.
-- [ ] Collect SIP attempts and failures that occur before a participant joins a room.
-- [ ] Correlate provider call IDs, SIP call IDs, trunks, dispatch rules, rooms and participants.
-- [ ] Display SIP response codes, failure stages and termination reasons where available.
-- [ ] Mark inferred call direction separately from confirmed provider/service data.
-- [ ] Expose relevant service logs for failures without a room or session record.
+- [x] Collect server/SIP/egress service health and capacity metrics.
+- [x] Collect session/participant/track quality samples with durable identifiers.
+- [x] Show bandwidth, packet loss, jitter, RTT, FPS, reconnects and disconnect reasons where measured.
+- [x] Add participant and track quality charts alongside session lifecycle events.
+- [x] Collect SIP attempts and failures that occur before a participant joins a room.
+- [x] Correlate provider call IDs, SIP call IDs, trunks, dispatch rules, rooms and participants.
+- [x] Display SIP response codes, failure stages and termination reasons where available.
+- [x] Mark inferred call direction separately from confirmed provider/service data.
+- [x] Expose relevant service logs for failures without a room or session record.
 
 Acceptance:
 

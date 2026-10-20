@@ -99,3 +99,7 @@ of those server APIs. They do not reproduce Cloud's full observability pipeline.
 ### Measured agent performance
 
 Project → Agent analytics compares retained turn timings and native stage durations, with nearest-rank percentiles, exact contributor drilldowns, drag-selected ranges and shareable measurement drawers. Finalized model usage is shown alongside timing coverage; missing data is not counted as zero.
+
+## Measured connection and telephony diagnostics
+
+Administrators can inspect service CPU/memory and aggregate metrics, native participant/track quality charts, reconnect/disconnect events and retained SIP attempts, including pre-room failures. Collection is opt-in; unavailable values remain explicit. See [setup and limits](connection-diagnostics.md).

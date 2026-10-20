@@ -1,0 +1,11 @@
+# Connection quality and telephony diagnostics
+
+Implement Phase 3 of the approved Cloud parity checklist using the current React/Express/SQLite stack.
+
+Three explicitly scoped sources feed one bounded service-token ingestion endpoint. Quality samples identify the room SID, participant SID, track SID, observation direction and reporter; native RTC stats supply only measured counters/rates/timings. Lifecycle/reconnect samples can omit a track. Service snapshots identify a configured service instance and distinguish container running/health from application readiness. Allowlisted Prometheus values stay aggregate. SIP service log projections retain call/provider IDs, explicit direction, trunk/rule and room/participant identifiers when present, stage/code/reason and sanitized relevant messages; raw SIP headers, credentials, IPs and arbitrary logs are excluded.
+
+Administrator-only diagnostics reads provide service charts, pre-room attempts, call timelines and participant/track quality alongside existing lifecycle events. Missing values are gaps, not zero. Exact SID matching is authoritative; names alone never join a reused room. Call IDs may join retained SIP attributes to rooms after the log arrives. Direction from SIP service is confirmed separately from attribute-based inference. Native SDK connection quality is an indicator, not fabricated packet loss. Collection never subscribes to private audio or starts telephone calls.
+
+Retention is explicit, bounded, retry-idempotent without renewing timestamps; conflicting retries fail atomically. Uploads cap record counts/body sizes, reject invalid numeric measurements and excessive future timestamps, and strip unknown fields. Reads paginate and bound time ranges/results. No browser is given a service token. Opt-in collectors run outside the console without Docker-socket access in the web process.
+
+Verify native RTC track measurements with controlled test audio and measured degradation, and retain a pre-room SIP failure from real local SIP-service behavior. Existing completed inbound/outbound call links remain inspectable. Deploy through protected PRs; no intermediate tags/releases. Theme changes remain the final roadmap step.

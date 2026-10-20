@@ -4,17 +4,21 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { ArrowDownLeft, ArrowUpRight, Info } from 'lucide-react';
 import { type Json } from '../lib/api';
 import { useApi } from '../lib/hooks';
-import { useInitialQuery, useTab } from '../lib/useTab';
+import { useInitialQuery } from '../lib/useTab';
 import { fromMs, fromMsPrecise, durationMs, fmtMs } from '../lib/format';
+import { useMe } from '../lib/me';
+import { SipDiagnostics } from '../components/SipDiagnostics';
+import { useDiagnosticTab } from '../components/ConnectionQuality';
 import { DataTable, type Col } from '../components/DataTable';
 import { Spark } from '../components/Charts';
 import { Alert, Badge, KV, Kpi, Kpis, PageHeader, Panel, ServerPager, StatusBadge, Tabs } from '../components/ui';
 
 const LIMIT = 50;
-export const DirectionBadge = ({ d }: { d: string | null }) =>
-  d === 'inbound' ? <Badge tone="info"><ArrowDownLeft size={11} />Inbound</Badge> : d === 'outbound' ? <Badge><ArrowUpRight size={11} />Outbound</Badge> : <Badge>Unknown</Badge>;
+export const DirectionBadge = ({ d, source }: { d: string | null; source?: string }) =>
+  <span>{d === 'inbound' ? <Badge tone="info"><ArrowDownLeft size={11} />Inbound</Badge> : d === 'outbound' ? <Badge><ArrowUpRight size={11} />Outbound</Badge> : <Badge>Unknown</Badge>}{d && <span className="muted" style={{ marginLeft: 6 }}>{source === 'sip_service' ? 'SIP service' : 'Inferred from attributes'}</span>}</span>;
 
 export function Calls() {
+  const admin = useMe().data?.role === 'admin';
   const navigate = useNavigate();
   const { hours } = useRange();
   const [q, setQ] = useState(useInitialQuery());
@@ -31,7 +35,7 @@ export function Calls() {
     { key: 'id', header: 'Call ID', cell: (c) => <Link className="rowlink mono" to={`/telephony/calls/${c.id}`} onClick={(e) => e.stopPropagation()}>{c.callId ?? c.id}</Link> },
     { key: 'from', header: 'From', cell: (c) => c.from ?? '—' },
     { key: 'to', header: 'To', cell: (c) => c.to ?? '—' },
-    { key: 'dir', header: 'Direction', cell: (c) => <DirectionBadge d={c.direction} /> },
+    { key: 'dir', header: 'Direction', cell: (c) => <DirectionBadge d={c.direction} source={c.directionSource} /> },
     { key: 'start', header: 'Started at', cell: (c) => <span className="nowrap">{fromMs(c.joinedAt)}</span> },
     { key: 'end', header: 'Ended at', hidden: true, cell: (c) => fromMs(c.leftAt) },
     { key: 'dur', header: 'Duration', cell: (c) => durationMs(c.joinedAt, c.leftAt) },
@@ -58,35 +62,37 @@ export function Calls() {
           empty={{ title: 'No calls in this range', hint: 'Calls appear once a SIP participant joins a room and LiveKit webhooks reach this console.' }}
           footer={<ServerPager offset={offset} limit={LIMIT} total={d?.total ?? 0} onChange={setOffset} />} />
       </Panel>
-      <Alert><Info size={14} style={{ verticalAlign: -2, marginRight: 6 }} />Calls that are rejected before a room is created (carrier errors, no matching trunk or rule) never produce a webhook, so they cannot appear here. Check the livekit-sip logs for those.</Alert>
+      <Alert><Info size={14} style={{ verticalAlign: -2, marginRight: 6 }} />Calls rejected before joining a room may appear in {admin ? <Link to="/telephony/diagnostics">SIP diagnostics</Link> : <>administrator SIP diagnostics</>}, when the SIP service log source is configured and submitting observations. This calls list is reconstructed from room participants.</Alert>
     </>
   );
 }
 
 export function CallDetail() {
   const { id = '' } = useParams();
-  const [tab, setTab] = useTab('overview', ['overview', 'events'] as const);
+  const admin = useMe().data?.role === 'admin';
+  const [tab, setTab] = useDiagnosticTab('overview', ['overview', 'events', 'diagnostics'] as const);
   const { data, error } = useApi<Json>(['call', id], `/history/calls/${id}`);
   const c = data?.call;
   const attrs = Object.entries(c?.attributes ?? {});
   return (
     <>
-      <PageHeader crumbs={[{ label: 'Telephony' }, { label: 'Calls', to: '/telephony/calls' }, { label: c?.direction ? c.direction.replace(/^./, (x: string) => x.toUpperCase()) : 'Call' }, { label: c?.callId ?? id }]} title={c?.callId ?? id} sub={c && <><DirectionBadge d={c.direction} /> <StatusBadge status={c.state} /></>} />
+      <PageHeader crumbs={[{ label: 'Telephony' }, { label: 'Calls', to: '/telephony/calls' }, { label: c?.direction ? c.direction.replace(/^./, (x: string) => x.toUpperCase()) : 'Call' }, { label: c?.callId ?? id }]} title={c?.callId ?? id} range sub={c && <><DirectionBadge d={c.direction} source={c.directionSource} /> <StatusBadge status={c.state} /></>} />
       {error && <Alert kind="bad">{(error as Error).message}</Alert>}
-      <Tabs value={tab} onChange={setTab} tabs={[{ id: 'overview', label: 'Call overview' }, { id: 'events', label: 'Events', count: data?.events.length }]} />
+      <Tabs value={tab} onChange={setTab} tabs={[{ id: 'overview', label: 'Call overview' }, { id: 'events', label: 'Events', count: data?.events.length }, ...(admin ? [{ id: 'diagnostics' as const, label: 'Diagnostics' }] : [])]} />
       {c && tab === 'overview' && (
         <>
           <Panel title="Call overview"><KV items={[['Call ID', <span className="mono">{c.callId ?? '—'}</span>], ['Started at', fromMs(c.joinedAt)], ['Ended at', fromMs(c.leftAt)], ['Duration', durationMs(c.joinedAt, c.leftAt)], ['Session', <Link to={`/sessions/${c.roomSid}`}>{c.roomName}</Link>], ['Status', <StatusBadge status={c.state} />]]} /></Panel>
           <div className="grid-2">
-            <Panel title="SIP details"><KV items={[['Direction', <DirectionBadge d={c.direction} />], ['Trunk ID', c.trunkId ? <Link className="mono" to={`/telephony/trunks?q=${c.trunkId}`}>{c.trunkId}</Link> : '—'], ['Dispatch rule', c.ruleId ? <Link className="mono" to={`/telephony/dispatch?q=${c.ruleId}`}>{c.ruleId}</Link> : '—'], ['Last call status', c.callStatus ?? '—'], ['Provider call ID', <span className="mono">{c.providerCallId ?? '—'}</span>], ['SIP host', <span className="mono">{c.sipHost ?? '—'}</span>]]} /></Panel>
+            <Panel title="SIP details"><KV items={[['Direction', <DirectionBadge d={c.direction} source={c.directionSource} />], ['Trunk ID', c.trunkId ? <Link className="mono" to={`/telephony/trunks?q=${c.trunkId}`}>{c.trunkId}</Link> : '—'], ['Dispatch rule', c.ruleId ? <Link className="mono" to={`/telephony/dispatch?q=${c.ruleId}`}>{c.ruleId}</Link> : '—'], ['Last call status', c.callStatus ?? '—'], ['Provider call ID', <span className="mono">{c.providerCallId ?? '—'}</span>], ['SIP host', <span className="mono">{c.sipHost ?? '—'}</span>]]} /></Panel>
             <Panel title="Call details"><KV items={[['From number', c.from ?? '—'], ['To number', c.to ?? '—'], ['Participant', <Link to={`/sessions/${c.roomSid}/participants/${c.id}`} className="mono">{c.identity}</Link>]]} /></Panel>
           </div>
           <Panel title={`SIP attributes (${attrs.length})`}>
             <DataTable rows={attrs} search={attrs.length > 8} pageSize={false} rowKey={([k]) => k} cols={[{ key: 'k', header: 'Key', cell: ([k]) => <span className="mono">{k}</span>, text: ([k]) => k }, { key: 'v', header: 'Value', cell: ([, v]) => <span className="mono">{String(v)}</span>, text: ([, v]) => String(v), wrap: true }]} />
           </Panel>
-          <Alert><Info size={14} style={{ verticalAlign: -2, marginRight: 6 }} />Codec, SIP response code and PCAP capture are collected by the SIP service itself and are not available over the API. Enable <span className="mono">include_headers</span> on the trunk to copy SIP headers into the attributes above.</Alert>
+          <Alert><Info size={14} style={{ verticalAlign: -2, marginRight: 6 }} />SIP service stages, response codes and sanitized reasons are available in the administrator Diagnostics tab when the SIP log source submits observations.</Alert>
         </>
       )}
+      {c && tab === 'diagnostics' && <SipDiagnostics roomSid={c.roomSid} participantSid={c.id} callId={c.callId ?? c.providerCallId ?? undefined} />}
       {c && tab === 'events' && (
         <Panel><DataTable rows={data!.events as Json[]} rowKey={(e) => e.id} pageSize={50} cols={[{ key: 't', header: 'Timestamp', cell: (e) => <span className="mono">{fromMsPrecise(e.ts)}</span> }, { key: 'e', header: 'Event', cell: (e) => <span className="mono">{e.type}</span> }]} empty={{ title: 'No events' }} /></Panel>
       )}
