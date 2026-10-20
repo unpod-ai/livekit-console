@@ -119,9 +119,9 @@ provider integrations. Aggregate Prometheus metrics alone do not establish per-s
 
 Acceptance:
 
-- [ ] Investigate a degraded connection using measured quality samples from the correct participant/track.
-- [ ] A failed pre-room SIP attempt appears with its available identifiers and failure reason.
-- [ ] Successful inbound and outbound calls retain correct component links after completion.
+- [x] Investigate a degraded connection using measured quality samples from the correct participant/track.
+- [x] A failed pre-room SIP attempt appears with its available identifiers and failure reason.
+- [x] Successful inbound and outbound calls retain correct component links after completion.
 
 ## Phase 4 — Persistent agent and worker inventory
 

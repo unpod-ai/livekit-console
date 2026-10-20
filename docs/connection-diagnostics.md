@@ -29,13 +29,13 @@ Read `/api/diagnostics/services`, `/quality` and `/sip` as an administrator. Ano
 requests 403. Reads are `no-store` and support Unix-ms `from`/`to` windows up to 90 days, `limit` (1–1000) and `offset`.
 Quality requires `roomSid`, with optional `participantSid`, `trackSid`, `reporterId` and `direction` filters. SIP supports
 `roomSid`, `participantSid`, exact `callId` and `q` (call ID/reason search). Results contain the matching retained page,
-not a claim of complete lifetime coverage. Quality replies include room lifecycle events separately from track samples.
+not a claim of complete lifetime coverage. Quality replies include room lifecycle events separately from track samples. Project pages follow the global header range. Historical session/participant/call details default to their lifecycle window (calls include a 30-minute setup margin); explicit From / To parameters override it.
 
 Uploads use `{schemaVersion:1,records:[...]}` with 1–100 records and a 256KiB body limit. Every record has stable `id`,
 Unix-ms `at` and `kind` (`quality`, `service` or `sip`). Fields are allowlisted; raw headers, credentials, network IPs and
 unbounded logs are not stored. Free-text reasons/messages use at least standard redaction. Duplicate records are
 idempotent; conflicting IDs reject the entire batch. Retention follows source time, so retries cannot extend access;
-expired contents are cleared and retry tombstones prevent restoration. Configure database backup/restore as described
+expired contents and correlation lookup identifiers are cleared, while minimal ID/digest retry tombstones prevent restoration. Configure database backup/restore as described
 in the deployment guide; this store is included in the same SQLite database.
 
 The native collector and host collector installation instructions follow their scripts. Keep all service tokens,
@@ -68,3 +68,13 @@ instrumented workers; the existing `start_collection` integration attaches one c
 shutdown. Keep the normal service-token transport and allow its exact `/api/telemetry/diagnostics` route through any
 private ingest proxy. Standalone native RTC code can call `attach_quality(room, send, reporter_id=...)` and await
 `collector.close()` on shutdown. Collection is opt-in, observes already subscribed tracks and never opens a new room.
+
+## Acceptance evidence
+
+Native RTC track samples captured a generated audio stream before and after packet loss/delay applied only inside a
+disposable test container network namespace. Exact retained sample metrics and SSRC/participant scope matched the API;
+audio FPS remained unavailable. A loopback-only INVITE to a confirmed unmatched destination received a 404 and generated
+pre-room service diagnostics with identifiers and failure context, without a linked room or a carrier call. Existing
+completed inbound/outbound calls retained their session/participant links and service timelines. All three configured
+service resource snapshots were measured. A consistent SQLite backup and restored-copy integrity check preserved all
+diagnostic categories. Operational identifiers, measurements, logs and screenshots remain private.

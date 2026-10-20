@@ -92,7 +92,7 @@ export function CallDetail() {
           <Alert><Info size={14} style={{ verticalAlign: -2, marginRight: 6 }} />SIP service stages, response codes and sanitized reasons are available in the administrator Diagnostics tab when the SIP log source submits observations.</Alert>
         </>
       )}
-      {c && tab === 'diagnostics' && <SipDiagnostics roomSid={c.roomSid} participantSid={c.id} callId={c.callId ?? c.providerCallId ?? undefined} />}
+      {c && tab === 'diagnostics' && <SipDiagnostics startedAt={c.joinedAt} endedAt={c.leftAt} roomSid={c.roomSid} participantSid={c.id} callId={c.callId ?? c.providerCallId ?? undefined} />}
       {c && tab === 'events' && (
         <Panel><DataTable rows={data!.events as Json[]} rowKey={(e) => e.id} pageSize={50} cols={[{ key: 't', header: 'Timestamp', cell: (e) => <span className="mono">{fromMsPrecise(e.ts)}</span> }, { key: 'e', header: 'Event', cell: (e) => <span className="mono">{e.type}</span> }]} empty={{ title: 'No events' }} /></Panel>
       )}
