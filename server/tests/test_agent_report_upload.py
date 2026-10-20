@@ -23,6 +23,7 @@ class UploadTests(unittest.IsolatedAsyncioTestCase):
         self.environment.start()
         self.addCleanup(self.environment.stop)
         self.ctx = Mock()
+        self.ctx.make_session_report.return_value.model_usage = None
         self.ctx.make_session_report.return_value.to_dict.return_value = {
             "room_id": "RM_example", "job_id": "AJ_example", "timestamp": 1000,
             "chat_history": {"items": []},
@@ -50,6 +51,16 @@ class UploadTests(unittest.IsolatedAsyncioTestCase):
             build.return_value.open.side_effect = urllib.error.HTTPError("https://console.example.com", 401, "unauthorized", {}, None)
             self.assertFalse(await helper.upload_session_report(self.ctx, "example-agent"))
             self.assertEqual(build.return_value.open.call_count, 1)
+
+    async def test_usage_defaults_keep_their_type_and_unknown_model_identity(self):
+        usage = Mock(type="llm_usage", provider="", model="")
+        usage.model_dump.return_value = {"input_tokens": 120, "output_tokens": 40}
+        self.ctx.make_session_report.return_value.model_usage = [usage]
+        with patch.object(helper.urllib.request, "build_opener") as build:
+            build.return_value.open.return_value = Mock(__enter__=Mock(return_value=Mock()), __exit__=Mock(return_value=False))
+            self.assertTrue(await helper.upload_session_report(self.ctx, "example-agent"))
+        body = json.loads(build.return_value.open.call_args.args[0].data)
+        self.assertEqual(body["report"]["usage"], [{"type": "llm_usage", "provider": "", "model": "", "input_tokens": 120, "output_tokens": 40}])
 
     async def test_non_json_metrics_do_not_break_the_session_end_callback(self):
         self.ctx.make_session_report.return_value.to_dict.return_value = {"metric": float("nan")}
