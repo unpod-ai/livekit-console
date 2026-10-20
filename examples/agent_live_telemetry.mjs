@@ -112,6 +112,7 @@ export class SessionTelemetry {
     const exporter = { export: (spans, done) => { for (const span of spans) this.recordSpan(span); done({ code: 0 }); }, shutdown: async () => {} };
     const fanout = new telemetry.FanoutSpanProcessor();
     this.provider = new NodeTracerProvider({ spanProcessors: [new SimpleSpanProcessor(exporter), fanout] });
+    this.provider.register(); // Install the async context manager used for parent/child correlation.
     telemetry.setTracerProvider(this.provider, { allowPii: false, registerSpanProcessor: processor => fanout.add(processor) });
     this.capabilities.push('spans');
   }
