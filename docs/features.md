@@ -38,6 +38,14 @@ every worker (`GET /` for health, `GET /worker` for name, job type, load, active
 ![Agents](images/agents.png)
 ![Agent detail](images/agent-detail.png)
 
+### Agent session reports
+
+With [optional report uploads](agent-telemetry.md), **Sessions → Agent insights** shows post-session user/agent
+text, tool/error/handoff markers, interruption flags and SDK-reported response/LLM/TTS timings. Administrators
+can select reports and download their normalized content. Viewer accounts cannot access conversation reports.
+Uploads use a separate service token; content expires after the configured retention window (30 days by default).
+Live traces/logs, audio synchronization, model usage summaries and automatic PII redaction are not collected yet.
+
 ## Telephony
 - **Calls:** SIP calls reconstructed from SIP participants: from, to, direction, duration, status, provider call ID and
   SIP host. Direction is inferred from the attributes LiveKit adds (a dispatch rule means inbound, a trunk only means
@@ -72,10 +80,14 @@ computed from webhook history.
 
 ## Access control
 Sign in with the `.env` admin, then add users under **Settings → Team members**. **Admin** can change anything.
-**Viewer** can read everything and change nothing; this is enforced on the server. Role changes and removals apply on
+**Viewer** can read standard console data and change nothing; agent conversation reports require **Admin** access.
+This is enforced on the server. Role changes and removals apply on
 the person's next request.
 
 ## Not available
 A self-hosted LiveKit server does not expose: per-session bandwidth, latency and FPS graphs, agent observability and
 versions, PCAP and codec details per call, calls rejected before a room exists (those never produce a webhook; check
 the `livekit-sip` logs), number purchasing, and billing.
+
+Optional agent report uploads collect a limited set of insights directly from the agent process, independently
+of those server APIs. They do not reproduce Cloud's full observability pipeline.

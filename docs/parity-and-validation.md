@@ -5,6 +5,8 @@ managed infrastructure or its analytics pipeline. LiveKit's own
 [Cloud comparison](https://docs.livekit.io/intro/cloud/#comparing-livekit-cloud-to-self-hosted) distinguishes the shared
 server capabilities from managed hosting and observability.
 
+See the [Cloud parity checklist](cloud-parity-checklist.md) for prioritized implementation and acceptance tasks.
+
 ## Current coverage
 
 | Area | Console implementation | Remaining difference |
@@ -12,7 +14,7 @@ server capabilities from managed hosting and observability.
 | Rooms and participants | Live admin APIs, room actions, participant details and session links | Historical records depend on webhook collection |
 | Sessions and calls | Webhook history, SIP attributes, participant/call/agent/egress links | Inbound/outbound direction is inferred; calls that never join a room are not recorded |
 | Agent workers | Worker endpoint health, load, SDK, job count, last check and retained worker history | No managed builds, deployments or region inventory; worker IDs require the worker to expose them |
-| Agent analytics | Sessions served, join latency, sampled uptime and average load | No transcripts, model metrics, turn timing or distributed traces collected by this console |
+| Agent analytics | Sessions served, join latency, sampled uptime/load; optional admin-only final reports with transcripts and reported turn timings | No live trace/log collection, model usage aggregation or synchronized audio |
 | SIP configuration | Inbound/outbound trunks, dispatch rules, numbers referenced by configuration | Phone number purchasing and provider billing remain with the SIP provider |
 | Recordings and ingress | Egress/ingress admin APIs, egress history, recording location links | Private recordings need storage access or signed URLs; media files are not stored in the console database |
 | Usage and charts | Counts and participant durations derived from stored events | No per-session bandwidth, packet loss, FPS or Cloud billing measurements |
@@ -39,15 +41,9 @@ controls alone cannot supply those measurements.
 These checks do not establish full Cloud parity. They do not exercise every destructive admin action, every SIP
 provider, every storage configuration or every browser.
 
-## Remaining live acceptance check
+## Live acceptance verification
 
-A real inbound provider call still needs to be verified. On a test number under your control:
-
-1. Confirm the inbound trunk and dispatch rule target the intended room/agent and that webhooks are enabled.
-2. Place an inbound call to that number and confirm it reaches the agent.
-3. Open Calls and check the inferred direction, trunk/rule references and participant attributes.
-4. Follow the session link, then its agent and egress links, and follow each return link to the same session.
-5. If recording is enabled, confirm a recording location appears and that an authorized user can open the file.
-6. End the call and confirm the call/session close and the final duration and egress status update.
-
-Synthetic webhook fixtures can validate the data flow, but they do not prove provider routing or audio transport.
+Inbound routing, component navigation, final lifecycle state and private recording access have been exercised.
+Operational evidence is retained privately. Repeat the [acceptance procedure](validation/inbound-calls.md) with
+your provider, agent and storage configuration. Console login alone does not authorize private storage URLs;
+integrated recording playback remains a planned feature. These checks do not assess conversational quality.

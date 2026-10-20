@@ -37,6 +37,14 @@ db.exec(`
     day INTEGER NOT NULL, kind TEXT NOT NULL, count INTEGER NOT NULL, uniques INTEGER NOT NULL,
     PRIMARY KEY (day, kind)
   );
+  CREATE TABLE IF NOT EXISTS agent_session_reports (
+    room_sid TEXT NOT NULL, job_id TEXT NOT NULL, agent_name TEXT NOT NULL,
+    participant_sid TEXT, worker_id TEXT, sdk_version TEXT,
+    reported_at INTEGER NOT NULL, received_at INTEGER NOT NULL, expires_at INTEGER NOT NULL,
+    digest TEXT NOT NULL, content TEXT,
+    PRIMARY KEY (room_sid, job_id)
+  );
+  CREATE INDEX IF NOT EXISTS agent_reports_expiry ON agent_session_reports(expires_at) WHERE content IS NOT NULL;
   CREATE TABLE IF NOT EXISTS egress (
     egress_id TEXT PRIMARY KEY, room_sid TEXT, room_name TEXT, status TEXT,
     started_at INTEGER, ended_at INTEGER, info TEXT NOT NULL
