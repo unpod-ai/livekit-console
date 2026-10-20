@@ -1,4 +1,4 @@
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useMe } from '../lib/me';
 import { useApi } from '../lib/hooks';
 import { fromMs, fromMsPrecise } from '../lib/format';
@@ -57,6 +57,7 @@ export function AgentInsights({ sid }: { sid: string }) {
       </select></label></div>
       {data.total > data.reports.length && <p className="muted">Showing the latest {data.reports.length} of {data.total} reports.</p>}
       {report && <KV items={[
+        ['Logs', <Link className="rowlink" to={`/sessions/${encodeURIComponent(sid)}?tab=logs&logJob=${encodeURIComponent(report.jobId)}`}>View this job's logs</Link>],
         ['Agent', report.agentName], ['Job ID', <span className="mono">{report.jobId}</span>], ['SDK', report.sdkVersion ?? 'Not reported'],
         ['Participant SID', report.participantSid ?? 'Not reported'], ['Worker ID', report.workerId ?? 'Not reported'],
         ['Reported', fromMs(report.reportedAt)], ['Received', fromMs(report.receivedAt)], ['Content expires', fromMs(report.expiresAt)],
@@ -64,7 +65,7 @@ export function AgentInsights({ sid }: { sid: string }) {
     </Panel>
     {report?.state === 'expired' && <Alert>Conversation content for this report has expired. Its identifying metadata is retained; uploading it again does not restore the content.</Alert>}
     {report?.content && <>
-      <Alert>This is a post-session report. Timings are reported by the agent SDK and may be unavailable for some models. Live traces, runtime logs, audio playback and tool arguments/results are not collected by this integration.</Alert>
+      <Alert>This is a post-session report. Timings are reported by the agent SDK and may be unavailable for some models. Structured application logs are available in the Agent logs tab when submitted. Live traces, audio playback and tool arguments/results are not collected by this integration.</Alert>
       <ModelUsage usage={report.content.usage} omitted={report.content.omittedUsage} />
       <Panel title="Conversation and tool events" actions={<button className="btn secondary sm" onClick={download}>Download report</button>}>
         <DataTable rows={report.content.items.map((item, index) => ({ ...item, rowKey: String(index) }))} cols={columns} rowKey={(i) => i.rowKey} pageSize={50} empty={{ title: 'No conversation items in this report' }} />

@@ -10,6 +10,7 @@ import { DataTable, type Col } from '../components/DataTable';
 import { Spark, StepChart } from '../components/Charts';
 import { Recording } from '../components/Recording';
 import { AgentInsights } from '../components/AgentInsights';
+import { AgentLogs } from '../components/AgentLogs';
 import { Alert, Badge, KV, Kpi, Kpis, PageHeader, Panel, ServerPager, StatusBadge, Tabs } from '../components/ui';
 import { DirectionBadge } from './Calls';
 
@@ -77,7 +78,7 @@ const isEgressIdentity = (id: string) => /^EG_[A-Za-z0-9]+$/.test(id);
 export function SessionDetail() {
   const { sid = '' } = useParams();
   const navigate = useNavigate();
-  const [tab, setTab] = useTab('analytics', ['analytics', 'events', 'insights'] as const);
+  const [tab, setTab] = useTab('analytics', ['analytics', 'events', 'insights', 'logs'] as const);
   const { data, error } = useApi<Json>(['session', sid], `/history/sessions/${sid}`);
   const s = data?.session;
   const end = s?.ended_at ?? Date.now();
@@ -110,7 +111,7 @@ export function SessionDetail() {
         actions={s && !s.ended_at ? <Link className="btn secondary" to={`/rooms/${enc(s.room_name)}`}><Radio size={14} />Open live room</Link> : undefined} />
       {error && <Alert kind="bad">{(error as Error).message}{' '}This session may predate the collector; only sessions seen since webhooks were enabled are recorded.</Alert>}
       {s?.partial === 2 && <Alert kind="warn">This session was reconstructed from LiveKit's egress record because it started before webhooks were enabled. Its name, ID, times and recording are known; participants and calls were not recorded.</Alert>}
-      <Tabs value={tab} onChange={setTab} tabs={[{ id: 'analytics', label: 'Session analytics' }, { id: 'events', label: 'Session events', count: data?.events.length }, { id: 'insights', label: 'Agent insights' }]} />
+      <Tabs value={tab} onChange={setTab} tabs={[{ id: 'analytics', label: 'Session analytics' }, { id: 'events', label: 'Session events', count: data?.events.length }, { id: 'insights', label: 'Agent insights' }, { id: 'logs', label: 'Agent logs' }]} />
       {s && tab === 'analytics' && (
         <>
           <Panel><KV items={[['Room name', s.room_name], ['Room session ID', <span className="mono">{s.room_sid}</span>], ['Unique participants', new Set((data!.participants as Json[]).map((p) => p.identity)).size], ['Start time', fromMs(s.started_at)], ['End time', fromMs(s.ended_at)], ['Duration', durationMs(s.started_at, s.ended_at)]]} /></Panel>
@@ -148,6 +149,7 @@ export function SessionDetail() {
         <Panel><DataTable rows={data!.events as Json[]} cols={ecols} rowKey={(e) => e.id} pageSize={50} storageKey="session-events" empty={{ title: 'No events' }} /></Panel>
       )}
       {tab === 'insights' && <AgentInsights key={sid} sid={sid} />}
+      {tab === 'logs' && <AgentLogs key={sid} sid={sid} />}
     </>
   );
 }

@@ -4,8 +4,10 @@ import asyncio
 import json
 import logging
 import os
+import time
 import urllib.error
 import urllib.request
+import uuid
 
 from livekit.agents import JobContext
 
@@ -45,9 +47,18 @@ async def upload_session_report(ctx: JobContext, agent_name: str) -> bool:
         logger.warning("Console report could not be serialized")
         return False
 
+    return await _post_telemetry("/api/telemetry/session-reports", body)
+
+
+async def _post_telemetry(route: str, body: bytes) -> bool:
+    console_url = os.environ.get("CONSOLE_URL", "").rstrip("/")
+    token = os.environ.get("AGENT_TELEMETRY_TOKEN", "")
+    if not console_url or not token:
+        return False
+
     def send() -> None:
         request = urllib.request.Request(
-            console_url + "/api/telemetry/session-reports",
+            console_url + route,
             data=body,
             headers={"Content-Type": "application/json", "Authorization": "Bearer " + token},
             method="POST",
@@ -61,14 +72,41 @@ async def upload_session_report(ctx: JobContext, agent_name: str) -> bool:
             return True
         except urllib.error.HTTPError as exc:
             if exc.code < 500 and exc.code != 429:
-                logger.warning("Console report upload rejected (HTTP %s)", exc.code)
+                logger.warning("Console telemetry upload rejected (HTTP %s)", exc.code)
                 return False
         except (urllib.error.URLError, TimeoutError, OSError):
             pass
         if attempt == 0:
             await asyncio.sleep(0.5)
-    logger.warning("Console report upload failed after two attempts")
+    logger.warning("Console telemetry upload failed after two attempts")
     return False
+
+
+def make_session_log(level: str, message: str, **correlation) -> dict:
+    """Build once and retain this entry ID when retrying it in a later batch."""
+    entry = {"id": uuid.uuid4().hex, "at": time.time(), "level": level, "message": message}
+    for key in ("logger", "turnId", "traceId", "spanId"):
+        if key in correlation:
+            entry[key] = correlation[key]
+    return entry
+
+
+async def upload_session_logs(ctx: JobContext, agent_name: str, entries: list[dict]) -> bool:
+    """Explicit structured logs; no root/process logger or arbitrary exception capture."""
+    if os.environ.get("AGENT_LOGS_ENABLED") != "true" or not 1 <= len(entries) <= 100:
+        return False
+    try:
+        body = json.dumps({
+            "schemaVersion": 1, "roomSid": ctx.job.room.sid, "jobId": ctx.job.id,
+            "agentName": agent_name, "batchId": uuid.uuid4().hex, "entries": entries,
+        }, allow_nan=False).encode("utf-8")
+    except (TypeError, ValueError, AttributeError):
+        logger.warning("Console log batch could not be serialized")
+        return False
+    if len(body) > 256 * 1024:
+        logger.warning("Console log batch exceeds 256 KiB")
+        return False
+    return await _post_telemetry("/api/telemetry/logs", body)
 
 
 def register_shutdown_report(ctx: JobContext, agent_name: str) -> bool:
@@ -76,13 +114,27 @@ def register_shutdown_report(ctx: JobContext, agent_name: str) -> bool:
     if not os.environ.get("CONSOLE_URL") or not os.environ.get("AGENT_TELEMETRY_TOKEN"):
         return False
 
-    async def export_after_session() -> None:
+    log_start = asyncio.create_task(upload_session_logs(ctx, agent_name, [make_session_log("INFO", "Agent job started")])) if os.environ.get("AGENT_LOGS_ENABLED") == "true" else None
+
+    async def export_report() -> None:
         try:
             if await upload_session_report(ctx, agent_name):
                 logger.info("Console agent session report uploaded")
         except Exception as exc:
             # Telemetry must not prevent application cleanup, including for non-AgentSession handlers.
             logger.warning("Console report callback unavailable (%s)", type(exc).__name__)
+
+    async def export_logs() -> None:
+        if log_start is None:
+            return
+        try:
+            await log_start
+            await upload_session_logs(ctx, agent_name, [make_session_log("INFO", "Agent job shutdown")])
+        except Exception as exc:
+            logger.warning("Console log callback unavailable (%s)", type(exc).__name__)
+
+    async def export_after_session() -> None:
+        await asyncio.gather(export_report(), export_logs())
 
     ctx.add_shutdown_callback(export_after_session)
     return True
