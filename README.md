@@ -11,6 +11,7 @@ API key/secret so the browser never sees them, receives LiveKit webhooks and sto
 - [Deployment](docs/deployment.md): deploy to a VM with HTTPS and an IP allowlist
 - [Cloud coverage and validation](docs/parity-and-validation.md): supported capabilities and remaining acceptance checks
 - [Agent session reports](docs/agent-telemetry.md): opt-in uploads, administrator-only transcripts/turn timings and per-agent model usage charts
+- [Structured agent logs](docs/agent-logs.md): opt-in job-linked logs with administrator-only search, filters and retention
 
 ## Screenshots
 Taken from a demo instance with simulated data (`server/scripts/simulate-webhooks.ts`).

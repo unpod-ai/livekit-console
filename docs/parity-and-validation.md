@@ -14,7 +14,7 @@ See the [Cloud parity checklist](cloud-parity-checklist.md) for prioritized impl
 | Rooms and participants | Live admin APIs, room actions, participant details and session links | Historical records depend on webhook collection |
 | Sessions and calls | Webhook history, SIP attributes, participant/call/agent/egress links | Inbound/outbound direction is inferred; calls that never join a room are not recorded |
 | Agent workers | Worker endpoint health, load, SDK, job count, last check and retained worker history | No managed builds, deployments or region inventory; worker IDs require the worker to expose them |
-| Agent analytics | Sessions served, join latency, sampled uptime/load; optional admin-only final reports with transcripts, turn timings, model usage and per-agent usage charts/drilldowns | No live trace/log collection, project-wide usage aggregation or synchronized audio |
+| Agent analytics | Sessions served, join latency, sampled uptime/load; optional admin-only reports, turn timings, model usage/charts, and explicit structured log browsing | No automatic process-log or trace collection, project-wide usage aggregation or synchronized audio |
 | SIP configuration | Inbound/outbound trunks, dispatch rules, numbers referenced by configuration | Phone number purchasing and provider billing remain with the SIP provider |
 | Recordings and ingress | Egress/ingress admin APIs, egress history, recording location links | Private recordings need storage access or signed URLs; media files are not stored in the console database |
 | Usage and charts | Counts and participant durations derived from stored events | No per-session bandwidth, packet loss, FPS or Cloud billing measurements |

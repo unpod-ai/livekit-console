@@ -1,24 +1,23 @@
 import express, { Router, type ErrorRequestHandler } from 'express';
-import { createHash, timingSafeEqual } from 'node:crypto';
+import { createHash } from 'node:crypto';
 import { config } from './config.js';
 import { db } from './db.js';
 import { normalizeReport, ReportValidationError } from './agent-report.js';
 import { aggregateAgentUsage, type ModelKey, type UsageReport } from './agent-usage.js';
+import { requireTelemetry } from './telemetry-auth.js';
+import { logIngest, logInsights, purgeLogContent } from './session-logs.js';
 
 export const telemetryIngest = Router();
 export const agentInsights = Router();
 
 const hash = (value: string): Buffer => createHash('sha256').update(value).digest();
-const purge = () => db.prepare('UPDATE agent_session_reports SET content=NULL WHERE expires_at <= ? AND content IS NOT NULL').run(Date.now());
+const purge = () => {
+  db.prepare('UPDATE agent_session_reports SET content=NULL WHERE expires_at <= ? AND content IS NOT NULL').run(Date.now());
+  purgeLogContent();
+};
+telemetryIngest.use('/logs', logIngest);
 
-telemetryIngest.post('/session-reports', (req, res, next) => {
-  if (!config.telemetryToken) { res.status(503).json({ error: 'Agent report collection is disabled' }); return; }
-  const auth = req.get('authorization') ?? '';
-  if (!auth.startsWith('Bearer ') || !timingSafeEqual(hash(auth.slice(7)), hash(config.telemetryToken))) {
-    res.status(401).json({ error: 'Invalid telemetry token' }); return;
-  }
-  next();
-}, express.json({ limit: '2mb' }), (req, res, next) => {
+telemetryIngest.post('/session-reports', requireTelemetry, express.json({ limit: '2mb' }), (req, res, next) => {
   try {
     const normalized = normalizeReport(req.body);
     const { roomSid, jobId, agentName, participantSid, workerId, sdkVersion, reportedAt, content } = normalized;
@@ -53,6 +52,7 @@ const summary = (r: ReportRow) => ({ roomSid: r.room_sid, jobId: r.job_id, agent
 
 // index.ts mounts this router behind requireAuth + requireAdmin; the service token is upload-only.
 agentInsights.use((_req, res, next) => { res.set('Cache-Control', 'no-store'); next(); });
+agentInsights.use(logInsights);
 agentInsights.get('/agents/:name/usage', (req, res, next) => {
   try {
     const integer = (value: unknown, fallback: number, max: number) => {

@@ -46,6 +46,18 @@ db.exec(`
   );
   CREATE INDEX IF NOT EXISTS agent_reports_expiry ON agent_session_reports(expires_at) WHERE content IS NOT NULL;
   CREATE INDEX IF NOT EXISTS agent_reports_agent_time ON agent_session_reports(agent_name,reported_at);
+  CREATE TABLE IF NOT EXISTS agent_log_batches (
+    room_sid TEXT NOT NULL, job_id TEXT NOT NULL, batch_id TEXT NOT NULL, digest TEXT NOT NULL, received_at INTEGER NOT NULL,
+    PRIMARY KEY(room_sid,job_id,batch_id)
+  );
+  CREATE TABLE IF NOT EXISTS agent_log_entries (
+    room_sid TEXT NOT NULL, job_id TEXT NOT NULL, entry_id TEXT NOT NULL, agent_name TEXT NOT NULL,
+    at INTEGER NOT NULL, level TEXT NOT NULL, message TEXT, logger TEXT, turn_id TEXT, trace_id TEXT, span_id TEXT,
+    received_at INTEGER NOT NULL, expires_at INTEGER NOT NULL, digest TEXT NOT NULL,
+    PRIMARY KEY(room_sid,job_id,entry_id)
+  );
+  CREATE INDEX IF NOT EXISTS agent_log_room_time ON agent_log_entries(room_sid,at DESC);
+  CREATE INDEX IF NOT EXISTS agent_log_expiry ON agent_log_entries(expires_at) WHERE message IS NOT NULL;
   CREATE TABLE IF NOT EXISTS egress (
     egress_id TEXT PRIMARY KEY, room_sid TEXT, room_name TEXT, status TEXT,
     started_at INTEGER, ended_at INTEGER, info TEXT NOT NULL

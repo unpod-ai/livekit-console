@@ -46,6 +46,8 @@ The complete Phase 1 collection pipeline remains open.
 - [x] Accept bounded uploads with a dedicated service token and persist reports independently of webhook arrival.
 - [x] Make final-report retries idempotent and reject conflicting room/job reports.
 - [x] Enforce administrator-only report reads and expiration without restoring content on retry.
+- [x] Accept opt-in structured log batches independently of reports, with atomic retry/conflict handling and content retention.
+- [x] Provide a Python log uploader and optional fixed job lifecycle events without collecting process-wide logs.
 
 - [ ] Define versioned telemetry records and supported Python/Node Agents SDK versions.
 - [ ] Provide authenticated ingestion separate from browser login sessions.
@@ -66,6 +68,7 @@ The complete Phase 1 collection pipeline remains open.
 - [ ] Display timestamped user/agent transcripts, tool calls, handoffs and errors.
 - [ ] Display a span timeline for turns, STT, LLM, TTS and tools.
 - [ ] Search/filter session logs and correlate log lines with turns and traces.
+- [x] Browse structured logs by job, exact severity and message text; show supplied turn/trace/span IDs and link reports to job logs.
 - [ ] Show response latency, stage timing, interruptions and model/token/speech usage where reported.
 - [x] Distinguish agent join latency from conversational response latency.
 - [ ] Handle realtime-model and pipeline-model telemetry differences with explicit unavailable states.

@@ -23,6 +23,7 @@ export const config = {
   sessionSecret: need('SESSION_SECRET'),
   telemetryToken,
   telemetryRetentionDays,
+  agentLogsEnabled: process.env.AGENT_LOGS_ENABLED === 'true',
   sipUri: process.env.SIP_URI ?? '',
   // GitHub repo whose clone/view traffic is recorded daily; the token needs push access to read traffic.
   githubRepo: process.env.GITHUB_REPO ?? 'unpod-ai/livekit-console',

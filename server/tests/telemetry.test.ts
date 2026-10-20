@@ -11,6 +11,7 @@ Object.assign(process.env, {
   DB_PATH: path.join(dir, 'test.db'), LIVEKIT_URL: 'ws://127.0.0.1:1', LIVEKIT_API_KEY: 'test', LIVEKIT_API_SECRET: 'test',
   ADMIN_USER: 'admin', ADMIN_PASSWORD: 'test-password', SESSION_SECRET: 'test-session-secret',
   AGENT_TELEMETRY_TOKEN: 'test-service-token-with-at-least-32-characters',
+  AGENT_LOGS_ENABLED: 'true',
 });
 const { telemetryIngest, agentInsights } = await import('../src/telemetry.js');
 const { login, requireAuth, requireAdmin, hashPassword } = await import('../src/auth.js');
@@ -191,6 +192,75 @@ test('agent usage aggregates retained reports with stage/model isolation, filter
   }
   assert.equal((await fetch(url)).status, 401);
   assert.equal((await fetch(url, { headers: { cookie: await cookie('reader') } })).status, 403);
+});
+
+test('structured log batches are authenticated, atomically idempotent and searchable by room/job', async () => {
+  const e = { schemaVersion: 1, agentName: 'log-agent', roomSid: 'RM_logroom', jobId: 'AJ_logs', batchId: 'batch1', entries: [
+    { id: 'entry1', at: 1000, level: 'INFO', message: 'Ready <script>unsafe</script>', logger: 'app', turnId: 'turn1', traceId: 'a'.repeat(32), spanId: 'b'.repeat(16), secret: 'discard' },
+    { id: 'entry2', at: 1002, level: 'ERROR', message: 'Tool unavailable', logger: 'app' },
+  ] };
+  const post = (body: unknown, auth: string | null = token) => fetch(base + '/api/telemetry/logs', { method: 'POST', headers: { 'content-type': 'application/json', ...(auth ? { authorization: 'Bearer ' + auth } : {}) }, body: JSON.stringify(body) });
+  assert.equal((await post(e, null)).status, 401);
+  assert.equal((await post(e)).status, 201);
+  const saved = db.prepare("SELECT expires_at FROM agent_log_entries WHERE entry_id='entry1'").get();
+  assert.equal((await post(e)).status, 200);
+  assert.deepEqual(db.prepare("SELECT expires_at FROM agent_log_entries WHERE entry_id='entry1'").get(), saved);
+  assert.equal((await post({ ...e, batchId: 'another-batch' })).status, 201);
+  assert.equal((await post({ ...e, agentName: 'different-agent', batchId: 'different-agent', entries: [{ ...e.entries[0], id: 'new-agent-entry' }] })).status, 409);
+  assert.equal((await post({ ...e, entries: [{ ...e.entries[0], message: 'Changed' }] })).status, 409);
+  const conflict = { ...e, batchId: 'conflict-batch', entries: [{ ...e.entries[0], id: 'new-entry' }, { ...e.entries[1], message: 'Changed' }] };
+  assert.equal((await post(conflict)).status, 409);
+  assert.equal(db.prepare("SELECT COUNT(*) AS n FROM agent_log_entries WHERE entry_id='new-entry'").get()!.n, 0);
+  const auth = { cookie: await cookie() }, url = base + '/api/agent-insights/sessions/RM_logroom/logs';
+  const response = await fetch(url, { headers: auth }); assert.equal(response.status, 200);
+  assert.equal(response.headers.get('cache-control'), 'no-store');
+  const data = await response.json();
+  assert.equal(data.total, 2); assert.equal(data.rows.length, 2);
+  assert.equal(data.rows[0].message, 'Tool unavailable');
+  assert.equal(data.rows[1].at, 1000000);
+  assert.equal(data.rows[1].traceId, 'a'.repeat(32));
+  assert.equal(JSON.stringify(data).includes('discard'), false);
+  assert.equal((await (await fetch(url + '?level=ERROR&q=UNAVAILABLE', { headers: auth })).json()).total, 1);
+  assert.equal((await (await fetch(url + '?jobId=AJ_other', { headers: auth })).json()).total, 0);
+  assert.equal((await fetch(url)).status, 401);
+  assert.equal((await fetch(url, { headers: { cookie: await cookie('reader') } })).status, 403);
+  db.prepare("UPDATE agent_log_entries SET expires_at=0 WHERE room_sid='RM_logroom'").run();
+  const expired = await (await fetch(url, { headers: auth })).json();
+  assert.equal(expired.total, 0); assert.equal(expired.expired, 2);
+  assert.equal((await post({ ...e, batchId: 'after-expiry' })).status, 201);
+  assert.equal((await (await fetch(url, { headers: auth })).json()).total, 0);
+  assert.equal(db.prepare("SELECT message FROM agent_log_entries WHERE entry_id='entry1'").get()!.message, null);
+  assert.equal((await post({ ...e, batchId: 'invalid', entries: [{ ...e.entries[0], at: -1 }] })).status, 422);
+  assert.equal((await post({ ...e, batchId: 'invalid', entries: [{ ...e.entries[0], traceId: 'invalid' }] })).status, 422);
+  assert.equal((await post({ ...e, batchId: 'invalid', entries: [e.entries[0], e.entries[0]] })).status, 422);
+  assert.equal((await post({ ...e, schemaVersion: 2 })).status, 422);
+  assert.equal((await fetch(url + '?page=-1', { headers: auth })).status, 422);
+  assert.equal(db.prepare("SELECT COUNT(*) AS n FROM sessions WHERE room_sid='RM_logroom'").get()!.n, 0);
+  const previous = config.agentLogsEnabled; config.agentLogsEnabled = false;
+  try { assert.equal((await post(e)).status, 503); }
+  finally { config.agentLogsEnabled = previous; }
+  const headers = { 'content-type': 'application/json', authorization: 'Bearer ' + token };
+  assert.equal((await fetch(base + '/api/telemetry/logs', { method: 'POST', headers, body: '{' })).status, 400);
+  assert.equal((await fetch(base + '/api/telemetry/logs', { method: 'POST', headers, body: JSON.stringify({ padding: 'x'.repeat(256 * 1024) }) })).status, 413);
+  assert.equal((await post({ ...e, entries: Array.from({ length: 101 }, (_, n) => ({ ...e.entries[0], id: String(n) })) })).status, 422);
+  assert.equal((await post({ ...e, entries: [{ ...e.entries[0], message: 'x'.repeat(4001) }] })).status, 422);
+  assert.equal((await post({ ...e, entries: [{ ...e.entries[0], level: 'NOTICE' }] })).status, 422);
+});
+
+test('log pagination, late events and identical entry IDs remain isolated by room/job', async () => {
+  const e = { schemaVersion: 1, agentName: 'log-agent', roomSid: 'RM_paged', jobId: 'AJ_paged', batchId: 'paged',
+    entries: Array.from({ length: 61 }, (_, n) => ({ id: `entry${n}`, at: 1000 + n, level: 'INFO', message: `Log ${n}` })) };
+  const post = (e: unknown) => fetch(base + '/api/telemetry/logs', { method: 'POST', headers: { 'content-type': 'application/json', authorization: 'Bearer ' + token }, body: JSON.stringify(e) });
+  assert.equal((await post(e)).status, 201);
+  assert.equal((await post({ ...e, batchId: 'late', entries: [{ ...e.entries[0], id: 'late', at: 500 }] })).status, 201);
+  assert.equal((await post({ ...e, roomSid: 'RM_other_logs', batchId: 'other' })).status, 201);
+  const auth = { cookie: await cookie() }, url = base + '/api/agent-insights/sessions/RM_paged/logs';
+  const first = await (await fetch(url, { headers: auth })).json();
+  const second = await (await fetch(url + '?page=2', { headers: auth })).json();
+  assert.equal(first.total, 62); assert.equal(first.rows.length, 50); assert.equal(second.rows.length, 12);
+  assert.equal(first.rows[0].id, 'entry60'); assert.equal(second.rows.at(-1).id, 'late');
+  assert.equal(new Set([...first.rows, ...second.rows].map(r => r.id)).size, 62);
+  assert.equal((await fetch(url, { headers: { authorization: 'Bearer ' + token } })).status, 401);
 });
 
 test('collection is disabled without an explicitly configured service token', async () => {

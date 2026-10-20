@@ -4,6 +4,8 @@ This opt-in integration adds post-session conversation reports to **Sessions →
 self-hosted media server; it does not use Cloud observability APIs. Current support is the snake_case report from
 Python Agents `JobContext.make_session_report().to_dict()`. Other SDK formats need an explicit adapter.
 
+For independent structured application logs and job lifecycle messages, see [agent logs](agent-logs.md).
+
 ## Enable collection
 
 Set a separate, randomly generated `AGENT_TELEMETRY_TOKEN` of at least 32 characters on the console server. Leave it
@@ -181,7 +183,7 @@ Late reports appear in their original report-time buckets when still retained. A
 
 ## Not included in this slice
 
-Live event streaming, OTLP trace ingestion, runtime log collection, automatic PII redaction, project-wide usage
+Live event streaming, OTLP trace ingestion, automatic process-log collection, automatic PII redaction, project-wide usage
 aggregation, estimated costs, synchronized audio and agent-wide performance charts remain on the [Cloud parity checklist](cloud-parity-checklist.md).
 No historical transcripts can be reconstructed from room webhooks. Existing calls gain report data only if the
 agent collected and uploaded it.

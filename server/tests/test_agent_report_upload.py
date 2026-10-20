@@ -52,6 +52,42 @@ class UploadTests(unittest.IsolatedAsyncioTestCase):
             self.assertFalse(await helper.upload_session_report(self.ctx, "example-agent"))
             self.assertEqual(build.return_value.open.call_count, 1)
 
+    async def test_log_batch_transport_retries_preserve_ids_and_body(self):
+        self.ctx.job = types.SimpleNamespace(id="AJ_example", room=types.SimpleNamespace(sid="RM_example"))
+        entry = {"id": "entry1", "at": 1000, "level": "INFO", "message": "Job ready"}
+        sent = []
+
+        def send(request, timeout):
+            sent.append(request.data)
+            if len(sent) == 1:
+                raise urllib.error.URLError("temporary failure")
+            return Mock(__enter__=Mock(return_value=Mock()), __exit__=Mock(return_value=False))
+
+        with patch.dict(os.environ, {"AGENT_LOGS_ENABLED": "true"}), patch.object(helper.urllib.request, "build_opener") as build, patch.object(helper.asyncio, "sleep", new_callable=AsyncMock):
+            build.return_value.open.side_effect = send
+            self.assertTrue(await helper.upload_session_logs(self.ctx, "example-agent", [entry]))
+        self.assertEqual(sent[0], sent[1])
+        body = json.loads(sent[0])
+        self.assertEqual(body["entries"], [entry])
+        self.assertEqual(body["jobId"], "AJ_example")
+        self.assertEqual(body["roomSid"], "RM_example")
+
+    async def test_log_collection_is_opt_in_and_bounded(self):
+        with patch.dict(os.environ, {"AGENT_LOGS_ENABLED": ""}), patch.object(helper.urllib.request, "build_opener") as build:
+            self.assertFalse(await helper.upload_session_logs(self.ctx, "example-agent", []))
+            build.assert_not_called()
+        with patch.dict(os.environ, {"AGENT_LOGS_ENABLED": "true"}), patch.object(helper.urllib.request, "build_opener") as build:
+            self.assertFalse(await helper.upload_session_logs(self.ctx, "example-agent", [{}] * 101))
+            build.assert_not_called()
+
+    async def test_opted_in_hook_emits_job_lifecycle_logs_even_when_report_fails(self):
+        with patch.dict(os.environ, {"AGENT_LOGS_ENABLED": "true"}), patch.object(helper, "upload_session_logs", new_callable=AsyncMock, return_value=True) as upload_logs, patch.object(helper, "upload_session_report", new_callable=AsyncMock, side_effect=RuntimeError("unavailable")), patch.object(helper.logger, "warning"):
+            self.assertTrue(helper.register_shutdown_report(self.ctx, "example-agent"))
+            await self.ctx.add_shutdown_callback.call_args.args[0]()
+        self.assertEqual(upload_logs.await_count, 2)
+        messages = [call.args[2][0]["message"] for call in upload_logs.await_args_list]
+        self.assertEqual(messages, ["Agent job started", "Agent job shutdown"])
+
     async def test_usage_defaults_keep_their_type_and_unknown_model_identity(self):
         usage = Mock(type="llm_usage", provider="", model="")
         usage.model_dump.return_value = {"input_tokens": 120, "output_tokens": 40}
