@@ -138,7 +138,7 @@ export function SessionDetail() {
                   { key: 's', header: 'Status', cell: (e) => <StatusBadge status={e.status} /> }, { key: 't', header: 'Started', cell: (e) => fromMs(e.started_at) },
                   { key: 'd', header: 'Duration', cell: (e) => durationMs(e.started_at, e.ended_at) },
                   { key: 'dest', header: 'Destination', cell: (e) => <span className="mono">{e.destination}</span> },
-                  { key: 'rec', header: 'Recording', cell: (e) => <span onClick={stop}><Recording file={e.files?.[0]} /></span> },
+                  { key: 'rec', header: 'Recording', cell: (e) => <span onClick={stop}><Recording file={e.files?.[0]} sessionSid={sid} egressId={e.egress_id} /></span> },
                 ]} />
             </Panel>
           )}

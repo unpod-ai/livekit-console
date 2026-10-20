@@ -10,6 +10,7 @@ import { DataTable, type Col } from '../components/DataTable';
 import { Alert, Badge, Help, KV, Kpi, Kpis, PageHeader, Panel, Tabs } from '../components/ui';
 import { jobType, sdkLabel, WorkersPanel, type FormerWorker, type Worker } from './Agents';
 import { DataTable as OutageTable } from '../components/DataTable';
+import { Performance } from './Performance';
 import { AgentUsage } from '../components/AgentUsage';
 
 const STATE_TONE: Record<string, 'ok' | 'warn' | 'info' | undefined> = { listening: 'ok', speaking: 'info', thinking: 'warn', initializing: 'warn' };
@@ -20,7 +21,7 @@ export function AgentDetail() {
   const { name = '' } = useParams();
   const navigate = useNavigate();
   const { hours } = useRange();
-  const [tab, setTab] = useTab('overview', ['overview', 'worker', 'sessions', 'usage'] as const);
+  const [tab, setTab] = useTab('overview', ['overview', 'worker', 'sessions', 'usage', 'performance'] as const);
   const enc = encodeURIComponent(name);
   const ov = useApi<Json>(['agent-overview', name, hours], `/history/agents/${enc}/overview?hours=${hours}`);
   const wk = useApi<{ configured: boolean; workers: Worker[]; former: FormerWorker[] }>(['agent-workers', hours], `/history/agent-workers?hours=${hours}`);
@@ -51,9 +52,10 @@ export function AgentDetail() {
 
   return (
     <>
-      <PageHeader crumbs={[{ label: 'Project' }, { label: 'Agents', to: '/agents' }, { label: name }, { label: { overview: 'Overview', worker: 'Worker', sessions: 'Sessions', usage: 'Usage' }[tab] }]} title={name} range
+      <PageHeader crumbs={[{ label: 'Project' }, { label: 'Agents', to: '/agents' }, { label: name }, { label: { overview: 'Overview', worker: 'Worker', sessions: 'Sessions', usage: 'Usage', performance: 'Performance' }[tab] }]} title={name} range
         actions={<div style={{ textAlign: 'right', lineHeight: 1.2 }}><div className="mono muted" style={{ fontSize: 9.5, letterSpacing: 0.5 }}>CURRENT STATUS</div>{statusEl}</div>} />
-      <Tabs value={tab} onChange={setTab} tabs={[{ id: 'overview', label: 'Overview' }, { id: 'worker', label: 'Worker' }, { id: 'sessions', label: 'Sessions', count: detail.data?.sessions.length }, { id: 'usage', label: 'Usage' }]} />
+      <Tabs value={tab} onChange={setTab} tabs={[{ id: 'overview', label: 'Overview' }, { id: 'worker', label: 'Worker' }, { id: 'sessions', label: 'Sessions', count: detail.data?.sessions.length }, { id: 'usage', label: 'Usage' }, { id: 'performance', label: 'Performance' }]} />
+      {tab === 'performance' && <Performance initialAgent={name} />}
       {tab === 'usage' && <AgentUsage name={name} hours={hours} />}
 
       {tab === 'overview' && (

@@ -9,6 +9,7 @@ import { Dispatch } from './pages/Dispatch';
 import { Egress, EgressDetail } from './pages/Egress';
 import { Ingress } from './pages/Ingress';
 import { Login } from './pages/Login';
+import { Performance } from './pages/Performance';
 import { Overview } from './pages/Overview';
 import { PhoneNumbers } from './pages/PhoneNumbers';
 import { RoomDetail, Rooms } from './pages/Rooms';
@@ -36,6 +37,7 @@ export function App() {
         <Route path="sessions/:sid/participants/:psid" element={<ParticipantDetail />} />
         <Route path="rooms" element={<Rooms />} />
         <Route path="rooms/:name" element={<RoomDetail />} />
+        <Route path="agent-analytics" element={<Performance />} />
         <Route path="agents" element={<Agents />} />
         <Route path="agents/:name" element={<AgentDetail />} />
         <Route path="usage" element={<Usage />} />

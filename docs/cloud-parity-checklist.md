@@ -84,17 +84,17 @@ Acceptance:
 
 ## Phase 2 — Recordings and interactive analytics
 
-- [ ] Provide authorized access to private storage using short-lived signed URLs or a controlled streaming endpoint.
-- [ ] Add in-console audio/video playback with seeking and clear loading, missing and expired-file states.
-- [ ] Add audio waveform and timestamp synchronization with transcripts and selected turns.
-- [ ] Record which audio source is available; distinguish Egress media from agent-side recordings.
-- [ ] Add per-agent/project latency percentiles and stage breakdowns based on collected turn metrics.
-- [ ] Add model usage breakdowns; label optional rate-based costs as estimates rather than provider invoices.
+- [x] Provide authorized access to private storage using short-lived signed URLs or a controlled streaming endpoint.
+- [x] Add in-console audio/video playback with seeking and clear loading, missing and expired-file states.
+- [x] Add audio waveform and timestamp synchronization with transcripts and selected turns.
+- [x] Record which audio source is available; distinguish Egress media from agent-side recordings.
+- [x] Add per-agent/project latency percentiles and stage breakdowns based on collected turn metrics.
+- [x] Add model usage breakdowns; label optional rate-based costs as estimates rather than provider invoices.
 - [x] Show per-agent retained token and speech usage charts with links to contributing reports; exclude expired data.
-- [ ] Click a chart bucket or outlier to open the matching sessions.
-- [ ] Drag to select a time window and apply it consistently across the page.
-- [ ] Compare selected agents with the same range, filters and metric definitions.
-- [ ] Preserve chart selections, filters and detail drawers in shareable URLs.
+- [x] Click a chart bucket or outlier to open the matching sessions.
+- [x] Drag to select a time window and apply it consistently across the page.
+- [x] Compare selected agents with the same range, filters and metric definitions.
+- [x] Preserve chart selections, filters and detail drawers in shareable URLs.
 
 Acceptance:
 

@@ -6,10 +6,12 @@ import { DataTable, type Col } from './DataTable';
 import { Alert, Badge, KV, Panel } from './ui';
 import { ModelUsage, type Usage } from './ModelUsage';
 import { LiveInsights } from './LiveInsights';
+import { SessionRecordings } from './SessionRecordings';
 
 type Item = {
   id: string; type: string; at: number | null; role?: string; text?: string; interrupted?: boolean;
   metrics?: Record<string, number>; name?: string | null; callId?: string | null;
+  traceId?: string | null; spanId?: string | null; turnId?: string | null;
   isError?: boolean; fromAgent?: string | null; toAgent?: string;
 };
 type Content = { schemaVersion: number; items: Item[]; omittedItems: number; usage?: Usage[] | null; omittedUsage?: number };
@@ -34,11 +36,11 @@ export function AgentInsights({ sid }: { sid: string }) {
   if (!query.data) return <Alert>Loading agent reports…</Alert>;
   const data = query.data;
   const report = data.selected;
-  if (!data.reports.length) return <><LiveInsights sid={sid} /><Alert>{data.enabled
+  if (!data.reports.length) return <><SessionRecordings sid={sid} /><LiveInsights sid={sid} /><Alert>{data.enabled
     ? 'No agent session report has been received for this room. Reports appear after an instrumented agent session ends.'
     : 'Agent report collection is disabled. An administrator can enable it and configure report uploads following the Agent telemetry setup guide.'}</Alert></>;
   const columns: Col<TranscriptRow>[] = [
-    { key: 'at', header: 'Timestamp', cell: (i) => <span className="mono nowrap">{fromMsPrecise(i.at)}</span>, sort: (i) => i.at ?? 0 },
+    { key: 'at', header: 'Timestamp', cell: (i) => i.at==null?'—':<button aria-label={`Seek to report item ${i.id}`} aria-pressed={params.get('reportItem')===i.id} style={params.get('reportItem')===i.id?{borderColor:'var(--accent)'}:undefined} className="btn secondary sm mono" onClick={()=>setParams(old=>{const next=new URLSearchParams(old);next.set('mediaAt',String(i.at));next.set('reportItem',i.id);if(i.traceId)next.set('liveTrace',i.traceId);if(i.turnId)next.set('liveTurn',i.turnId);next.delete('livePage');return next;})}>{fromMsPrecise(i.at)}</button>, sort: (i) => i.at ?? 0 },
     { key: 'type', header: 'Event', cell: (i) => <div className="badges"><Badge>{i.role ?? i.type.replace(/_/g, ' ')}</Badge>{i.interrupted && <Badge tone="warn">Interrupted</Badge>}{i.isError && <Badge tone="bad">Tool error</Badge>}</div> },
     { key: 'text', header: 'Content', wrap: true, cell: (i) => <span style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{i.type === 'message' ? i.text || 'No text recorded' : i.type === 'agent_handoff' ? `${i.fromAgent ?? 'Unknown'} → ${i.toAgent}` : `${i.name ?? 'Tool'}${i.callId ? ` · ${i.callId}` : ''}`}</span>, text: (i) => i.text ?? i.name ?? i.toAgent ?? '' },
     { key: 'e2e', header: 'Response latency', cell: (i) => ms(i.metrics?.e2e_latency) },
@@ -52,7 +54,7 @@ export function AgentInsights({ sid }: { sid: string }) {
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
   return <>
-    <LiveInsights sid={sid} />
+    <SessionRecordings sid={sid} /><LiveInsights sid={sid} />
     <Panel title="Agent session reports">
       <div style={{ padding: '12px 14px' }}><label>Report <select className="select" aria-label="Agent report" value={report?.jobId ?? ''} onChange={(e) => setJobId(e.target.value)}>
         {data.reports.map((r) => <option key={r.jobId} value={r.jobId}>{r.agentName} · {r.jobId} · {r.state}</option>)}

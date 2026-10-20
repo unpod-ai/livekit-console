@@ -4,11 +4,11 @@ import { useLive } from './live';
 import { useToast } from './toast';
 
 /** GET query that follows the global auto-refresh setting. */
-export function useApi<T = any>(key: QueryKey, path: string, opts: { live?: boolean; enabled?: boolean } = {}) {
+export function useApi<T = any>(key: QueryKey, path: string | (() => string), opts: { live?: boolean; enabled?: boolean } = {}) {
   const { interval } = useLive();
   return useQuery<T>({
     queryKey: key,
-    queryFn: () => api<T>(path),
+    queryFn: () => api<T>(typeof path === 'function' ? path() : path),
     refetchInterval: opts.live !== false && interval ? interval : false,
     enabled: opts.enabled,
   });
