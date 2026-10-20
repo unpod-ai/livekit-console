@@ -45,6 +45,7 @@ db.exec(`
     PRIMARY KEY (room_sid, job_id)
   );
   CREATE INDEX IF NOT EXISTS agent_reports_expiry ON agent_session_reports(expires_at) WHERE content IS NOT NULL;
+  CREATE INDEX IF NOT EXISTS agent_reports_agent_time ON agent_session_reports(agent_name,reported_at);
   CREATE TABLE IF NOT EXISTS egress (
     egress_id TEXT PRIMARY KEY, room_sid TEXT, room_name TEXT, status TEXT,
     started_at INTEGER, ended_at INTEGER, info TEXT NOT NULL

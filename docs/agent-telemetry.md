@@ -155,14 +155,33 @@ Empty default counters do not establish that a provider exposes every breakdown.
 LLM input/output totals already include their cached/audio/text/image subsets; reasoning tokens are included in
 output tokens. Do not add these breakdowns again. Speech audio seconds belong to each STT/TTS stage, not to call
 duration. These are SDK usage counters, not monetary costs or provider invoices. The current view is per final
-report; project/agent rollups and estimated costs remain separate roadmap work.
+report; agent rollups are available in the agent Usage tab. Project-wide totals and estimated costs remain roadmap work.
 
 Usage has the same administrator-only access, export and content expiration as the conversation report. It is
 not retained in a separate long-term usage table after report expiry.
 
+## Agent usage analytics
+
+Open **Agents → an agent → Usage** as an administrator. The header time range filters final report timestamps,
+not call start times. The view shows collection coverage, LLM token and STT/TTS audio charts, per-model totals and
+contributing reports. Filter by stage/provider/model to inspect that model's series and reports. Drilldown links
+select the exact room/job report in Session Agent Insights. Reports arriving before room webhooks are marked as
+awaiting session history rather than linked to a nonexistent session.
+
+`GET /api/agent-insights/agents/:name/usage?hours=24&page=1` uses the same administrator-only permissions as report
+reads. `hours` accepts integers 1–2160 and report pages contain 25 entries. An optional `model` query parameter
+contains a URL-encoded JSON array `[type, provider, model]`. The response includes models, time buckets, coverage
+and paginated contributing-report metadata; it never includes conversation text. Pages do not limit the totals.
+
+Aggregation reads retained content only. Expired reports, older reports with no usage and unsupported rows are
+counted as coverage gaps, not zero consumption. Empty reported arrays and genuine zero counters remain distinct.
+Totals are grouped by agent name; historical aliases are not merged. No long-term rollup survives report expiry.
+Late reports appear in their original report-time buckets when still retained. Aggregate numeric overflow returns
+422 instead of silently rounding large counters. Header refresh controls apply to this view.
+
 ## Not included in this slice
 
-Live event streaming, OTLP trace ingestion, runtime log collection, automatic PII redaction, project/agent usage
+Live event streaming, OTLP trace ingestion, runtime log collection, automatic PII redaction, project-wide usage
 aggregation, estimated costs, synchronized audio and agent-wide performance charts remain on the [Cloud parity checklist](cloud-parity-checklist.md).
 No historical transcripts can be reconstructed from room webhooks. Existing calls gain report data only if the
 agent collected and uploaded it.

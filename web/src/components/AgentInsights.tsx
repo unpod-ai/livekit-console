@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useMe } from '../lib/me';
 import { useApi } from '../lib/hooks';
 import { fromMs, fromMsPrecise } from '../lib/format';
@@ -23,7 +23,9 @@ const ms = (value: number | undefined) => value == null ? '—' : `${Math.round(
 export function AgentInsights({ sid }: { sid: string }) {
   const me = useMe();
   const admin = me.data?.role === 'admin';
-  const [jobId, setJobId] = useState('');
+  const [params, setParams] = useSearchParams();
+  const jobId = params.get('reportJob') ?? '';
+  const setJobId = (job: string) => setParams(old => { const next = new URLSearchParams(old); next.set('reportJob', job); return next; });
   const query = useApi<Reports>(['agent-insights', sid, jobId], `/agent-insights/sessions/${encodeURIComponent(sid)}${jobId ? `?jobId=${encodeURIComponent(jobId)}` : ''}`, { enabled: admin });
   if (me.isLoading) return <Alert>Checking access…</Alert>;
   if (!admin) return <Alert>Agent Insights contains conversation content and requires an administrator account.</Alert>;

@@ -140,6 +140,56 @@ test('v2 usage is retained once, read only by admins and removed with report con
   assert.equal(db.prepare("SELECT content FROM agent_session_reports WHERE job_id='AJ_usage'").get()!.content, null);
 });
 
+test('agent usage aggregates retained reports with stage/model isolation, filters, boundaries and coverage', async () => {
+  const now = Date.now();
+  const make = (job: string, agent = 'usage-agent', timestamp = (now - 60000) / 1000) => ({
+    ...envelope(job), schemaVersion: 2, agentName: agent,
+    report: { ...envelope(job).report, timestamp, usage: [
+      { type: 'llm_usage', provider: 'example', model: 'shared', input_tokens: 100, input_cached_tokens: 20, output_tokens: 40 },
+      { type: 'tts_usage', provider: 'example', model: 'shared', audio_duration: 2.5, characters_count: 30 },
+      { type: 'stt_usage', provider: 'example', model: 'speech', audio_duration: 4 },
+    ] },
+  });
+  const first = make('AJ_agg1');
+  assert.equal((await upload(first)).status, 201);
+  assert.equal((await upload(first)).status, 200);
+  assert.equal((await upload(make('AJ_agg2'))).status, 201);
+  assert.equal((await upload(make('AJ_agg_other', 'other-agent'))).status, 201);
+  assert.equal((await upload(make('AJ_agg_old', 'usage-agent', (now - 7200000) / 1000))).status, 201);
+  assert.equal((await upload(make('AJ_agg_future', 'usage-agent', (now + 7200000) / 1000))).status, 201);
+  assert.equal((await upload(make('AJ_agg_expired'))).status, 201);
+  db.prepare("UPDATE agent_session_reports SET expires_at=0 WHERE job_id='AJ_agg_expired'").run();
+  assert.equal((await upload({ ...make('AJ_agg_v1'), schemaVersion: 1 })).status, 201);
+  const partial = make('AJ_agg_partial');
+  assert.equal((await upload({ ...partial, report: { ...partial.report, usage: [{ type: 'future_usage' }] } })).status, 201);
+  const auth = { cookie: await cookie() };
+  const url = base + '/api/agent-insights/agents/usage-agent/usage?hours=1';
+  const r = await fetch(url, { headers: auth }); assert.equal(r.status, 200);
+  assert.equal(r.headers.get('cache-control'), 'no-store');
+  const data = await r.json();
+  assert.deepEqual(data.coverage, { totalReports: 5, retainedReports: 4, usageReports: 2, missingUsageReports: 1, emptyUsageReports: 1, expiredReports: 1, omittedUsage: 1 });
+  assert.equal(data.models.length, 3);
+  const llm = data.models.find((m: any) => m.type === 'llm_usage');
+  assert.equal(llm.metrics.input_tokens, 200); assert.equal(llm.metrics.input_cached_tokens, 40);
+  assert.equal(llm.metrics.output_tokens, 80);
+  assert.equal(data.series.reduce((s: number, b: any) => s + b.llmInput, 0), 200);
+  assert.equal(data.series.reduce((s: number, b: any) => s + b.ttsAudio, 0), 5);
+  assert.equal(data.series.reduce((s: number, b: any) => s + b.sttAudio, 0), 8);
+  assert.equal(data.totalContributingReports, 2);
+  assert.equal(data.reports[0].sessionAvailable, true);
+  assert.equal(JSON.stringify(data).includes('Hello'), false);
+  const key = encodeURIComponent(JSON.stringify(['tts_usage', 'example', 'shared']));
+  const filtered = await (await fetch(url + '&model=' + key, { headers: auth })).json();
+  assert.equal(filtered.series.reduce((s: number, b: any) => s + b.llmInput, 0), 0);
+  assert.equal(filtered.series.reduce((s: number, b: any) => s + b.ttsAudio, 0), 5);
+  assert.equal(filtered.totalContributingReports, 2);
+  for (const query of ['hours=0', 'hours=NaN', 'hours=2161', 'page=-1', 'page=1.5', 'model=oops', 'model=%5B%22x%22%5D']) {
+    assert.equal((await fetch(url.split('?')[0] + '?' + query, { headers: auth })).status, 422);
+  }
+  assert.equal((await fetch(url)).status, 401);
+  assert.equal((await fetch(url, { headers: { cookie: await cookie('reader') } })).status, 403);
+});
+
 test('collection is disabled without an explicitly configured service token', async () => {
   const previous = config.telemetryToken; config.telemetryToken = '';
   try { assert.equal((await upload(envelope('AJ_disabled'))).status, 503); }
