@@ -60,3 +60,20 @@ async def upload_session_report(ctx: JobContext, agent_name: str) -> bool:
             await asyncio.sleep(0.5)
     logger.warning("Console report upload failed after two attempts")
     return False
+
+
+def register_shutdown_report(ctx: JobContext, agent_name: str) -> bool:
+    """For legacy workers whose SDK finalizes AgentSession before shutdown callbacks (verified on 1.5.8)."""
+    if not os.environ.get("CONSOLE_URL") or not os.environ.get("AGENT_TELEMETRY_TOKEN"):
+        return False
+
+    async def export_after_session() -> None:
+        try:
+            if await upload_session_report(ctx, agent_name):
+                logger.info("Console agent session report uploaded")
+        except Exception as exc:
+            # Telemetry must not prevent application cleanup, including for non-AgentSession handlers.
+            logger.warning("Console report callback unavailable (%s)", type(exc).__name__)
+
+    ctx.add_shutdown_callback(export_after_session)
+    return True

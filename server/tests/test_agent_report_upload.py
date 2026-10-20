@@ -58,3 +58,22 @@ class UploadTests(unittest.IsolatedAsyncioTestCase):
 
     def test_upload_redirects_are_not_followed(self):
         self.assertIsNone(helper.NoRedirect().redirect_request(None, None, 302, "", {}, "https://other.example.com"))
+
+    async def test_shutdown_registration_uploads_after_the_sdk_callback_runs(self):
+        with patch.object(helper, "upload_session_report", new_callable=AsyncMock, return_value=True) as upload:
+            self.assertTrue(helper.register_shutdown_report(self.ctx, "example-agent"))
+            upload.assert_not_awaited()
+            callback = self.ctx.add_shutdown_callback.call_args.args[0]
+            await callback()
+            upload.assert_awaited_once_with(self.ctx, "example-agent")
+
+    async def test_shutdown_upload_failure_does_not_break_other_cleanup(self):
+        with patch.object(helper, "upload_session_report", new_callable=AsyncMock, side_effect=RuntimeError("no native session")), patch.object(helper.logger, "warning") as log:
+            helper.register_shutdown_report(self.ctx, "example-agent")
+            await self.ctx.add_shutdown_callback.call_args.args[0]()
+            log.assert_called_once()
+
+    def test_unconfigured_shutdown_hook_is_not_registered(self):
+        with patch.dict(os.environ, {"AGENT_TELEMETRY_TOKEN": ""}):
+            self.assertFalse(helper.register_shutdown_report(self.ctx, "example-agent"))
+            self.ctx.add_shutdown_callback.assert_not_called()

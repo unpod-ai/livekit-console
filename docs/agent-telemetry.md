@@ -43,6 +43,33 @@ report once and reuses the body for retries. Upload failures are logged without 
 helper has no durable queue: a worker crash or prolonged outage can lose a report. Apply any transcript PII
 redaction before upload; automatic PII redaction is not implemented by the console.
 
+### Legacy WorkerOptions integrations
+
+For SDKs that close the primary `AgentSession` before invoking job shutdown callbacks (verified with Python
+Agents 1.5.8), the helper also provides a registration function. Call it once at the beginning of your existing
+entrypoint, keeping the application's other cleanup callbacks:
+
+```python
+from agent_report_upload import register_shutdown_report
+
+async def entrypoint(ctx: JobContext):
+    register_shutdown_report(ctx, "my-agent")
+    # Keep the existing connection and AgentSession setup here.
+```
+
+Choose either this shutdown hook or the `on_session_end` integration. Do not register both. The registration
+function does nothing when collection is not configured. Upload exceptions are isolated from application cleanup.
+A handler that never creates a native `AgentSession` cannot produce this SDK report; it needs its own adapter.
+Check the shutdown order for your installed SDK before using this hook.
+
+### Workers in a separate container network
+
+A worker container cannot reach a host service through its own `127.0.0.1`. Use a reachable internal endpoint for
+`CONSOLE_URL`. If the console UI must stay bound to host loopback, an upload-only proxy can listen on the worker's
+private network gateway and forward only `/api/telemetry/session-reports` to the console. Keep other routes closed,
+retain bearer-token authentication, and limit the proxy's bind address and source network. The public admin UI
+does not need broader access for agent uploads.
+
 ## Version 1 upload contract
 
 `POST /api/telemetry/session-reports` requires `Authorization: Bearer <AGENT_TELEMETRY_TOKEN>` and JSON of at most
