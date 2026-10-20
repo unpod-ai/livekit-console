@@ -16,3 +16,9 @@ test('byte ranges allow single finite or suffix requests and reject multipart or
   for (const value of [undefined,'bytes=0-9','bytes=100-','bytes=-10'])assert.equal(validateRange(value),value);
   for (const value of ['bytes=','bytes=9-0','bytes=0-1,4-5','bytes=-0','bytes=99999999999999999999-','items=1-5'])assert.throws(()=>validateRange(value));
 });
+
+test('recording access cannot renew indefinitely when lifecycle timestamps are missing',()=>{
+ const old=resolveRecording({...row,started_at:null,ended_at:null},0,storage);assert.equal(old.state,'expired');
+ const info=JSON.parse(row.info);delete info.fileResults[0].startedAt;
+ assert.equal(resolveRecording({...row,started_at:null,ended_at:null,info:JSON.stringify(info)},0,storage).state,'unavailable');
+});

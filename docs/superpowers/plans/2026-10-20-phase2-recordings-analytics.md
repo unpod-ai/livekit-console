@@ -25,38 +25,38 @@ exact contributing samples, using one explicit range/filter definition for chart
 ## Task 1: Authorized recordings
 
 Files: `server/src/recordings.ts`, `server/src/config.ts`, server routing/dependencies, `server/tests/recordings.test.ts`.
-- [ ] Test resolver rejection, trusted storage mapping, missing/expired sources, anonymous/viewer denial and valid/invalid/suffix ranges.
-- [ ] Implement session recording inventory and bounded authenticated S3 HEAD/GET streaming with cancellation and no-store headers.
-- [ ] Configure existing POC storage credentials privately; preserve source metadata and file-start timestamps without exposing secrets.
+- [x] Test resolver rejection, trusted storage mapping, missing/expired sources, anonymous/viewer denial and valid/invalid/suffix ranges.
+- [x] Implement session recording inventory and bounded authenticated S3 HEAD/GET streaming with cancellation and no-store headers.
+- [x] Configure existing POC storage credentials privately; preserve source metadata and file-start timestamps without exposing secrets.
 
 ## Task 2: Playback and synchronized investigation
 
 Files: `web/src/components/SessionRecordings.tsx`, waveform utilities, AgentInsights/LiveInsights/log/egress links.
-- [ ] Add source selection, native audio/video seeking and loading/unavailable/missing/expired states.
-- [ ] Decode bounded actual audio into a seekable SVG waveform; cancel work on source switch/unmount.
-- [ ] Map measured absolute timestamps to file offsets; selected transcript/spans/logs share context and URL state.
-- [ ] Verify private playback, byte seeking, source switches, invalid offsets, no false alignment and narrow layout in a browser.
+- [x] Add source selection, native audio/video seeking and loading/unavailable/missing/expired states.
+- [x] Decode bounded actual audio into a seekable SVG waveform; cancel work on source switch/unmount.
+- [x] Map measured absolute timestamps to file offsets; selected transcript/spans/logs share context and URL state.
+- [x] Verify private playback, byte seeking, source switches, invalid offsets, no false alignment and narrow layout in a browser.
 
 ## Task 3: Measurement analytics
 
 Files: `server/src/turn-analytics.ts`, `server/src/performance.ts`, telemetry mounting, analytics unit/HTTP tests.
-- [ ] Test native measurement deduplication, expiry, zero/missing values, nearest-rank percentiles and agent/stage/time isolation.
-- [ ] Project only required fields from retained reports/events and usage; reject oversized investigations explicitly.
-- [ ] Return per-agent distributions/buckets, available models, coverage and paginated exact contributing samples.
-- [ ] Test identical comparison ranges, bucket drilldowns, unsupported filters and administrator-only content access.
+- [x] Test native measurement deduplication, expiry, zero/missing values, nearest-rank percentiles and agent/stage/time isolation.
+- [x] Project only required fields from retained reports/events and usage; reject oversized investigations explicitly.
+- [x] Return per-agent distributions/buckets, available models, coverage and paginated exact contributing samples.
+- [x] Test identical comparison ranges, bucket drilldowns, unsupported filters and administrator-only content access.
 
 ## Task 4: Interactive analytics UI
 
 Files: performance chart/page/components, AppShell/App routes and AgentDetail links.
-- [ ] Add selected-agent comparison, measured metric/stage and range controls, distributions and model breakdowns.
-- [ ] Click a chart bucket/outlier to see exact contributors; drag a range to filter the whole page.
-- [ ] Keep range/filter/bucket/drawer URLs shareable and validate empty/error/expired cases without invented zeros.
-- [ ] Browser-check brush selection, same-filter comparisons, contributor/session links, drawer reload and mobile layout.
+- [x] Add selected-agent comparison, measured metric/stage and range controls, distributions and model breakdowns.
+- [x] Click a chart bucket/outlier to see exact contributors; drag a range to filter the whole page.
+- [x] Keep range/filter/bucket/drawer URLs shareable and validate empty/error/expired cases without invented zeros.
+- [x] Browser-check brush selection, same-filter comparisons, contributor/session links, drawer reload and mobile layout.
 
 ## Task 5: Ship and acceptance
 
-- [ ] Review code; run complete tests/builds and targeted browser/security checks.
-- [ ] Merge protected PRs and deploy, taking a consistent pre-deploy DB backup and retaining rollback configuration.
-- [ ] Verify authorized playback/seek/waveform against retained real egress media without exporting recordings publicly.
-- [ ] Verify synchronized media against a controlled native RTC session with an actual recording and timestamped telemetry.
-- [ ] Cross-check chart statistics and contributors against retained data; update checklist only for proven outcomes.
+- [x] Review code; run complete tests/builds and targeted browser/security checks.
+- [x] Merge protected PRs and deploy, taking a consistent pre-deploy DB backup and retaining rollback configuration.
+- [x] Verify authorized playback/seek/waveform against retained real egress media without exporting recordings publicly.
+- [x] Verify synchronized media against a controlled native RTC session with an actual recording and timestamped telemetry.
+- [x] Cross-check chart statistics and contributors against retained data; update checklist only for proven outcomes.

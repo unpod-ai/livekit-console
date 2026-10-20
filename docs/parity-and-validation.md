@@ -14,9 +14,9 @@ See the [Cloud parity checklist](cloud-parity-checklist.md) for prioritized impl
 | Rooms and participants | Live admin APIs, room actions, participant details and session links | Historical records depend on webhook collection |
 | Sessions and calls | Webhook history, SIP attributes, participant/call/agent/egress links | Inbound/outbound direction is inferred; calls that never join a room are not recorded |
 | Agent workers | Worker endpoint health, load, SDK, job count, last check and retained worker history | No managed builds, deployments or region inventory; worker IDs require the worker to expose them |
-| Agent analytics | Sessions served, join latency, sampled uptime/load; optional admin-only reports, turn timings, model usage/charts, and explicit structured log browsing | Opt-in native SDK events/spans and scoped logs only; no project-wide usage aggregation or synchronized audio |
+| Agent analytics | Sessions served, join latency, sampled uptime/load; admin-only reports, measured latency comparisons, model usage, structured logs and recording alignment | Opt-in retained SDK events/spans and configured Egress files only; unavailable stages remain explicit |
 | SIP configuration | Inbound/outbound trunks, dispatch rules, numbers referenced by configuration | Phone number purchasing and provider billing remain with the SIP provider |
-| Recordings and ingress | Egress/ingress admin APIs, egress history, recording location links | Private recordings need storage access or signed URLs; media files are not stored in the console database |
+| Recordings and ingress | Egress/ingress admin APIs, egress history, recording location links | Admin-only configured S3 streaming, native playback/waveform/seek; other storage/playlist sources remain unsupported; media is not stored in SQLite |
 | Usage and charts | Counts and participant durations derived from stored events | No per-session bandwidth, packet loss, FPS or Cloud billing measurements |
 | Accounts | Local admin/viewer accounts and bootstrap admin | No organization SSO or Cloud account management |
 
@@ -46,7 +46,7 @@ provider, every storage configuration or every browser.
 Inbound routing, component navigation, final lifecycle state and private recording access have been exercised.
 Operational evidence is retained privately. Repeat the [acceptance procedure](validation/inbound-calls.md) with
 your provider, agent and storage configuration. Console login alone does not authorize private storage URLs;
-integrated recording playback remains a planned feature. These checks do not assess conversational quality.
+integrated playback is available for configured trusted S3 Egress files. These checks do not assess conversational quality.
 
 ## Phase 1 native SDK acceptance
 
@@ -63,3 +63,13 @@ measurement conversion, bounded failure handling and privacy. Operational eviden
 These are deterministic SDK/RTC tests, not new telephone calls or provider billing evidence. Missing STT/TTS
 stages and pre-instrumentation history cannot be reconstructed; existing real inbound-call acceptance remains
 separate. See [the integration guide](agent-live-telemetry.md) for repeating collection in your deployment.
+
+## Phase 2 acceptance
+
+Existing private Egress media was verified through the authenticated console stream with HEAD, byte-range access,
+native playback, waveform decode and seeking; anonymous access was denied. A dedicated native SDK/RTC room with
+generated test audio and deterministic local responses produced its own Egress file. Conversation/span selections
+used reported file-start timestamps and retained trace context. Independent numeric extraction matched native stage
+percentiles and chart-bucket contributors. Browser checks also covered comparison, brush ranges, shared drawers,
+relative refresh windows and mobile layouts. Generated audio verifies media plumbing and time alignment, not speech
+intelligibility or provider billing. See [recordings and analytics](recordings-and-analytics.md) for limits and setup.
