@@ -134,6 +134,8 @@ old backups or copies already downloaded; manage their retention separately.
 ## Model usage (version 2)
 
 Version 2 accepts the SDK's `report.usage` model summaries and displays them in the session's Agent Insights tab.
+The helper restores each typed usage object's `type`, `provider` and `model` fields: Python SDK 1.5.8's default
+suppression omits the type discriminator from `to_dict()`. Custom upload adapters must preserve these fields too.
 Deploy the updated console before updating the Python upload helper. Version 1 uploads remain accepted with their
 original normalization and retry digest; usage in version 1 is still ignored. Existing reports are immutable:
 re-uploading a finalized version-1 job as version 2 returns 409 rather than changing its content or retention.

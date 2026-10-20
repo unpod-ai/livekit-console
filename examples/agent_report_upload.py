@@ -27,10 +27,19 @@ async def upload_session_report(ctx: JobContext, agent_name: str) -> bool:
 
     # Build once so retries retain the same report timestamp and content.
     try:
+        report = ctx.make_session_report()
+        payload = report.to_dict()
+        if report.model_usage is not None:
+            # SDK 1.5.8's to_dict excludes defaults, including the usage discriminator.
+            payload["usage"] = [
+                {**usage.model_dump(exclude_defaults=True), "type": usage.type,
+                 "provider": usage.provider, "model": usage.model}
+                for usage in report.model_usage
+            ]
         body = json.dumps({
             "schemaVersion": 2,
             "agentName": agent_name,
-            "report": ctx.make_session_report().to_dict(),
+            "report": payload,
         }, allow_nan=False).encode("utf-8")
     except (TypeError, ValueError):
         logger.warning("Console report could not be serialized")
