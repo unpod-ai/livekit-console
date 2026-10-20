@@ -15,6 +15,14 @@ if (telemetryRedactTerms.length > 50 || telemetryRedactTerms.some(v => v.length 
 if (!Number.isInteger(telemetryRetentionDays) || telemetryRetentionDays < 1 || telemetryRetentionDays > 365) {
   throw new Error('AGENT_TELEMETRY_RETENTION_DAYS must be an integer between 1 and 365');
 }
+const recordingPrefix = (process.env.RECORDING_S3_PREFIX ?? '').replace(/\/?$/, '/').replace(/^\/$/, '');
+if (recordingPrefix.startsWith('/') || /[\\%\x00-\x1f]/.test(recordingPrefix) || recordingPrefix.split('/').some(p=>p==='.'||p==='..')) throw new Error('RECORDING_S3_PREFIX must be a relative object prefix without encoded paths');
+if (process.env.RECORDING_S3_ENDPOINT) {
+  const endpoint = new URL(process.env.RECORDING_S3_ENDPOINT);
+  if (!['http:', 'https:'].includes(endpoint.protocol) || endpoint.username || endpoint.password || endpoint.search || endpoint.hash) throw new Error('RECORDING_S3_ENDPOINT must be a trusted HTTP(S) storage base URL without credentials or query parameters');
+}
+const recordingDays = Number(process.env.RECORDING_ACCESS_DAYS ?? 30);
+if (!Number.isInteger(recordingDays) || recordingDays < 1 || recordingDays > 3650) throw new Error('RECORDING_ACCESS_DAYS must be an integer from 1 to 3650');
 
 export const config = {
   port: Number(process.env.PORT ?? 8080),
@@ -31,6 +39,14 @@ export const config = {
   telemetryEventsEnabled: process.env.AGENT_TELEMETRY_EVENTS_ENABLED === 'true',
   telemetryRedaction: telemetryRedaction as 'off' | 'standard' | 'strict',
   telemetryRedactTerms,
+  recordingStorage: {
+    bucket: process.env.RECORDING_S3_BUCKET ?? '',
+    prefix: recordingPrefix,
+    retentionDays: recordingDays,
+  },
+  recordingRegion: process.env.RECORDING_S3_REGION ?? 'us-east-1',
+  recordingEndpoint: process.env.RECORDING_S3_ENDPOINT || undefined,
+  recordingPathStyle: process.env.RECORDING_S3_FORCE_PATH_STYLE === 'true',
   sipUri: process.env.SIP_URI ?? '',
   // GitHub repo whose clone/view traffic is recorded daily; the token needs push access to read traffic.
   githubRepo: process.env.GITHUB_REPO ?? 'unpod-ai/livekit-console',

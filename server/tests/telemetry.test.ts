@@ -380,3 +380,18 @@ test('combined export rejects an excessive byte budget before materializing cont
     assert.equal(response.status, 413); assert.match((await response.json()).error, /32 MiB/);
   } finally { db.prepare("DELETE FROM agent_session_reports WHERE room_sid='RM_large_export'").run(); }
 });
+
+test('performance percentiles and bucket drilldowns use canonical retained sources with isolated comparisons', async () => {
+  const start=Date.now()-60000,auth={cookie:await cookie()},path='/api/agent-insights/analytics';
+  for(const [agentName,jobId,values]of [['perf-one','AJ_perf_one',[.1,.3]],['perf-two','AJ_perf_two',[.2,.4]]] as const){
+    const body={schemaVersion:2,agentName,report:{room_id:'RM_perf',job_id:jobId,timestamp:start/1000,chat_history:{items:values.map((n,i)=>({id:'turn'+i,type:'message',role:'assistant',content:['not-returned'],created_at:(start+i*1000)/1000,metrics:{e2e_latency:n}}))},usage:[{type:'llm_usage',provider:'test',model:'test',input_tokens:10,output_tokens:2}]}};
+    assert.equal((await upload(body)).status,201);
+  }
+  const query=new URLSearchParams({from:String(start-1000),to:String(start+3000),agents:JSON.stringify(['perf-one','perf-two'])});
+  const response=await fetch(base+path+'?'+query,{headers:auth});assert.equal(response.status,200);const data=await response.json();
+  assert.equal(data.totalSamples,4);assert.equal(data.groups.find((g:any)=>g.agentName==='perf-one').p50,100);assert.equal(data.groups.find((g:any)=>g.agentName==='perf-two').p95,400);assert.equal(data.models[0].metrics.input_tokens,20);assert.equal(JSON.stringify(data).includes('not-returned'),false);
+  query.set('bucket',String(data.series[0].t));const selected=await(await fetch(base+path+'?'+query,{headers:auth})).json();assert.equal(selected.totalContributors,selected.rows.length);assert.ok(selected.rows.every((s:any)=>s.at>=data.series[0].t&&s.at<data.series[0].t+data.bucketMs));
+  query.set('sample',selected.rows[0].id);const drawer=await(await fetch(base+path+'?'+query,{headers:auth})).json();assert.equal(drawer.selected.id,selected.rows[0].id);
+  assert.equal((await fetch(base+path+'?'+query)).status,401);assert.equal((await fetch(base+path+'?'+query,{headers:{cookie:await cookie('reader')}})).status,403);
+  query.set('agents',JSON.stringify(['a','b','c','d','e']));assert.equal((await fetch(base+path+'?'+query,{headers:auth})).status,422);
+});

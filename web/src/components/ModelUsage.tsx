@@ -6,7 +6,7 @@ const stages: Record<string, string> = { llm_usage: 'LLM', tts_usage: 'TTS', stt
 const number = (n: number | undefined) => n == null ? '—' : n.toLocaleString(undefined, { maximumFractionDigits: 3 });
 const label = (key: string) => key.replace(/_/g, ' ').replace('duration', 'duration (seconds)');
 
-export function ModelUsage({ usage, omitted = 0, scope = 'report' }: { usage?: Usage[] | null; omitted?: number; scope?: 'report' | 'agent' }) {
+export function ModelUsage({ usage, omitted = 0, scope = 'report', title = 'Model usage' }: { usage?: Usage[] | null; omitted?: number; scope?: 'report' | 'agent' | 'project'; title?: string }) {
   const cols: Col<Usage>[] = [
     { key: 'type', header: 'Stage', cell: (r) => stages[r.type] ?? r.type },
     { key: 'provider', header: 'Provider / model', wrap: true, text: (r) => `${r.provider} ${r.model}`, cell: (r) => <span style={{ overflowWrap: 'anywhere' }}>{r.provider || 'Unknown provider'}<br /><span className="muted">{r.model || 'Unknown model'}</span></span> },
@@ -18,10 +18,10 @@ export function ModelUsage({ usage, omitted = 0, scope = 'report' }: { usage?: U
     { key: 'requests', header: 'Requests', cell: (r) => number(r.metrics.total_requests) },
     { key: 'details', header: 'Breakdown', wrap: true, cell: (r) => <details><summary>All counters</summary>{Object.entries(r.metrics).map(([key, n]) => <div key={key}>{label(key)}: {number(n)}</div>)}</details> },
   ];
-  return <Panel title="Model usage">
+  return <Panel title={title}>
     {usage == null ? <Alert>Model usage was not reported. Use the version-2 upload helper with an SDK session that collects model usage; older reports cannot be backfilled.</Alert> : <>
-      <div style={{ padding: '12px 14px' }} className="muted">Model totals for {scope === 'agent' ? 'retained reports in this agent and time range' : 'this final report'}. Cached and audio/text/image token counts are subsets of the input/output totals; they are not added again. Audio seconds describe the individual speech stage, not call duration. Usage counters are not provider charges.</div>
-      <DataTable rows={usage} cols={cols} rowKey={(r) => JSON.stringify([r.type, r.provider, r.model])} pageSize={25} empty={{ title: 'No supported model usage entries in this report' }} />
+      <div style={{ padding: '12px 14px' }} className="muted">Model totals for {scope === 'project' ? 'retained reports for the selected agents and time range' : scope === 'agent' ? 'retained reports in this agent and time range' : 'this final report'}. Cached and audio/text/image token counts are subsets of the input/output totals; they are not added again. Audio seconds describe the individual speech stage, not call duration. Usage counters are not provider charges.</div>
+      <DataTable rows={usage} cols={cols} rowKey={(r) => JSON.stringify([r.type, r.provider, r.model])} pageSize={25} empty={{ title: scope === 'report' ? 'No supported model usage entries in this report' : 'No retained model usage for this selection' }} />
     </>}
     {omitted > 0 && <Alert kind="warn">{omitted} unsupported usage entries were excluded. The displayed usage is incomplete.</Alert>}
   </Panel>;

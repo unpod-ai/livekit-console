@@ -14,6 +14,7 @@ const GROUPS: { title: string; items: Item[] }[] = [
     { to: '/sessions', label: 'Sessions', icon: Activity },
     { to: '/rooms', label: 'Live rooms', icon: DoorOpen },
     { to: '/agents', label: 'Agents', icon: Bot },
+    { to: '/agent-analytics', label: 'Agent analytics', icon: Activity },
     { to: '/usage', label: 'Usage', icon: BarChart3 },
   ] },
   { title: 'Telephony', items: [

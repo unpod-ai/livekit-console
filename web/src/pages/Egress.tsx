@@ -77,7 +77,7 @@ export function Egress() {
     { key: 'type', header: 'Type', cell: (e) => e.type, text: (e) => e.type },
     { key: 'room', header: 'Source (session)', cell: (e) => (e.room ? <Link className="rowlink" to={sessionLink(e)} onClick={(ev) => ev.stopPropagation()}>{e.room}</Link> : '—'), text: (e) => e.room },
     { key: 'dest', header: 'Destination', cell: (e) => <span className="mono">{e.dest}</span>, text: (e) => e.dest },
-    { key: 'rec', header: 'Recording', cell: (e) => <span onClick={(ev) => ev.stopPropagation()}><Recording file={e.files[0]} /></span>, text: (e) => e.files.map((f) => `${f.name} ${f.location}`).join(' ') },
+    { key: 'rec', header: 'Recording', cell: (e) => <span onClick={(ev) => ev.stopPropagation()}><Recording file={e.files[0]} sessionSid={e.roomSid} egressId={e.id} /></span>, text: (e) => e.files.map((f) => `${f.name} ${f.location}`).join(' ') },
     { key: 'size', header: 'Size', hidden: true, cell: (e) => (e.files[0]?.size ? fmtBytes(e.files[0].size) : '—') },
   ];
   return (
@@ -129,7 +129,7 @@ export function EgressDetail() {
               : row.files.map((f, i) => (
                 <div key={i} className="panel-body" style={{ borderTop: i ? '1px solid var(--border)' : 0 }}>
                   <div className="kv" style={{ margin: -14 }}>
-                    <div><div className="k">Target</div><div className="v mono">{f.name || '—'}</div></div>
+                    <div><div className="k">Target</div><div className="v mono">{f.name || '—'} {row.roomSid && /\.(ogg|opus|mp3|wav|mp4|m4a|webm)$/i.test(f.name) && <Link className="rowlink" to={`/sessions/${encodeURIComponent(row.roomSid)}?${new URLSearchParams({tab:'insights',recording:`${row.id}/${i}`})}`}>Play in console</Link>}</div></div>
                     <div><div className="k">URL</div><div className="v mono">{f.location || '—'} {f.location && <CopyButton text={f.location} label="Copy URL" />} {isUrl(f.location) && <a href={f.location} target="_blank" rel="noopener noreferrer">Open</a>}</div></div>
                     <div><div className="k">Size / duration</div><div className="v">{f.size != null ? fmtBytes(f.size) : '—'} · {f.durationMs != null ? fmtMs(f.durationMs) : '—'}</div></div>
                   </div>
@@ -137,7 +137,7 @@ export function EgressDetail() {
               ))}
           </Panel>
           {row.files.some((f) => /\.s3[.-]/i.test(f.location) || f.name.includes('private')) && (
-            <Alert kind="info">Recordings in a private bucket cannot be opened with this plain link. Download them with your storage tooling, or generate a signed URL.</Alert>
+            <Alert kind="info">Recordings in a private bucket cannot be opened with this plain link. Use Play in console for authorized access through configured storage.</Alert>
           )}
           <Panel title="Request" actions={request && <CopyButton text={JSON.stringify(request, null, 2)} label="Copy request" />}>
             {request && Object.keys(request).length

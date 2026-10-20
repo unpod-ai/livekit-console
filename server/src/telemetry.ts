@@ -7,6 +7,7 @@ import { aggregateAgentUsage, type ModelKey, type UsageReport } from './agent-us
 import { requireTelemetry } from './telemetry-auth.js';
 import { logIngest, logInsights, purgeLogContent } from './session-logs.js';
 import { redactContent } from './telemetry-privacy.js';
+import { performance } from './performance.js';
 import { liveIngest, liveInsights, purgeLiveContent } from './live-telemetry.js';
 
 export const telemetryIngest = Router();
@@ -60,6 +61,7 @@ const summary = (r: ReportRow) => ({ roomSid: r.room_sid, jobId: r.job_id, agent
 agentInsights.use((_req, res, next) => { res.set('Cache-Control', 'no-store'); next(); });
 agentInsights.use(logInsights);
 agentInsights.use(liveInsights);
+agentInsights.use(performance);
 agentInsights.get('/agents/:name/usage', (req, res, next) => {
   try {
     const integer = (value: unknown, fallback: number, max: number) => {
@@ -103,8 +105,16 @@ agentInsights.get('/sessions/:sid', (req, res) => {
   const job = typeof req.query.jobId === 'string' ? req.query.jobId : rows[0]?.job_id;
   const selected = job ? db.prepare(`SELECT ${columns},content FROM agent_session_reports WHERE room_sid=? AND job_id=?`).get(req.params.sid, job) as ReportRow | undefined : undefined;
   const total = db.prepare('SELECT COUNT(*) AS n FROM agent_session_reports WHERE room_sid=?').get(req.params.sid)!.n;
+  const retained = selected && selected.expires_at > Date.now() && selected.content ? redactContent(JSON.parse(selected.content), config.telemetryRedaction, config.telemetryRedactTerms) : null;
+  if (retained && selected) {
+    const references = db.prepare(`SELECT json_extract(content,'$.messageId') AS message_id,trace_id,span_id,turn_id FROM agent_live_records
+      WHERE room_sid=? AND job_id=? AND kind='message' AND content IS NOT NULL AND expires_at>? ORDER BY received_at DESC,rowid DESC LIMIT 10000`).all(req.params.sid, selected.job_id, Date.now()).reverse();
+    const byMessage = new Map(references.filter(r=>r.message_id).map(r=>[r.message_id,r]));
+    retained.items = retained.items.map((item: {id:string}) => {const ref=byMessage.get(item.id);return ref?{...item,traceId:ref.trace_id,spanId:ref.span_id,turnId:ref.turn_id}:item;});
+  }
+
   res.json({ enabled: !!config.telemetryToken, retentionDays: config.telemetryRetentionDays, total, reports: rows.map(summary),
-    selected: selected ? { ...summary(selected), content: selected.expires_at > Date.now() && selected.content ? redactContent(JSON.parse(selected.content), config.telemetryRedaction, config.telemetryRedactTerms) : null } : null });
+    selected: selected ? { ...summary(selected), content: retained } : null });
 });
 
 export function scrubRetainedTelemetry(): void {

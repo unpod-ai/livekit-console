@@ -48,7 +48,7 @@ With [live telemetry](agent-live-telemetry.md) enabled, native events and span t
 the final report. Trace/turn filters link to structured logs, combined exports include retained categories,
 and collection states identify missing or dropped data. Per-model usage is available in reports and the agent
 Usage tab. Configurable standard/strict content redaction applies before storage and to reads/exports;
-standard mode is best-effort. Audio synchronization remains a later phase.
+standard mode is best-effort. Configured S3 Egress recordings can be replayed with waveforms and measured timestamp seeking; see [recordings and analytics](recordings-and-analytics.md).
 
 ## Telephony
 - **Calls:** SIP calls reconstructed from SIP participants: from, to, direction, duration, status, provider call ID and
@@ -95,3 +95,7 @@ the `livekit-sip` logs), number purchasing, and billing.
 
 Optional agent report uploads collect a limited set of insights directly from the agent process, independently
 of those server APIs. They do not reproduce Cloud's full observability pipeline.
+
+### Measured agent performance
+
+Project → Agent analytics compares retained turn timings and native stage durations, with nearest-rank percentiles, exact contributor drilldowns, drag-selected ranges and shareable measurement drawers. Finalized model usage is shown alongside timing coverage; missing data is not counted as zero.

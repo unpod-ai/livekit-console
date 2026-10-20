@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useApi } from '../lib/hooks';
 import { useMe } from '../lib/me';
 import { fromMsPrecise } from '../lib/format';
@@ -45,7 +45,7 @@ export function AgentLogs({ sid }: { sid: string }) {
         { key: 'at', header: 'Time', cell: r => <span className="mono nowrap">{fromMsPrecise(r.at)}</span> },
         { key: 'level', header: 'Severity', cell: r => <Badge tone={r.level === 'ERROR' || r.level === 'CRITICAL' ? 'bad' : r.level === 'WARNING' ? 'warn' : undefined}>{r.level}</Badge> },
         { key: 'message', header: 'Message', wrap: true, cell: r => <span style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{r.message}</span> },
-        { key: 'context', header: 'Context', wrap: true, cell: r => <details><summary>{r.logger ?? r.agentName}</summary><div className="mono" style={{ overflowWrap: 'anywhere' }}>Job: {r.jobId}<br />Turn: {r.turnId ?? 'Not reported'}<br />Trace: {r.traceId ?? 'Not reported'}<br />Span: {r.spanId ?? 'Not reported'}</div></details> },
+        { key: 'context', header: 'Context', wrap: true, cell: r => <details><summary>{r.logger ?? r.agentName}</summary><Link className="rowlink" to={`/sessions/${encodeURIComponent(sid)}?${new URLSearchParams({tab:'insights',reportJob:r.jobId,mediaAt:String(r.at),...(r.traceId?{liveTrace:r.traceId}:{}),...(r.turnId?{liveTurn:r.turnId}:{})})}`}>Seek recording at log time</Link><div className="mono" style={{ overflowWrap: 'anywhere' }}>Job: {r.jobId}<br />Turn: {r.turnId ?? 'Not reported'}<br />Trace: {r.traceId ?? 'Not reported'}<br />Span: {r.spanId ?? 'Not reported'}</div></details> },
       ]} />
       {data && <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 12, padding: 12 }}>
         <span className="muted">{data.total} matching logs · Page {data.page} of {Math.max(1, Math.ceil(data.total / data.pageSize))}</span>
