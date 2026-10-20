@@ -5,6 +5,7 @@ import { fromMs, fromMsPrecise } from '../lib/format';
 import { DataTable, type Col } from './DataTable';
 import { Alert, Badge, KV, Panel } from './ui';
 import { ModelUsage, type Usage } from './ModelUsage';
+import { LiveInsights } from './LiveInsights';
 
 type Item = {
   id: string; type: string; at: number | null; role?: string; text?: string; interrupted?: boolean;
@@ -33,9 +34,9 @@ export function AgentInsights({ sid }: { sid: string }) {
   if (!query.data) return <Alert>Loading agent reports…</Alert>;
   const data = query.data;
   const report = data.selected;
-  if (!data.reports.length) return <Alert>{data.enabled
+  if (!data.reports.length) return <><LiveInsights sid={sid} /><Alert>{data.enabled
     ? 'No agent session report has been received for this room. Reports appear after an instrumented agent session ends.'
-    : 'Agent report collection is disabled. An administrator can enable it and configure report uploads following the Agent telemetry setup guide.'}</Alert>;
+    : 'Agent report collection is disabled. An administrator can enable it and configure report uploads following the Agent telemetry setup guide.'}</Alert></>;
   const columns: Col<TranscriptRow>[] = [
     { key: 'at', header: 'Timestamp', cell: (i) => <span className="mono nowrap">{fromMsPrecise(i.at)}</span>, sort: (i) => i.at ?? 0 },
     { key: 'type', header: 'Event', cell: (i) => <div className="badges"><Badge>{i.role ?? i.type.replace(/_/g, ' ')}</Badge>{i.interrupted && <Badge tone="warn">Interrupted</Badge>}{i.isError && <Badge tone="bad">Tool error</Badge>}</div> },
@@ -51,6 +52,7 @@ export function AgentInsights({ sid }: { sid: string }) {
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
   return <>
+    <LiveInsights sid={sid} />
     <Panel title="Agent session reports">
       <div style={{ padding: '12px 14px' }}><label>Report <select className="select" aria-label="Agent report" value={report?.jobId ?? ''} onChange={(e) => setJobId(e.target.value)}>
         {data.reports.map((r) => <option key={r.jobId} value={r.jobId}>{r.agentName} · {r.jobId} · {r.state}</option>)}
@@ -65,7 +67,7 @@ export function AgentInsights({ sid }: { sid: string }) {
     </Panel>
     {report?.state === 'expired' && <Alert>Conversation content for this report has expired. Its identifying metadata is retained; uploading it again does not restore the content.</Alert>}
     {report?.content && <>
-      <Alert>This is a post-session report. Timings are reported by the agent SDK and may be unavailable for some models. Structured application logs are available in the Agent logs tab when submitted. Live traces, audio playback and tool arguments/results are not collected by this integration.</Alert>
+      <Alert>This is a post-session report. Timings are reported by the agent SDK and may be unavailable for some models. Structured application logs are available in the Agent logs tab when submitted. Live events and spans appear above when instrumented. Audio and tool arguments/results are excluded.</Alert>
       <ModelUsage usage={report.content.usage} omitted={report.content.omittedUsage} />
       <Panel title="Conversation and tool events" actions={<button className="btn secondary sm" onClick={download}>Download report</button>}>
         <DataTable rows={report.content.items.map((item, index) => ({ ...item, rowKey: String(index) }))} cols={columns} rowKey={(i) => i.rowKey} pageSize={50} empty={{ title: 'No conversation items in this report' }} />

@@ -58,6 +58,24 @@ db.exec(`
   );
   CREATE INDEX IF NOT EXISTS agent_log_room_time ON agent_log_entries(room_sid,at DESC);
   CREATE INDEX IF NOT EXISTS agent_log_expiry ON agent_log_entries(expires_at) WHERE message IS NOT NULL;
+  CREATE TABLE IF NOT EXISTS agent_live_jobs (
+    room_sid TEXT NOT NULL,job_id TEXT NOT NULL,agent_name TEXT NOT NULL,sdk_language TEXT NOT NULL,sdk_version TEXT,
+    participant_sid TEXT,worker_id TEXT,mode TEXT NOT NULL,capabilities TEXT NOT NULL,
+    first_received INTEGER NOT NULL,last_received INTEGER NOT NULL,expires_at INTEGER NOT NULL,
+    terminal_id TEXT,terminal_state TEXT,expected_count INTEGER,dropped_count INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY(room_sid,job_id)
+  );
+  CREATE TABLE IF NOT EXISTS agent_live_batches (
+    room_sid TEXT NOT NULL,job_id TEXT NOT NULL,batch_id TEXT NOT NULL,digest TEXT NOT NULL,
+    PRIMARY KEY(room_sid,job_id,batch_id)
+  );
+  CREATE TABLE IF NOT EXISTS agent_live_records (
+    room_sid TEXT NOT NULL,job_id TEXT NOT NULL,id TEXT NOT NULL,kind TEXT NOT NULL,at INTEGER NOT NULL,
+    turn_id TEXT,trace_id TEXT,span_id TEXT,content TEXT,digest TEXT NOT NULL,
+    received_at INTEGER NOT NULL,expires_at INTEGER NOT NULL,PRIMARY KEY(room_sid,job_id,id)
+  );
+  CREATE INDEX IF NOT EXISTS agent_live_room ON agent_live_records(room_sid,at);
+  CREATE INDEX IF NOT EXISTS agent_live_expiry ON agent_live_records(expires_at) WHERE content IS NOT NULL;
   CREATE TABLE IF NOT EXISTS egress (
     egress_id TEXT PRIMARY KEY, room_sid TEXT, room_name TEXT, status TEXT,
     started_at INTEGER, ended_at INTEGER, info TEXT NOT NULL

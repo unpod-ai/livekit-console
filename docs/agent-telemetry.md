@@ -2,7 +2,7 @@
 
 This opt-in integration adds post-session conversation reports to **Sessions → Agent insights**. It works with a
 self-hosted media server; it does not use Cloud observability APIs. Current support is the snake_case report from
-Python Agents `JobContext.make_session_report().to_dict()`. Other SDK formats need an explicit adapter.
+Python Agents `JobContext.make_session_report().to_dict()`. For live events, tracing and the explicit Node SDK adapter, see [live telemetry](agent-live-telemetry.md).
 
 For independent structured application logs and job lifecycle messages, see [agent logs](agent-logs.md).
 
@@ -42,8 +42,7 @@ async def entrypoint(ctx: JobContext):
 Add this call to an existing callback rather than replacing application cleanup. Allow the callback enough time
 to upload; the helper makes two attempts with a 3-second request timeout and a short delay. It constructs the
 report once and reuses the body for retries. Upload failures are logged without payloads or credentials. This
-helper has no durable queue: a worker crash or prolonged outage can lose a report. Apply any transcript PII
-redaction before upload; automatic PII redaction is not implemented by the console.
+helper has no durable queue: a worker crash or prolonged outage can lose a report. Apply source-side redaction as needed and configure the console’s [privacy policy](agent-live-telemetry.md#privacy) before collection.
 
 ### Legacy WorkerOptions integrations
 

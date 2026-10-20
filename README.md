@@ -89,3 +89,5 @@ and [changelog](CHANGELOG.md).
 
 ## Star history
 [![Star History Chart](https://api.star-history.com/svg?repos=unpod-ai/livekit-console&type=Date)](https://star-history.com/#unpod-ai/livekit-console&Date)
+
+For native live event collection, span timelines, privacy settings and Python/Node adapters, see [live agent telemetry](docs/agent-live-telemetry.md).

@@ -6,6 +6,8 @@ import { normalizeReport, ReportValidationError } from './agent-report.js';
 import { aggregateAgentUsage, type ModelKey, type UsageReport } from './agent-usage.js';
 import { requireTelemetry } from './telemetry-auth.js';
 import { logIngest, logInsights, purgeLogContent } from './session-logs.js';
+import { redactContent } from './telemetry-privacy.js';
+import { liveIngest, liveInsights, purgeLiveContent } from './live-telemetry.js';
 
 export const telemetryIngest = Router();
 export const agentInsights = Router();
@@ -14,8 +16,10 @@ const hash = (value: string): Buffer => createHash('sha256').update(value).diges
 const purge = () => {
   db.prepare('UPDATE agent_session_reports SET content=NULL WHERE expires_at <= ? AND content IS NOT NULL').run(Date.now());
   purgeLogContent();
+  purgeLiveContent();
 };
 telemetryIngest.use('/logs', logIngest);
+telemetryIngest.use('/events', liveIngest);
 
 telemetryIngest.post('/session-reports', requireTelemetry, express.json({ limit: '2mb' }), (req, res, next) => {
   try {
@@ -29,8 +33,10 @@ telemetryIngest.post('/session-reports', requireTelemetry, express.json({ limit:
       res.json({ roomSid, jobId, duplicate: true }); return;
     }
     const now = Date.now();
+    const liveJob = db.prepare('SELECT agent_name FROM agent_live_jobs WHERE room_sid=? AND job_id=?').get(roomSid, jobId);
+    if (liveJob && liveJob.agent_name !== agentName) { res.status(409).json({ error: 'Conflicting job identity' }); return; }
     db.prepare(`INSERT INTO agent_session_reports(room_sid,job_id,agent_name,participant_sid,worker_id,sdk_version,reported_at,received_at,expires_at,digest,content)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?)`).run(roomSid, jobId, agentName, participantSid, workerId, sdkVersion, reportedAt, now, now + config.telemetryRetentionDays * 86400000, digest, JSON.stringify(content));
+      VALUES (?,?,?,?,?,?,?,?,?,?,?)`).run(roomSid, jobId, agentName, participantSid, workerId, sdkVersion, reportedAt, now, now + config.telemetryRetentionDays * 86400000, digest, JSON.stringify(redactContent(content, config.telemetryRedaction, config.telemetryRedactTerms)));
     res.status(201).json({ roomSid, jobId, duplicate: false });
   } catch (err) {
     if (err instanceof ReportValidationError) { res.status(422).json({ error: err.message }); return; }
@@ -53,6 +59,7 @@ const summary = (r: ReportRow) => ({ roomSid: r.room_sid, jobId: r.job_id, agent
 // index.ts mounts this router behind requireAuth + requireAdmin; the service token is upload-only.
 agentInsights.use((_req, res, next) => { res.set('Cache-Control', 'no-store'); next(); });
 agentInsights.use(logInsights);
+agentInsights.use(liveInsights);
 agentInsights.get('/agents/:name/usage', (req, res, next) => {
   try {
     const integer = (value: unknown, fallback: number, max: number) => {
@@ -97,10 +104,29 @@ agentInsights.get('/sessions/:sid', (req, res) => {
   const selected = job ? db.prepare(`SELECT ${columns},content FROM agent_session_reports WHERE room_sid=? AND job_id=?`).get(req.params.sid, job) as ReportRow | undefined : undefined;
   const total = db.prepare('SELECT COUNT(*) AS n FROM agent_session_reports WHERE room_sid=?').get(req.params.sid)!.n;
   res.json({ enabled: !!config.telemetryToken, retentionDays: config.telemetryRetentionDays, total, reports: rows.map(summary),
-    selected: selected ? { ...summary(selected), content: selected.expires_at > Date.now() && selected.content ? JSON.parse(selected.content) : null } : null });
+    selected: selected ? { ...summary(selected), content: selected.expires_at > Date.now() && selected.content ? redactContent(JSON.parse(selected.content), config.telemetryRedaction, config.telemetryRedactTerms) : null } : null });
 });
+
+export function scrubRetainedTelemetry(): void {
+  if (config.telemetryRedaction === 'off') return;
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    for (const table of ['agent_session_reports', 'agent_live_records']) {
+      // The live table is added by the Phase 1 schema; both tables hold normalized content only.
+      for (const row of db.prepare(`SELECT rowid,content FROM ${table} WHERE content IS NOT NULL`).iterate()) {
+        db.prepare(`UPDATE ${table} SET content=? WHERE rowid=?`).run(JSON.stringify(redactContent(JSON.parse(row.content as string), config.telemetryRedaction, config.telemetryRedactTerms)), row.rowid as number);
+      }
+    }
+    for (const row of db.prepare('SELECT rowid,message,logger FROM agent_log_entries WHERE message IS NOT NULL').iterate()) {
+      const value = redactContent(row, config.telemetryRedaction, config.telemetryRedactTerms);
+      db.prepare('UPDATE agent_log_entries SET message=?,logger=? WHERE rowid=?').run(value.message as string, value.logger as string | null, row.rowid as number);
+    }
+    db.exec('COMMIT');
+  } catch (err) { db.exec('ROLLBACK'); throw err; }
+}
 
 export function startReportRetention(): void {
   purge();
+  scrubRetainedTelemetry();
   setInterval(purge, 3600000).unref();
 }
