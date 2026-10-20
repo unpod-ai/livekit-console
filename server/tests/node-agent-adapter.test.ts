@@ -30,3 +30,9 @@ test('Node final report and usage adapter convert native timing units without co
   const body = reportEnvelope({ roomId: 'RM_node', jobId: 'AJ_node', timestamp: 1000, chatHistory: { items: [] }, options: { apiKey: 'private' }, modelUsage: [] }, 'test', '1.9.3');
   assert.equal(body.report.timestamp, 1); assert.equal(JSON.stringify(body).includes('private'), false);
 });
+
+test('Node reports distinguish unreported usage from a measured empty collection', () => {
+  const base = { roomId: 'RM_node', jobId: 'AJ_node', timestamp: 1000, chatHistory: { items: [] } };
+  assert.equal(reportEnvelope(base, 'test', '1.9.3').report.usage, null);
+  assert.deepEqual(reportEnvelope({ ...base, modelUsage: [] }, 'test', '1.9.3').report.usage, []);
+});

@@ -15,7 +15,7 @@ export function reportEnvelope(report, agentName, sdkVersion) {
     name: item.name, call_id: item.callId, is_error: item.isError, old_agent_id: item.oldAgentId, new_agent_id: item.newAgentId,
   }));
   return { schemaVersion: 2, agentName, report: { room_id: report.roomId, room: report.room, job_id: report.jobId,
-    sdk_version: sdkVersion, timestamp: report.timestamp / 1000, chat_history: { items }, usage: usageRows(report.modelUsage) } };
+    sdk_version: sdkVersion, timestamp: report.timestamp / 1000, chat_history: { items }, usage: report.modelUsage == null ? null : usageRows(report.modelUsage) } };
 }
 export function transport({ url = process.env.CONSOLE_URL, token = process.env.AGENT_TELEMETRY_TOKEN } = {}) {
   return async (route, body) => {

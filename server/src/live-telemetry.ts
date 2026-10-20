@@ -188,9 +188,12 @@ liveInsights.get('/sessions/:sid/export',(req,res)=>{
     const room=req.params.sid, now=Date.now();
     const job=req.query.jobId===undefined?null:id(req.query.jobId,'jobId');
     const suffix=job?' AND job_id=?':'',args:(string|number)[]=[room,now,...(job?[job]:[])];
+    let exportBytes = 0;
     for(const table of ['agent_live_records','agent_log_entries','agent_session_reports']){
-      const count=db.prepare(`SELECT COUNT(*) AS n FROM ${table} WHERE room_sid=? AND expires_at>?${suffix}`).get(...args)!.n as number;
-      if(count>50000){res.status(413).json({error:'Export exceeds 50,000 records per category; export a single job or use paginated reads'});return;}
+      const size = table === 'agent_log_entries' ? 'COALESCE(length(CAST(message AS BLOB)),0)+COALESCE(length(CAST(logger AS BLOB)),0)+2048' : 'COALESCE(length(CAST(content AS BLOB)),0)+1024';
+      const totals=db.prepare(`SELECT COUNT(*) AS n,COALESCE(SUM(${size}),0) AS bytes FROM ${table} WHERE room_sid=? AND expires_at>?${suffix}`).get(...args)!;
+      exportBytes += totals.bytes as number;
+      if((totals.n as number)>50000 || exportBytes>32*1024*1024){res.status(413).json({error:'Export exceeds the 50,000-record or 32 MiB budget; export a single job or use paginated reads'});return;}
     }
     const records=db.prepare(`SELECT job_id,content FROM agent_live_records WHERE room_sid=? AND expires_at>? AND content IS NOT NULL${suffix} ORDER BY at,id`).all(...args).map(r=>({...privacy(JSON.parse(r.content as string)),jobId:r.job_id}));
     const reports=db.prepare(`SELECT job_id AS jobId,agent_name AS agentName,sdk_version AS sdkVersion,content FROM agent_session_reports WHERE room_sid=? AND expires_at>? AND content IS NOT NULL${suffix} ORDER BY reported_at`).all(...args).map(r=>({...r,content:privacy(JSON.parse(r.content as string))}));

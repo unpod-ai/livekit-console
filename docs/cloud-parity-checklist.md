@@ -75,7 +75,7 @@ Isolated tests cover delivery, redaction, state, export and permissions; native 
 
 Acceptance:
 
-- [ ] Run a real agent session and correlate its transcript, trace, logs and usage with the existing session page.
+- [x] Run a real native SDK/RTC agent session and correlate its transcript, trace, logs and usage with the session page (deterministic local model).
 - [x] Verify tool calls, an interrupted turn, an agent error and incomplete telemetry remain understandable.
 - [x] Verify final-report retries do not duplicate conversation reports or extend retention (isolated HTTP tests).
 - [x] Verify report text is inaccessible to anonymous users/viewers (HTTP and browser checks).

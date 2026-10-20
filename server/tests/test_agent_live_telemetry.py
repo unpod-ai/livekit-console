@@ -1,5 +1,7 @@
 import importlib.util
 import json
+import os
+from unittest.mock import patch
 from pathlib import Path
 import types
 import unittest
@@ -106,3 +108,12 @@ class LiveTests(unittest.IsolatedAsyncioTestCase):
         collector.emit("metrics", stage="llm", metrics={"duration": float('nan')})
         await collector.close()
         self.assertEqual(self.sent[-1]["entries"][0]["state"], "incomplete")
+
+    async def test_native_job_context_does_not_require_userdata(self):
+        del self.ctx.userdata
+        with patch.dict(os.environ, {"AGENT_TELEMETRY_EVENTS_ENABLED": "true", "AGENT_LOGS_ENABLED": "false"}), patch.object(helper.importlib.metadata, "version", return_value="1.5.8"), patch.object(helper.SessionTelemetry, "configure_tracing"):
+            collector = helper.start_collection(self.ctx, "test-agent", self.send)
+            self.assertIs(helper.start_collection(self.ctx, "test-agent", self.send), collector)
+            session = Session()
+            self.assertIs(helper.attach_session(self.ctx, session), collector)
+            await collector.close()

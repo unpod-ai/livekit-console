@@ -94,8 +94,8 @@ within the current paginated result, not estimated model timings. Final report d
 - Expired: all retained content for the job has expired. Metadata and retry tombstones remain.
 - Disabled: new event collection is switched off. Retained data stays readable until its original expiry.
 
-A lack of activity can appear incomplete after 120 seconds even if the room remains open; this is an explicit
-coverage warning, not proof that the worker died. Older report-only jobs cannot reconstruct live traces.
+Collectors send a coverage heartbeat every 30 seconds while running. An upload outage can appear incomplete after
+120 seconds even if the room remains open; this is a coverage warning, not proof that the worker died. Older report-only jobs cannot reconstruct live traces.
 Worker IDs are shown only when supplied (`LIVEKIT_WORKER_ID`); the SDK does not necessarily expose them per job.
 Messages may include updated versions of the same native message ID. Usage records are cumulative snapshots and
 never contribute again to final-report usage charts. Missing/realtime stages remain unavailable.
@@ -118,7 +118,7 @@ sets content expiry; duplicates and late events cannot extend it or restore expi
 
 `GET /api/agent-insights/sessions/:sid/telemetry` supports jobId, turnId, traceId, kind and page (100 records/page).
 `GET /api/agent-insights/sessions/:sid/export?jobId=...` combines retained reports, live records and logs. Export
-is bounded to 50,000 entries per category, otherwise returns 413; use job-scoped export or paginated reads.
+is bounded to 50,000 entries per category and a 32 MiB preflight budget (including metadata allowance), otherwise returns 413; use job-scoped export or paginated reads.
 
 ## Privacy
 
