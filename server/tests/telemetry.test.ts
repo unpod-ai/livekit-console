@@ -12,6 +12,7 @@ Object.assign(process.env, {
   ADMIN_USER: 'admin', ADMIN_PASSWORD: 'test-password', SESSION_SECRET: 'test-session-secret',
   AGENT_TELEMETRY_TOKEN: 'test-service-token-with-at-least-32-characters',
   AGENT_LOGS_ENABLED: 'true',
+  AGENT_TELEMETRY_EVENTS_ENABLED: 'true',
 });
 const { telemetryIngest, agentInsights } = await import('../src/telemetry.js');
 const { login, requireAuth, requireAdmin, hashPassword } = await import('../src/auth.js');
@@ -263,8 +264,111 @@ test('log pagination, late events and identical entry IDs remain isolated by roo
   assert.equal((await fetch(url, { headers: { authorization: 'Bearer ' + token } })).status, 401);
 });
 
+test('live collection handles terminal-before-events, redaction, correlation, exports and expired retries', async () => {
+  const header = { schemaVersion: 1, roomSid: 'RM_live', jobId: 'AJ_live', agentName: 'live-agent', batchId: 'start',
+    sdk: { language: 'python', version: '1.5.8' }, participantSid: 'PA_live', workerId: 'AW_live', mode: 'pipeline', capabilities: ['events', 'spans', 'logs', 'report'] };
+  const post = (body: unknown) => fetch(base + '/api/telemetry/events', { method: 'POST', headers: { 'content-type': 'application/json', authorization: 'Bearer ' + token }, body: JSON.stringify(body) });
+  const terminal = { id: 'finish', kind: 'collection', at: 1003, state: 'complete', expectedCount: 4, droppedCount: 0 };
+  assert.equal((await post({ ...header, entries: [terminal] })).status, 201);
+  const auth = { cookie: await cookie() }, url = base + '/api/agent-insights/sessions/RM_live/telemetry';
+  const read = async () => (await (await fetch(url, { headers: auth })).json());
+  assert.equal((await read()).jobs[0].state, 'incomplete');
+  const events = { ...header, batchId: 'events', entries: [
+    { id: 'message1', kind: 'message', at: 1000, role: 'user', text: 'Contact jane@example.test +14155550100', turnId: 'turn1', traceId: 'a'.repeat(32), spanId: 'b'.repeat(16) },
+    { id: 'tool1', kind: 'tool', at: 1001, name: 'lookup', callId: 'call1', isError: true, arguments: 'discard', output: 'discard', turnId: 'turn1' },
+    { id: 'span1', kind: 'span', at: 1000, end: 1002, stage: 'llm', name: 'llm_node', traceId: 'a'.repeat(32), spanId: 'b'.repeat(16), status: 'error', turnId: 'turn1', attributes: { password: 'discard' } },
+    { id: 'log1', kind: 'log', at: 1002, message: 'password=hidden-value', level: 'ERROR', logger: 'application', turnId: 'turn1', traceId: 'a'.repeat(32), spanId: 'b'.repeat(16) },
+  ] };
+  assert.equal((await post(events)).status, 201); assert.equal((await post(events)).status, 200);
+  const final = { ...envelope('AJ_live'), agentName: 'live-agent', report: { ...envelope('AJ_live').report, room_id: 'RM_live' } };
+  assert.equal((await upload(final)).status, 201);
+  const conflicting = { ...envelope('AJ_live'), agentName: 'another-agent', report: { ...envelope('AJ_live').report, room_id: 'RM_live' } };
+  assert.equal((await upload(conflicting)).status, 409);
+  const data = await read(); assert.equal(data.jobs[0].state, 'complete'); assert.equal(data.total, 5);
+  assert.equal(data.jobs[0].receivedCount, 4); assert.equal(data.jobs[0].workerId, 'AW_live');
+  assert.equal(data.rows.find((x: any) => x.id === 'message1').text.includes('jane@example.test'), false);
+  assert.equal(JSON.stringify(data).includes('discard'), false);
+  const correlated = await (await fetch(url + '?traceId=' + 'a'.repeat(32), { headers: auth })).json();
+  assert.equal(correlated.rows.length, 3);
+  const logs = await (await fetch(base + '/api/agent-insights/sessions/RM_live/logs?traceId=' + 'a'.repeat(32), { headers: auth })).json();
+  assert.equal(logs.total, 1); assert.equal(logs.rows[0].message.includes('hidden-value'), false);
+  const exportUrl = base + '/api/agent-insights/sessions/RM_live/export';
+  const exported = await (await fetch(exportUrl, { headers: auth })).json();
+  assert.equal(exported.records.length, 5); assert.equal(exported.logs.length, 1); assert.equal(exported.reports.length, 1);
+  assert.equal(JSON.stringify(exported).includes('jane@example.test'), false);
+  assert.equal((await fetch(exportUrl)).status, 401);
+  assert.equal((await fetch(exportUrl, { headers: { cookie: await cookie('reader') } })).status, 403);
+  assert.equal((await fetch(url, { headers: { authorization: 'Bearer ' + token } })).status, 401);
+  assert.equal((await post({ ...events, entries: [{ ...events.entries[0], text: 'Changed' }] })).status, 409);
+  db.prepare("UPDATE agent_live_jobs SET expires_at=0 WHERE job_id='AJ_live'").run();
+  db.prepare("UPDATE agent_live_records SET expires_at=0 WHERE job_id='AJ_live'").run();
+  db.prepare("UPDATE agent_session_reports SET expires_at=0 WHERE job_id='AJ_live'").run();
+  db.prepare("UPDATE agent_log_entries SET expires_at=0 WHERE job_id='AJ_live'").run();
+  assert.equal((await read()).jobs[0].state, 'expired');
+  assert.equal((await post(events)).status, 200); assert.equal((await read()).rows.length, 0);
+});
+
 test('collection is disabled without an explicitly configured service token', async () => {
   const previous = config.telemetryToken; config.telemetryToken = '';
   try { assert.equal((await upload(envelope('AJ_disabled'))).status, 503); }
   finally { config.telemetryToken = previous; }
+});
+
+test('live telemetry rejects invalid fields atomically and reports disabled, dropped and stalled jobs', async () => {
+  const post = (body: unknown, auth: string | null = token) => fetch(base + '/api/telemetry/events', { method: 'POST', headers: { 'content-type': 'application/json', ...(auth ? { authorization: `Bearer ${auth}` } : {}) }, body: JSON.stringify(body) });
+  const e = { schemaVersion: 1, roomSid: 'RM_edges', jobId: 'AJ_edges', agentName: 'test-agent', batchId: 'edge1', sdk: { language: 'python', version: '1.5.8' }, capabilities: ['events'], entries: [{ id: 'one', kind: 'state', at: 1000, state: 'thinking' }] };
+  assert.equal((await post(e, null)).status, 401);
+  config.telemetryEventsEnabled = false; assert.equal((await post(e)).status, 503); config.telemetryEventsEnabled = true;
+  for (const entry of [
+    { id: 'bad', kind: 'message', at: 1000, role: 'system', text: 'excluded' },
+    { id: 'bad', kind: 'span', at: 2, end: 1, traceId: 'a'.repeat(32), spanId: 'b'.repeat(16), name: 'llm', stage: 'llm' },
+    { id: 'bad', kind: 'metrics', at: 1, stage: 'llm', metrics: { input_tokens: .5 } },
+    { id: 'bad', kind: 'state', at: 1, state: 'thinking', traceId: '0'.repeat(32) },
+    { id: 'bad', kind: 'collection', at: 1, state: 'complete', expectedCount: -1 },
+  ]) assert.equal((await post({ ...e, entries: [...e.entries, entry] })).status, 422);
+  assert.equal(db.prepare("SELECT COUNT(*) AS n FROM agent_live_records WHERE room_sid='RM_edges'").get()!.n, 0);
+  assert.equal((await post(e)).status, 201);
+  const admin = { cookie: await cookie() };
+  const read = async () => (await (await fetch(base + '/api/agent-insights/sessions/RM_edges/telemetry', { headers: admin })).json()).jobs[0];
+  assert.equal((await read()).state, 'receiving');
+  db.prepare("UPDATE agent_live_jobs SET last_received=0 WHERE room_sid='RM_edges'").run();
+  assert.equal((await read()).state, 'incomplete');
+  assert.equal((await post({ ...e, batchId: 'edge2', entries: [{ id: 'end', kind: 'collection', at: 1001, state: 'incomplete', expectedCount: 2, droppedCount: 1 }] })).status, 201);
+  assert.equal((await read()).droppedCount, 1);
+  assert.equal((await post({ ...e, batchId: 'edge3', entries: [{ ...e.entries[0], state: 'speaking' }, { id: 'new', kind: 'state', at: 1001, state: 'idle' }] })).status, 409);
+  assert.equal(db.prepare("SELECT COUNT(*) AS n FROM agent_live_records WHERE room_sid='RM_edges' AND id='new'").get()!.n, 0);
+  for (const route of ['telemetry', 'export']) {
+    assert.equal((await fetch(base + '/api/agent-insights/sessions/RM_edges/' + route)).status, 401);
+    assert.equal((await fetch(base + '/api/agent-insights/sessions/RM_edges/' + route, { headers: { authorization: `Bearer ${token}` } })).status, 401);
+    assert.equal((await fetch(base + '/api/agent-insights/sessions/RM_edges/' + route, { headers: { cookie: await cookie('reader') } })).status, 403);
+  }
+});
+
+test('privacy upgrades scrub retained content while preserving retry digests', async () => {
+  const { scrubRetainedTelemetry } = await import('../src/telemetry.js');
+  const previous = config.telemetryRedaction;
+  try {
+    config.telemetryRedaction = 'off';
+    const e = envelope('AJ_privacy_upgrade'); e.report.chat_history.items[1].content = ['Contact person@example.test'];
+    assert.equal((await upload(e)).status, 201);
+    const before = db.prepare("SELECT digest FROM agent_session_reports WHERE job_id='AJ_privacy_upgrade'").get()!.digest;
+    config.telemetryRedaction = 'strict'; scrubRetainedTelemetry();
+    const row = db.prepare("SELECT digest,content FROM agent_session_reports WHERE job_id='AJ_privacy_upgrade'").get()!;
+    assert.equal(row.digest, before); assert.equal(String(row.content).includes('person@example.test'), false);
+    assert.equal((await upload(e)).status, 200);
+    const data = await (await fetch(base + '/api/agent-insights/sessions/RM_report?jobId=AJ_privacy_upgrade', { headers: { cookie: await cookie() } })).json();
+    assert.equal(data.selected.content.items[0].text, '[CONTENT REDACTED]');
+  } finally { config.telemetryRedaction = previous; }
+});
+
+test('live events reject oversized bodies and paginate without mixing room/job identities', async () => {
+  const post = (body: unknown) => fetch(base + '/api/telemetry/events', { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` }, body: JSON.stringify(body) });
+  const header = { schemaVersion: 1, roomSid: 'RM_pages', jobId: 'AJ_pages', agentName: 'page-agent', batchId: 'p1', sdk: { language: 'node', version: '1.9.3' }, capabilities: ['events'] };
+  const entries = Array.from({ length: 100 }, (_, i) => ({ id: 's'+i, kind: 'state', at: 1000+i, state: 'thinking' }));
+  assert.equal((await post({ ...header, entries })).status, 201);
+  assert.equal((await post({ ...header, batchId: 'p2', entries: [{ id: 'extra', kind: 'state', at: 2000, state: 'idle' }] })).status, 201);
+  assert.equal((await post({ ...header, batchId: 'oversize', entries: [{ id: 'huge', kind: 'message', at: 1, role: 'user', text: 'a'.repeat(300000) }] })).status, 413);
+  assert.equal((await post({ ...header, batchId: 'too-many', entries: [...entries, entries[0]] })).status, 422);
+  const data = await (await fetch(base + '/api/agent-insights/sessions/RM_pages/telemetry?page=2&jobId=AJ_pages', { headers: { cookie: await cookie() } })).json();
+  assert.equal(data.total, 101); assert.equal(data.rows.length, 1); assert.equal(data.rows[0].jobId, 'AJ_pages'); assert.equal(data.rows[0].id, 'extra');
 });

@@ -4,6 +4,7 @@ import { db } from './db.js';
 import { config } from './config.js';
 import { requireTelemetry } from './telemetry-auth.js';
 import { ReportValidationError } from './report-validation.js';
+import { redactContent } from './telemetry-privacy.js';
 
 const LEVELS = ['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'];
 const hash = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
@@ -71,7 +72,10 @@ logIngest.post('/', requireTelemetry, (_req, res, next) => {
     const now = Date.now(), expires = now + config.telemetryRetentionDays * 86400000;
     const insert = db.prepare(`INSERT OR IGNORE INTO agent_log_entries(room_sid,job_id,entry_id,agent_name,at,level,message,logger,turn_id,trace_id,span_id,received_at,expires_at,digest)
       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`);
-    for (const { entry: e, digest } of entries) insert.run(roomSid, jobId, e.id, agentName, e.at, e.level, e.message, e.logger, e.turnId, e.traceId, e.spanId, now, expires, digest);
+    for (const { entry, digest } of entries) {
+      const e = redactContent(entry, config.telemetryRedaction, config.telemetryRedactTerms);
+      insert.run(roomSid, jobId, e.id, agentName, e.at, e.level, e.message, e.logger, e.turnId, e.traceId, e.spanId, now, expires, digest);
+    }
     db.prepare('INSERT INTO agent_log_batches(room_sid,job_id,batch_id,digest,received_at) VALUES (?,?,?,?,?)').run(roomSid, jobId, batchId, digest, now);
     db.exec('COMMIT'); transaction = false;
     res.status(201).json({ duplicate: false });
@@ -97,6 +101,9 @@ logInsights.get('/sessions/:sid/logs', (req, res) => {
     let where = 'room_sid=? AND expires_at>? AND message IS NOT NULL';
     if (job) { where += ' AND job_id=?'; args.push(job); }
     if (level) { where += ' AND level=?'; args.push(level); }
+    for (const [query, column] of [['turnId', 'turn_id'], ['traceId', 'trace_id'], ['spanId', 'span_id']]) {
+      if (req.query[query] !== undefined) { where += ` AND ${column}=?`; args.push(text(req.query[query], query)); }
+    }
     if (q) { where += ' AND instr(lower(message),lower(?))>0'; args.push(q); }
     const total = db.prepare(`SELECT COUNT(*) AS n FROM agent_log_entries WHERE ${where}`).get(...args)!.n as number;
     const current = Math.min(page, Math.max(1, Math.ceil(total / 50)));
@@ -104,6 +111,6 @@ logInsights.get('/sessions/:sid/logs', (req, res) => {
       FROM agent_log_entries WHERE ${where} ORDER BY at DESC,job_id,entry_id LIMIT 50 OFFSET ?`).all(...args, (current - 1) * 50);
     const expired = db.prepare(`SELECT COUNT(*) AS n FROM agent_log_entries WHERE room_sid=? AND expires_at<=? ${job ? 'AND job_id=?' : ''}`).get(req.params.sid, now, ...(job ? [job] : []))!.n;
     const jobs = db.prepare('SELECT DISTINCT job_id AS jobId,agent_name AS agentName FROM agent_log_entries WHERE room_sid=? ORDER BY job_id LIMIT 100').all(req.params.sid);
-    res.json({ enabled: config.agentLogsEnabled && !!config.telemetryToken, retentionDays: config.telemetryRetentionDays, total, expired, rows, jobs, page: current, pageSize: 50 });
+    res.json({ enabled: config.agentLogsEnabled && !!config.telemetryToken, retentionDays: config.telemetryRetentionDays, total, expired, rows: redactContent(rows, config.telemetryRedaction, config.telemetryRedactTerms), jobs, page: current, pageSize: 50 });
   } catch (err) { res.status(err instanceof ReportValidationError ? 422 : 500).json({ error: err instanceof ReportValidationError ? err.message : 'Could not read logs' }); }
 });

@@ -14,10 +14,11 @@ export function AgentLogs({ sid }: { sid: string }) {
   const [params, setParams] = useSearchParams();
   const job = params.get('logJob') ?? params.get('reportJob') ?? '';
   const level = params.get('logLevel') ?? '', q = params.get('logQ') ?? '', page = params.get('logPage') ?? '1';
+  const turn = params.get('logTurn') ?? '', trace = params.get('logTrace') ?? '', span = params.get('logSpan') ?? '';
   const [search, setSearch] = useState(q);
   useEffect(() => setSearch(q), [q]);
-  const query = new URLSearchParams({ page, ...(job ? { jobId: job } : {}), ...(level ? { level } : {}), ...(q ? { q } : {}) });
-  const result = useApi<Data>(['agent-logs', sid, job, level, q, page], `/agent-insights/sessions/${encodeURIComponent(sid)}/logs?${query}`, { enabled: admin });
+  const query = new URLSearchParams({ page, ...(turn ? { turnId: turn } : {}), ...(trace ? { traceId: trace } : {}), ...(span ? { spanId: span } : {}), ...(job ? { jobId: job } : {}), ...(level ? { level } : {}), ...(q ? { q } : {}) });
+  const result = useApi<Data>(['agent-logs', sid, job, level, q, page, turn, trace, span], `/agent-insights/sessions/${encodeURIComponent(sid)}/logs?${query}`, { enabled: admin });
   function filter(key: string, value: string) {
     setParams(old => { const next = new URLSearchParams(old); next.set(key, value); if (key !== 'logPage') next.delete('logPage'); return next; });
   }
@@ -37,6 +38,7 @@ export function AgentLogs({ sid }: { sid: string }) {
         </select></label>
         <label style={{ minWidth: 0, maxWidth: '100%', flex: '1 1 140px' }}>Severity <select className="select" aria-label="Log severity" value={level} onChange={e => filter('logLevel', e.target.value)}><option value="">All levels</option>{['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'].map(l => <option key={l}>{l}</option>)}</select></label>
         <label style={{ minWidth: 0, maxWidth: '100%', flex: '1 1 200px' }}>Message <input className="input" aria-label="Search log messages" maxLength={200} value={search} onChange={e => setSearch(e.target.value)} /></label>
+        {([['logTurn', 'Turn', turn], ['logTrace', 'Trace', trace], ['logSpan', 'Span', span]] as const).map(([key, label, value]) => <label key={key} style={{ minWidth: 0, flex: '1 1 180px' }}>{label}<input className="input" aria-label={`Log ${label.toLowerCase()}`} value={value} maxLength={200} onChange={e => filter(key, e.target.value)} /></label>)}
         <button className="btn secondary sm" type="submit" style={{ alignSelf: 'end' }}>Search logs</button>
       </form>
       <DataTable rows={data?.rows ?? []} loading={result.isLoading} search={false} pageSize={false} rowKey={r => `${r.jobId}/${r.id}`} empty={{ title: 'No retained logs match these filters' }} cols={[

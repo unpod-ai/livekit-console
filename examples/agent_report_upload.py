@@ -114,6 +114,17 @@ def register_shutdown_report(ctx: JobContext, agent_name: str) -> bool:
     if not os.environ.get("CONSOLE_URL") or not os.environ.get("AGENT_TELEMETRY_TOKEN"):
         return False
 
+    collector = None
+    if os.environ.get("AGENT_TELEMETRY_EVENTS_ENABLED") == "true":
+        try:
+            if __package__:
+                from .agent_live_telemetry import start_collection
+            else:
+                from agent_live_telemetry import start_collection
+            collector = start_collection(ctx, agent_name, _post_telemetry)
+        except Exception as exc:
+            logger.warning("Console live collection unavailable (%s)", type(exc).__name__)
+
     log_start = asyncio.create_task(upload_session_logs(ctx, agent_name, [make_session_log("INFO", "Agent job started")])) if os.environ.get("AGENT_LOGS_ENABLED") == "true" else None
 
     async def export_report() -> None:
@@ -135,6 +146,11 @@ def register_shutdown_report(ctx: JobContext, agent_name: str) -> bool:
 
     async def export_after_session() -> None:
         await asyncio.gather(export_report(), export_logs())
+        if collector:
+            try:
+                await collector.close()
+            except Exception as exc:
+                logger.warning("Console live collection cleanup unavailable (%s)", type(exc).__name__)
 
     ctx.add_shutdown_callback(export_after_session)
     return True

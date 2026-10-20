@@ -37,10 +37,9 @@ responses and room lifecycle webhooks do not contain conversation transcripts or
 
 ### Collection and correlation
 
-The final-report slice includes authenticated uploads, Python integration, an admin-only viewer/export, retry
-protection and configurable content retention. The worker integration is enabled and the native-SDK transport path
-has passed a synthetic probe. Verification of a real post-rollout report remains open; earlier calls cannot be backfilled.
-The complete Phase 1 collection pipeline remains open.
+Final reports and live events use separate authenticated upload routes. The native integrations and investigation
+UI are described in [live telemetry](agent-live-telemetry.md), including supported SDK versions and privacy limits.
+Isolated tests cover delivery, redaction, state, export and permissions; native RTC acceptance is tracked below.
 
 - [x] Define and validate the version-1 Python post-session report envelope.
 - [x] Accept bounded uploads with a dedicated service token and persist reports independently of webhook arrival.
@@ -49,13 +48,13 @@ The complete Phase 1 collection pipeline remains open.
 - [x] Accept opt-in structured log batches independently of reports, with atomic retry/conflict handling and content retention.
 - [x] Provide a Python log uploader and optional fixed job lifecycle events without collecting process-wide logs.
 
-- [ ] Define versioned telemetry records and supported Python/Node Agents SDK versions.
-- [ ] Provide authenticated ingestion separate from browser login sessions.
-- [ ] Add agent integration examples for session reports, live events, metrics, traces and structured logs.
-- [ ] Correlate room SID, participant SID, session/job identifiers, agent identity, worker and trace identifiers.
-- [ ] Handle retries, duplicate records, late/out-of-order events and interrupted uploads.
-- [ ] Show collection state: disabled, receiving, incomplete, complete or expired.
-- [ ] Configure collection, access permissions, retention and redaction before storing conversation content.
+- [x] Define versioned telemetry records and supported Python/Node Agents SDK versions.
+- [x] Provide authenticated ingestion separate from browser login sessions.
+- [x] Add agent integration examples for session reports, live events, metrics, traces and structured logs.
+- [x] Correlate room SID, participant SID, session/job identifiers, agent identity, worker and trace identifiers.
+- [x] Handle retries, duplicate records, late/out-of-order events and interrupted uploads.
+- [x] Show collection state: disabled, receiving, incomplete, complete or expired.
+- [x] Configure collection, access permissions, retention and redaction before storing conversation content.
 
 ### Session experience
 
@@ -65,23 +64,23 @@ The complete Phase 1 collection pipeline remains open.
 - [x] Collect version-2 per-model token/cache/speech/request counters and display them per final report.
 - [x] Preserve version-1 retry compatibility and mark missing or unsupported usage explicitly.
 - [x] Aggregate retained model usage per agent with time ranges, coverage gaps, model filters and paginated report drilldowns.
-- [ ] Display timestamped user/agent transcripts, tool calls, handoffs and errors.
-- [ ] Display a span timeline for turns, STT, LLM, TTS and tools.
-- [ ] Search/filter session logs and correlate log lines with turns and traces.
+- [x] Display timestamped user/agent transcripts, tool calls, handoffs and errors.
+- [x] Display a span timeline for turns, STT, LLM, TTS and tools.
+- [x] Search/filter session logs and correlate log lines with turns and traces.
 - [x] Browse structured logs by job, exact severity and message text; show supplied turn/trace/span IDs and link reports to job logs.
-- [ ] Show response latency, stage timing, interruptions and model/token/speech usage where reported.
+- [x] Show response latency, stage timing, interruptions and model/token/speech usage where reported.
 - [x] Distinguish agent join latency from conversational response latency.
-- [ ] Handle realtime-model and pipeline-model telemetry differences with explicit unavailable states.
-- [ ] Export a session's available transcript, events, metrics, traces and logs.
+- [x] Handle realtime-model and pipeline-model telemetry differences with explicit unavailable states.
+- [x] Export a session's available transcript, events, metrics, traces and logs.
 
 Acceptance:
 
 - [ ] Run a real agent session and correlate its transcript, trace, logs and usage with the existing session page.
-- [ ] Verify tool calls, an interrupted turn, an agent error and incomplete telemetry remain understandable.
+- [x] Verify tool calls, an interrupted turn, an agent error and incomplete telemetry remain understandable.
 - [x] Verify final-report retries do not duplicate conversation reports or extend retention (isolated HTTP tests).
 - [x] Verify report text is inaccessible to anonymous users/viewers (HTTP and browser checks).
-- [ ] Verify duplicates in the future live event/log/usage pipelines do not inflate totals.
-- [ ] Verify all future conversation telemetry categories obey their access rules.
+- [x] Verify duplicates in the live event/log/usage pipelines do not inflate totals.
+- [x] Verify all conversation telemetry categories obey their access rules.
 
 ## Phase 2 — Recordings and interactive analytics
 
