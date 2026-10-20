@@ -30,7 +30,19 @@ async def upload_session_report(ctx: JobContext, agent_name: str) -> bool:
     # Build once so retries retain the same report timestamp and content.
     try:
         report = ctx.make_session_report()
-        payload = report.to_dict()
+        raw = report.to_dict()
+        # SDK error events may contain exception objects. They are uploaded through the live
+        # error projection, never serialized with reports, prompts or tool payloads.
+        payload = {key: raw.get(key) for key in ("room_id", "room", "job_id", "sdk_version", "timestamp", "usage")}
+        items = []
+        for item in raw["chat_history"]["items"]:
+            projected = {key: item[key] for key in ("id", "type", "role", "created_at", "interrupted", "name", "call_id", "is_error", "old_agent_id", "new_agent_id") if key in item}
+            if item.get("type") == "message" and item.get("role") in ("user", "assistant"):
+                content = item.get("content", [])
+                projected["content"] = [part for part in (content if isinstance(content, list) else [content]) if isinstance(part, str)]
+                projected["metrics"] = {key: value for key, value in item.get("metrics", {}).items() if key in ("llm_node_ttft", "tts_node_ttfb", "e2e_latency", "transcription_delay", "end_of_turn_delay", "on_user_turn_completed_delay")}
+            items.append(projected)
+        payload["chat_history"] = {"items": items}
         if report.model_usage is not None:
             # SDK 1.5.8's to_dict excludes defaults, including the usage discriminator.
             payload["usage"] = [
@@ -43,7 +55,7 @@ async def upload_session_report(ctx: JobContext, agent_name: str) -> bool:
             "agentName": agent_name,
             "report": payload,
         }, allow_nan=False).encode("utf-8")
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, KeyError):
         logger.warning("Console report could not be serialized")
         return False
 

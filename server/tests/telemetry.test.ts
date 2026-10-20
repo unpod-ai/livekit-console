@@ -372,3 +372,11 @@ test('live events reject oversized bodies and paginate without mixing room/job i
   const data = await (await fetch(base + '/api/agent-insights/sessions/RM_pages/telemetry?page=2&jobId=AJ_pages', { headers: { cookie: await cookie() } })).json();
   assert.equal(data.total, 101); assert.equal(data.rows.length, 1); assert.equal(data.rows[0].jobId, 'AJ_pages'); assert.equal(data.rows[0].id, 'extra');
 });
+
+test('combined export rejects an excessive byte budget before materializing content', async () => {
+  db.prepare("INSERT INTO agent_session_reports(room_sid,job_id,agent_name,reported_at,received_at,expires_at,digest,content) VALUES (?,?,?,?,?,?,?,json_object('text',hex(zeroblob(17000000))))").run('RM_large_export','AJ_large_export','test-agent',Date.now(),Date.now(),Date.now()+60000,'test-digest');
+  try {
+    const response = await fetch(base + '/api/agent-insights/sessions/RM_large_export/export', { headers: { cookie: await cookie() } });
+    assert.equal(response.status, 413); assert.match((await response.json()).error, /32 MiB/);
+  } finally { db.prepare("DELETE FROM agent_session_reports WHERE room_sid='RM_large_export'").run(); }
+});

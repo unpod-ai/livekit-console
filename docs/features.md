@@ -44,7 +44,11 @@ With [optional report uploads](agent-telemetry.md), **Sessions → Agent insight
 text, tool/error/handoff markers, interruption flags and SDK-reported response/LLM/TTS timings. Administrators
 can select reports and download their normalized content. Viewer accounts cannot access conversation reports.
 Uploads use a separate service token; content expires after the configured retention window (30 days by default).
-Live traces/logs, audio synchronization, model usage summaries and automatic PII redaction are not collected yet.
+With [live telemetry](agent-live-telemetry.md) enabled, native events and span timelines are visible before
+the final report. Trace/turn filters link to structured logs, combined exports include retained categories,
+and collection states identify missing or dropped data. Per-model usage is available in reports and the agent
+Usage tab. Configurable standard/strict content redaction applies before storage and to reads/exports;
+standard mode is best-effort. Audio synchronization remains a later phase.
 
 ## Telephony
 - **Calls:** SIP calls reconstructed from SIP participants: from, to, direction, duration, status, provider call ID and

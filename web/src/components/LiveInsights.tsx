@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useApi } from '../lib/hooks';
 import { fromMsPrecise } from '../lib/format';
@@ -22,6 +22,9 @@ export function LiveInsights({ sid }: { sid: string }) {
   const [params, setParams] = useSearchParams();
   const job = params.get('reportJob') ?? '', turn = params.get('liveTurn') ?? '', trace = params.get('liveTrace') ?? '';
   const kind = params.get('liveKind') ?? '', page = params.get('livePage') ?? '1';
+  const [draftTurn, setDraftTurn] = useState(turn), [draftTrace, setDraftTrace] = useState(trace);
+  useEffect(() => { setDraftTurn(turn); setDraftTrace(trace); }, [turn, trace]);
+  const validTrace = !draftTrace || /^[a-f0-9]{32}$/.test(draftTrace);
   const [exporting, setExporting] = useState(false), [exportError, setExportError] = useState('');
   const q = new URLSearchParams({ page, ...(job && { jobId: job }), ...(turn && { turnId: turn }), ...(trace && { traceId: trace }), ...(kind && { kind }) });
   const result = useApi<Data>(['live-insights', sid, job, turn, trace, kind, page], `/agent-insights/sessions/${encodeURIComponent(sid)}/telemetry?${q}`);
@@ -49,8 +52,11 @@ export function LiveInsights({ sid }: { sid: string }) {
       <div style={{ padding: 14, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
         <label style={{ flex: '1 1 240px', minWidth: 0 }}>Job <select className="select" aria-label="Telemetry job" value={job} onChange={e => filter('reportJob', e.target.value)}><option value="">All jobs</option>{data.jobs.map(j => <option key={j.jobId} value={j.jobId}>{j.agentName} · {j.jobId}</option>)}</select></label>
         <label style={{ flex: '1 1 140px' }}>Category <select className="select" aria-label="Telemetry category" value={kind} onChange={e => filter('liveKind', e.target.value)}><option value="">All categories</option>{['message','tool','handoff','state','error','metrics','usage','span','log','collection'].map(k => <option key={k}>{k}</option>)}</select></label>
-        <label style={{ flex: '1 1 180px', minWidth: 0 }}>Turn <input className="input" aria-label="Telemetry turn" value={turn} maxLength={200} onChange={e => filter('liveTurn', e.target.value)} /></label>
-        <label style={{ flex: '1 1 240px', minWidth: 0 }}>Trace <input className="input" aria-label="Telemetry trace" value={trace} maxLength={32} onChange={e => filter('liveTrace', e.target.value)} /></label>
+        <form style={{ display: 'contents' }} onSubmit={e => { e.preventDefault(); if (!validTrace) return; setParams(old => { const next = new URLSearchParams(old); for (const [key, value] of [['liveTurn', draftTurn], ['liveTrace', draftTrace]]) value ? next.set(key, value) : next.delete(key); next.delete('livePage'); return next; }); }}>
+          <label style={{ flex: '1 1 180px', minWidth: 0 }}>Turn <input className="input" aria-label="Telemetry turn" value={draftTurn} maxLength={200} onChange={e => setDraftTurn(e.target.value)} /></label>
+          <label style={{ flex: '1 1 240px', minWidth: 0 }}>Trace <input className="input" aria-label="Telemetry trace" value={draftTrace} maxLength={32} aria-invalid={!validTrace} onChange={e => setDraftTrace(e.target.value)} />{!validTrace && <span className="muted">Use 32 lowercase hexadecimal characters.</span>}</label>
+          <button className="btn secondary sm" type="submit" disabled={!validTrace} style={{ alignSelf: 'end' }}>Apply correlation</button>
+        </form>
       </div>
       <div style={{ padding: '0 14px 14px' }}>{(selected ? [selected] : data.jobs).map(j => <div key={j.jobId} style={{ marginBottom: 14 }}>
         <div className="badges"><Badge tone={j.state === 'complete' ? 'ok' : j.state === 'incomplete' ? 'warn' : undefined}>{j.state}</Badge><span className="mono">{j.jobId}</span><Badge>{j.mode}</Badge></div>

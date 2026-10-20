@@ -125,3 +125,20 @@ class UploadTests(unittest.IsolatedAsyncioTestCase):
         with patch.dict(os.environ, {"AGENT_TELEMETRY_TOKEN": ""}):
             self.assertFalse(helper.register_shutdown_report(self.ctx, "example-agent"))
             self.ctx.add_shutdown_callback.assert_not_called()
+
+    async def test_report_excludes_native_exception_objects_and_tool_payloads(self):
+        self.ctx.make_session_report.return_value.to_dict.return_value.update({
+            'events': [{'error': RuntimeError('not JSON serializable')}],
+            'options': {'instructions': 'private'},
+            'chat_history': {'items': [
+                {'type': 'message', 'role': 'system', 'content': ['private']},
+                {'type': 'message', 'role': 'assistant', 'content': ['Hello', {'image': object()}], 'metrics': {'e2e_latency': 0}},
+                {'type': 'function_call', 'name': 'lookup', 'call_id': 'one', 'arguments': 'private'},
+                {'type': 'function_call_output', 'call_id': 'one', 'output': 'private', 'is_error': True},
+            ]},
+        })
+        with patch.object(helper, '_post_telemetry', new_callable=AsyncMock, return_value=True) as post:
+            self.assertTrue(await helper.upload_session_report(self.ctx, 'test-agent'))
+            body = json.loads(post.call_args.args[1])
+            self.assertNotIn('private', json.dumps(body))
+            self.assertEqual(body['report']['chat_history']['items'][1]['metrics']['e2e_latency'], 0)

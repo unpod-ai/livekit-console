@@ -14,7 +14,7 @@ See the [Cloud parity checklist](cloud-parity-checklist.md) for prioritized impl
 | Rooms and participants | Live admin APIs, room actions, participant details and session links | Historical records depend on webhook collection |
 | Sessions and calls | Webhook history, SIP attributes, participant/call/agent/egress links | Inbound/outbound direction is inferred; calls that never join a room are not recorded |
 | Agent workers | Worker endpoint health, load, SDK, job count, last check and retained worker history | No managed builds, deployments or region inventory; worker IDs require the worker to expose them |
-| Agent analytics | Sessions served, join latency, sampled uptime/load; optional admin-only reports, turn timings, model usage/charts, and explicit structured log browsing | No automatic process-log or trace collection, project-wide usage aggregation or synchronized audio |
+| Agent analytics | Sessions served, join latency, sampled uptime/load; optional admin-only reports, turn timings, model usage/charts, and explicit structured log browsing | Opt-in native SDK events/spans and scoped logs only; no project-wide usage aggregation or synchronized audio |
 | SIP configuration | Inbound/outbound trunks, dispatch rules, numbers referenced by configuration | Phone number purchasing and provider billing remain with the SIP provider |
 | Recordings and ingress | Egress/ingress admin APIs, egress history, recording location links | Private recordings need storage access or signed URLs; media files are not stored in the console database |
 | Usage and charts | Counts and participant durations derived from stored events | No per-session bandwidth, packet loss, FPS or Cloud billing measurements |
@@ -47,3 +47,19 @@ Inbound routing, component navigation, final lifecycle state and private recordi
 Operational evidence is retained privately. Repeat the [acceptance procedure](validation/inbound-calls.md) with
 your provider, agent and storage configuration. Console login alone does not authorize private storage URLs;
 integrated recording playback remains a planned feature. These checks do not assess conversational quality.
+
+## Phase 1 native SDK acceptance
+
+The live collection path was exercised on a self-hosted RTC server using Python Agents 1.5.8, a dedicated
+agent/room/client and deterministic local model responses. Native conversation, handoff, tool-error,
+interruption, model-error, timing, usage and span records correlated with the finalized version-2 report
+and job logs. The client received text over RTC. A separate forced queue-overflow run verified that the
+collection remained incomplete while its available report and records were readable.
+
+Live browser checks covered session correlation, trace-to-log navigation, combined redacted export,
+administrator access, anonymous export denial and a narrow viewport. Node Agents 1.9.3 native message/span
+objects and tracer setup were checked separately; the cross-language unit suites cover retry identity,
+measurement conversion, bounded failure handling and privacy. Operational evidence stays private.
+These are deterministic SDK/RTC tests, not new telephone calls or provider billing evidence. Missing STT/TTS
+stages and pre-instrumentation history cannot be reconstructed; existing real inbound-call acceptance remains
+separate. See [the integration guide](agent-live-telemetry.md) for repeating collection in your deployment.

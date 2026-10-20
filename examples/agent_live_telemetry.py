@@ -15,7 +15,7 @@ import time
 import uuid
 
 logger = logging.getLogger(__name__)
-KEY = "livekit_console.telemetry"
+KEY = "_livekit_console_telemetry"
 METRICS = {"llm_node_ttft", "tts_node_ttfb", "e2e_latency", "transcription_delay", "end_of_turn_delay", "on_user_turn_completed_delay", "duration", "ttft", "ttfb", "audio_duration", "input_tokens", "output_tokens", "tokens_per_second", "playback_latency", "total_requests"}
 
 
@@ -304,11 +304,11 @@ class SessionTelemetry:
 def start_collection(ctx, agent_name, send, *, tracer_provider=None):
     if os.environ.get("AGENT_TELEMETRY_EVENTS_ENABLED") != "true":
         return None
-    if KEY in ctx.userdata:
-        return ctx.userdata[KEY]
+    if getattr(ctx, KEY, None) is not None:
+        return getattr(ctx, KEY)
     version = importlib.metadata.version("livekit-agents")
     collector = SessionTelemetry(ctx, agent_name, send, sdk_version=version)
-    ctx.userdata[KEY] = collector
+    setattr(ctx, KEY, collector)
     try:
         collector.configure_tracing(tracer_provider)
     except (ImportError, AttributeError):
@@ -321,7 +321,7 @@ def start_collection(ctx, agent_name, send, *, tracer_provider=None):
 
 
 def attach_session(ctx, session, *, mode=None):
-    collector = ctx.userdata.get(KEY)
+    collector = getattr(ctx, KEY, None)
     if collector:
         collector.attach(session, mode=mode)
     return collector

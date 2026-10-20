@@ -65,8 +65,8 @@ Files: live telemetry/timeline UI, Agent Insights, log filters and browser check
 
 ## Task 5: Deploy and verify acceptance
 
-- [ ] Review/run full regression suites and production builds, merge through protected PR and deploy console/proxy before worker changes.
-- [ ] Attach the integration to actual worker session construction and activate while idle, preserving rollback artifacts privately.
-- [ ] Exercise a real native SDK/RTC session on the self-hosted server; verify transcript, traces, logs, usage, tools, interruption/error/incomplete states and exports.
-- [ ] Retain operational evidence privately; distinguish deterministic test providers from provider-call evidence. Update checklist only with verified outcomes.
-- [ ] Leave any external acceptance dependency explicit; publish no release.
+- [x] Review/run full regression suites and production builds, merge through protected PR and deploy console/proxy before worker changes.
+- [x] Attach the integration to actual worker session construction and activate while idle, preserving rollback artifacts privately.
+- [x] Exercise a real native SDK/RTC session on the self-hosted server; verify transcript, traces, logs, usage, tools, interruption/error/incomplete states and exports.
+- [x] Retain operational evidence privately; distinguish deterministic test providers from provider-call evidence. Update checklist only with verified outcomes.
+- [x] Leave any external acceptance dependency explicit; publish no release.
