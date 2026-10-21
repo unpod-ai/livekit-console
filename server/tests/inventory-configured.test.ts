@@ -1,0 +1,27 @@
+import { after, test } from 'node:test';
+import assert from 'node:assert/strict';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import express from 'express';
+import cookieParser from 'cookie-parser';
+const dir = mkdtempSync(path.join(tmpdir(), 'inventory-configured-'));
+const upstream = express(); upstream.post('/twirp/livekit.SIP/ListSIPDispatchRule', (_, r) => r.json({ items: [{ sip_dispatch_rule_id: 'SDR_test', room_config: { agents: [{ agent_name: 'configured-only' }] } }] }));
+const mock = upstream.listen(0, '127.0.0.1'); await new Promise<void>(r => mock.once('listening', r));
+Object.assign(process.env, { DB_PATH: path.join(dir, 'test.db'), LIVEKIT_URL: `ws://127.0.0.1:${(mock.address() as any).port}`, LIVEKIT_API_KEY: 'test', LIVEKIT_API_SECRET: 'test', ADMIN_USER: 'admin', ADMIN_PASSWORD: 'test-password', SESSION_SECRET: 'test' });
+const { api } = await import('../src/routes.js');
+const { inventory } = await import('../src/inventory.js');
+const { login, requireAuth } = await import('../src/auth.js');
+const { db } = await import('../src/db.js');
+const app = express(); app.use(express.json(), cookieParser()); app.post('/login', login); app.use('/api/inventory', inventory); app.use('/api', requireAuth, api);
+const server = app.listen(0, '127.0.0.1'); await new Promise<void>(r => server.once('listening', r));
+const base = `http://127.0.0.1:${(server.address() as any).port}`;
+after(async () => { for (const s of [server, mock]) await new Promise<void>(r => s.close(() => r())); db.close(); rmSync(dir, { recursive: true, force: true }); });
+test('dispatch-only names obtain a stable inventory detail before their first session', async () => {
+ const response = await fetch(base + '/login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ username: 'admin', password: 'test-password' }) });
+ const headers = { cookie: response.headers.get('set-cookie')!.split(';')[0], 'content-type': 'application/json' };
+ assert.equal((await fetch(base + '/api/lk/sip/ListSIPDispatchRule', { method: 'POST', headers, body: '{}' })).status, 200);
+ const detail = await fetch(base + '/api/inventory/agents/configured-only', { headers });
+ assert.equal(detail.status, 200);
+ const data = await detail.json(); assert.match(data.agent.id, /^CA_/); assert.deepEqual(data.workers, []); assert.deepEqual(data.former, []);
+});

@@ -1,5 +1,6 @@
 import express, { Router, type ErrorRequestHandler } from 'express';
 import { createHash } from 'node:crypto';
+import { agentAliases } from './inventory-store.js';
 import { config } from './config.js';
 import { db } from './db.js';
 import { normalizeReport, ReportValidationError } from './agent-report.js';
@@ -86,7 +87,7 @@ agentInsights.get('/agents/:name/usage', (req, res, next) => {
       CASE WHEN r.expires_at > ? THEN COALESCE(json_extract(r.content,'$.omittedUsage'),0) ELSE 0 END AS omitted,
       (s.room_sid IS NOT NULL) AS session_available
       FROM agent_session_reports r LEFT JOIN sessions s ON s.room_sid=r.room_sid
-      WHERE r.agent_name=? AND r.reported_at>=? AND r.reported_at<? ORDER BY r.reported_at DESC,r.room_sid,r.job_id`).iterate(to, to, to, req.params.name, from, to);
+      WHERE r.agent_name IN (SELECT value FROM json_each(?)) AND r.reported_at>=? AND r.reported_at<? ORDER BY r.reported_at DESC,r.room_sid,r.job_id`).iterate(to, to, to, JSON.stringify(agentAliases(req.params.name)), from, to);
     function* reports(): Iterable<UsageReport> {
       for (const r of records) yield { roomSid: r.room_sid as string, jobId: r.job_id as string,
         reportedAt: r.reported_at as number, expiresAt: r.expires_at as number, retained: !!r.retained,

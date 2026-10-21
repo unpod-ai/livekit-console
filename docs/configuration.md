@@ -14,6 +14,8 @@ server from starting when missing.
 | `DB_PATH` | | | SQLite file for history and users (`/data/console.db` in Docker) |
 | `SIP_URI` | | | Your SIP URI, shown on the Dispatch rules and SIP trunks pages |
 | `AGENT_WORKER_URLS` | | | Comma-separated base URLs of agent workers' status servers |
+| `AGENT_WORKER_METADATA` | | `{}` | JSON mapping exact worker URLs to safe configured deployment metadata; see [inventory](agent-inventory.md) |
+| `WORKER_ROLLUP_RETENTION_DAYS` | | `365` | Hourly sampled availability/load retention, integer 14–3650 days; inventory survives expiry |
 | `AGENT_TELEMETRY_TOKEN` | | disabled | Separate upload-only bearer token (at least 32 characters); enables post-session agent reports |
 | `AGENT_TELEMETRY_RETENTION_DAYS` | | `30` | Content retention for newly received reports, integer 1–365 days |
 | `GITHUB_TOKEN` | | | Token with push access to the repo, to record clone/view traffic |
@@ -21,7 +23,7 @@ server from starting when missing.
 
 ## What is stored
 SQLite holds events, sessions, participants, egress records, users, agent worker status samples (kept 14 days) and
-repository traffic. LiveKit's API key/secret are never sent to the browser. Egress credentials returned by LiveKit
+durable agent identities, linked names, archived worker inventory, hourly check rollups and repository traffic. LiveKit's API key/secret are never sent to the browser. Egress credentials returned by LiveKit
 (S3 keys, session tokens and similar) are redacted by the server before they reach the UI.
 
 When agent report collection is enabled, normalized conversation reports are also stored. These contain sensitive

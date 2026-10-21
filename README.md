@@ -36,10 +36,11 @@ PCAP/codec/SIP response per call, calls rejected before a room is created, numbe
 ## Agents
 Agent status comes from the workers themselves, not from test jobs. Every LiveKit Agents worker serves a small status
 server (port 8081 by default: `GET /` health, `GET /worker` name, job type, load, active jobs, SDK version). Set
-`AGENT_WORKER_URLS` (comma-separated base URLs) and the console polls them every 10s, so a running worker shows as
-**Running** and a stopped one as **Dead**, with its last ping and last healthy time. Each agent's page has an Overview
-(sessions served, join latency, uptime, load), a **Worker** tab and a Sessions tab. The worker ID (`AW_...`) is not exposed
-by the status server, so it only shows if a worker reports one.
+`AGENT_WORKER_URLS` (comma-separated base URLs) and the console polls them every 10s. Endpoint availability, valid
+worker information, reported registration/readiness and serving jobs are separate facts. Each agent's **Inventory**
+tab retains stable console IDs, explicitly linked previous names, archived workers and long-range sampled check/load
+rollups. Native worker IDs (`AW_...`) appear only when reported; endpoint observations cannot prove an anonymous process
+restart. See [persistent inventory](docs/agent-inventory.md) for identity linking and retention.
 
 ## Repo traffic
 GitHub keeps only 14 days of clone and view counts. Set `GITHUB_TOKEN` (push access to the repo) and optionally `GITHUB_REPO`

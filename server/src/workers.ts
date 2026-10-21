@@ -1,72 +1,64 @@
 import { config } from './config.js';
-import { db } from './db.js';
+import { inventoryWorkerRows, lastWorkerObservation, pruneInventory, recordWorkerObservation, syncInventory, type Observation } from './inventory-store.js';
 
-/**
- * Agent workers report on themselves: the LiveKit Agents framework runs a small HTTP server in every worker
- * (port 8081 by default). `/` answers 200 while the worker is healthy, and `/worker` returns its name, load,
- * active job count and SDK version. Polling that gives Cloud-style RUNNING status without sending any test jobs.
- */
-export type WorkerStatus = {
-  url: string;
-  ok: boolean;
-  agentName: string | null;
-  workerId: string | null; // only when the worker's status server reports one
-  workerType: string | null;
-  load: number | null; // 0..1
-  activeJobs: number | null;
-  sdkVersion: string | null;
-  projectType: string | null;
-  latencyMs: number | null;
-  checkedAt: number;
-  error: string | null;
+export type WorkerStatus = Observation & {
+ workerId: string | null; workerType: string | null; load: number | null; activeJobs: number | null;
+ sdkVersion: string | null; projectType: string | null; latencyMs: number | null; error: string | null;
 };
-
 const TIMEOUT_MS = 3000;
-let latest: WorkerStatus[] = [];
-const knownNames = new Map<string, string>(); // so a worker that goes down keeps its agent name
-const knownIds = new Map<string, string>();
-
-const insert = db.prepare('INSERT INTO agent_worker_samples (url, agent_name, at, ok, load, active_jobs, latency_ms, worker_type, sdk_version, project_type) VALUES (?,?,?,?,?,?,?,?,?,?)');
-
+const INFO_MAX_BYTES = 65536;
+const textField = (v: unknown): string | null => typeof v === 'string' && v.length <= 512 && !/[\x00-\x1f]/.test(v) ? v : null;
+const finite = (v: unknown, max = Infinity): number | null => typeof v === 'number' && Number.isFinite(v) && v >= 0 && v <= max ? v : null;
+async function workerInfo(response: Response): Promise<Record<string, unknown>> {
+ if (!response.ok) throw new Error(`worker info answered ${response.status}`);
+ if (Number(response.headers.get('content-length')) > INFO_MAX_BYTES) { await response.body?.cancel(); throw new Error('Worker info exceeds size limit'); }
+ const reader = response.body?.getReader();
+ if (!reader) throw new Error('Worker info is empty');
+ let size = 0; const chunks: Uint8Array[] = [];
+ try { while (true) { const { value, done } = await reader.read(); if (done) break; size += value.byteLength; if (size > INFO_MAX_BYTES) throw new Error('Worker info exceeds size limit'); chunks.push(value); } }
+ finally { await reader.cancel().catch(() => {}); }
+ const parsed = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+ if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('Invalid worker info');
+ if (parsed.agent_name !== undefined && (!textField(parsed.agent_name) || !parsed.agent_name.trim())) throw new Error('Invalid agent name');
+ for (const field of ['worker_load', 'active_jobs']) if (parsed[field] !== undefined && (finite(parsed[field], field === 'worker_load' ? 1 : Number.MAX_SAFE_INTEGER) === null || field === 'active_jobs' && !Number.isInteger(parsed[field]))) throw new Error(`Invalid ${field}`);
+ for (const field of ['worker_type', 'sdk_version', 'project_type']) if (parsed[field] !== undefined && textField(parsed[field]) === null) throw new Error(`Invalid ${field}`);
+ return parsed;
+}
 async function probe(url: string): Promise<WorkerStatus> {
-  const started = Date.now();
-  const status: WorkerStatus = { url, ok: false, agentName: knownNames.get(url) ?? null, workerId: knownIds.get(url) ?? null, workerType: null, load: null, activeJobs: null, sdkVersion: null, projectType: null, latencyMs: null, checkedAt: started, error: null };
-  try {
-    const [health, info] = await Promise.all([fetch(`${url}/`, { signal: AbortSignal.timeout(TIMEOUT_MS) }), fetch(`${url}/worker`, { signal: AbortSignal.timeout(TIMEOUT_MS) })]);
-    const j = info.ok ? ((await info.json()) as Record<string, unknown>) : null;
-    if (j && typeof j.agent_name === 'string') knownNames.set(url, j.agent_name);
-    const id = typeof j?.worker_id === 'string' ? j.worker_id : typeof j?.id === 'string' ? j.id : null;
-    if (id) knownIds.set(url, id);
-    return {
-      ...status,
-      workerId: id ?? status.workerId,
-      ok: health.ok,
-      agentName: (j?.agent_name as string | undefined) ?? status.agentName,
-      workerType: (j?.worker_type as string | undefined) ?? null,
-      load: typeof j?.worker_load === 'number' ? j.worker_load : null,
-      activeJobs: typeof j?.active_jobs === 'number' ? j.active_jobs : null,
-      sdkVersion: (j?.sdk_version as string | undefined) ?? null,
-      projectType: (j?.project_type as string | undefined) ?? null,
-      latencyMs: Date.now() - started,
-      error: health.ok ? null : `status endpoint answered ${health.status}`,
-    };
-  } catch (err) {
-    return { ...status, error: err instanceof Error ? err.message : String(err) };
-  }
+ const started = Date.now(); const prior = lastWorkerObservation(url);
+ const result: WorkerStatus = { url, ok: false, agentName: prior?.observed_name ?? null, workerId: null, workerType: null, load: null, activeJobs: null, sdkVersion: null, projectType: null, latencyMs: null, checkedAt: started, error: null, infoAvailable: false, registrationState: 'unknown', readiness: 'unknown' };
+ const [health, info] = await Promise.allSettled([
+  fetch(`${url}/`, { signal: AbortSignal.timeout(TIMEOUT_MS), redirect: 'error' }).then(async r => { await r.body?.cancel(); return r; }),
+  fetch(`${url}/worker`, { signal: AbortSignal.timeout(TIMEOUT_MS), redirect: 'error' }).then(workerInfo),
+ ]);
+ const errors: string[] = [];
+ if (health.status === 'fulfilled') { result.ok = health.value.ok; if (!result.ok) errors.push(`status endpoint answered ${health.value.status}`); }
+ else errors.push(String(health.reason?.message ?? health.reason));
+ if (info.status === 'fulfilled') {
+  const j = info.value; const id = textField(j.worker_id) ?? textField(j.id);
+  Object.assign(result, { infoAvailable: true, agentName: textField(j.agent_name) ?? result.agentName, workerId: id && /^AW_[A-Za-z0-9_-]+$/.test(id) ? id : null, workerType: textField(j.worker_type), load: finite(j.worker_load, 1), activeJobs: finite(j.active_jobs, Number.MAX_SAFE_INTEGER), sdkVersion: textField(j.sdk_version), projectType: textField(j.project_type) });
+  if (typeof j.registered === 'boolean') result.registrationState = j.registered ? 'registered' : 'unregistered';
+  if (typeof j.ready === 'boolean') result.readiness = j.ready ? 'ready' : 'not_ready';
+ } else errors.push(String(info.reason?.message ?? info.reason));
+ result.error = errors.length ? errors.join('; ') : null; result.latencyMs = Date.now() - started;
+ return result;
 }
-
-export async function pollWorkers(): Promise<void> {
-  latest = await Promise.all(config.workerUrls.map(probe));
-  for (const w of latest) insert.run(w.url, w.agentName, w.checkedAt, w.ok ? 1 : 0, w.load, w.activeJobs, w.latencyMs, w.workerType, w.sdkVersion, w.projectType);
+let running: Promise<void> | null = null;
+export function pollWorkers(): Promise<void> {
+ if (running) return running;
+ running = (async () => {
+  syncInventory();
+  const observations = await Promise.all(config.workerUrls.map(probe));
+  for (const observation of observations) recordWorkerObservation(observation);
+ })().finally(() => { running = null; });
+ return running;
 }
-
-export const workerStatuses = (): WorkerStatus[] => latest;
-
+export const workerStatuses = (): WorkerStatus[] => inventoryWorkerRows(24).workers;
+let started = false;
 export function startWorkerPolling(): void {
-  if (!config.workerUrls.length) return;
-  const run = () => pollWorkers().catch((err) => console.error('worker poll failed', err));
-  run();
-  setInterval(run, 10_000).unref();
-  // keep two weeks of samples; that is plenty for uptime/load over the longest range shown
-  setInterval(() => db.prepare('DELETE FROM agent_worker_samples WHERE at < ?').run(Date.now() - 14 * 86400_000), 6 * 3600_000).unref();
+ if (started) return; started = true;
+ syncInventory(); pruneInventory();
+ const run = () => pollWorkers().catch(err => console.error('worker poll failed', err));
+ run(); setInterval(run, 10_000).unref();
+ setInterval(() => pruneInventory(), 6 * 3600_000).unref();
 }

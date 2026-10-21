@@ -1,9 +1,8 @@
 import { Router } from 'express';
 import { statSync } from 'node:fs';
-import { config } from './config.js';
 import { db } from './db.js';
 import { trafficState } from './traffic.js';
-import { workerStatuses } from './workers.js';
+import { agentAliases, resolveAgent, syncInventory, listAgents, inventoryWorkerRows, workerRollups } from './inventory-store.js';
 import { redactCredentials } from './twirp.js';
 
 export const history = Router();
@@ -18,6 +17,7 @@ const egressStatus = (s: string | null): string | null => (s == null ? s : EGRES
 
 // Agent participants carry the name of the agent they run as in their attributes.
 const agentNameOf = (attrs: Record<string, string>): string => attrs['lk.agent.name'] ?? attrs['lk.agent_name'] ?? attrs['agent.name'] ?? 'unknown';
+const sourceAgentSql = `CASE WHEN json_valid(p.attributes) THEN COALESCE(json_extract(p.attributes,'$."lk.agent.name"'),json_extract(p.attributes,'$."lk.agent_name"'),json_extract(p.attributes,'$."agent.name"'),'unknown') ELSE 'unknown' END`;
 
 // Country by the calling code of a SIP participant's phone number: the closest self-hosted analogue of Cloud's
 // "Top countries" (which uses client geolocation that SIP callers don't have).
@@ -97,7 +97,8 @@ history.get('/sessions', (req, res) => {
     sip: `AND EXISTS(SELECT 1 FROM participants p WHERE p.room_sid = s.room_sid AND p.kind IN ${SIP})`,
     egress: 'AND EXISTS(SELECT 1 FROM egress e WHERE e.room_sid = s.room_sid)',
   } as Record<string, string>)[String(req.query.feature)] ?? '';
-  const agent = typeof req.query.agent === 'string' && req.query.agent ? `AND EXISTS(SELECT 1 FROM participants p WHERE p.room_sid = s.room_sid AND p.kind IN ${AGENT} AND p.attributes LIKE '%"lk.agent.name":' || json_quote(?) || '%')` : '';
+  const aliases = typeof req.query.agent==='string'&&req.query.agent?agentAliases(req.query.agent):[];
+  const agent = aliases.length ? `AND EXISTS(SELECT 1 FROM participants p WHERE p.room_sid=s.room_sid AND p.kind IN ${AGENT} AND ${sourceAgentSql} IN (SELECT value FROM json_each(?)))` : '';
   const where = `s.started_at >= ? AND (s.room_name LIKE ? OR s.room_sid LIKE ?) ${status} ${feature} ${agent}`;
   const rows = db
     .prepare(
@@ -108,8 +109,8 @@ history.get('/sessions', (req, res) => {
         EXISTS(SELECT 1 FROM egress e WHERE e.room_sid = s.room_sid) AS has_egress
        FROM sessions s WHERE ${where} ORDER BY s.started_at DESC LIMIT ? OFFSET ?`,
     )
-    .all(...[since(hours), q, q, ...(agent ? [String(req.query.agent)] : []), limit, offsetParam(req.query.offset)]);
-  const total = db.prepare(`SELECT COUNT(*) AS n FROM sessions s WHERE ${where}`).get(...[since(hours), q, q, ...(agent ? [String(req.query.agent)] : [])]) as { n: number };
+    .all(...[since(hours), q, q, ...(agent ? [JSON.stringify(aliases)] : []), limit, offsetParam(req.query.offset)]);
+  const total = db.prepare(`SELECT COUNT(*) AS n FROM sessions s WHERE ${where}`).get(...[since(hours), q, q, ...(agent ? [JSON.stringify(aliases)] : [])]) as { n: number };
   const rooms = db.prepare('SELECT COUNT(DISTINCT room_name) AS n, COUNT(DISTINCT room_sid) AS sessions FROM sessions WHERE started_at >= ?').get(since(hours)) as any;
   const people = db.prepare('SELECT COUNT(DISTINCT identity) AS n FROM participants WHERE joined_at >= ?').get(since(hours)) as { n: number };
   const bucketMs = hours <= 48 ? 3600 * 1000 : 24 * 3600 * 1000;
@@ -169,90 +170,21 @@ history.get('/sessions/:sid/participants/:psid', (req, res) => {
   });
 });
 
-// Every agent ever seen. Counts are for the range; an agent with no activity in it still appears (inactive), with
-// when it was first and last seen, so renamed or retired agents stay visible.
-history.get('/agents', (req, res) => {
-  const hours = intParam(req.query.hours, 168, 24 * 90);
-  const from = since(hours);
-  const now = Date.now();
-  const rows = db
-    .prepare(`SELECT p.room_sid, p.attributes, p.joined_at, p.left_at FROM participants p WHERE p.kind IN ${AGENT} ORDER BY p.joined_at`)
-    .all() as { room_sid: string; attributes: string; joined_at: number; left_at: number | null }[];
-  const byName = new Map<string, { name: string; sessions: Set<string>; jobs: number; ms: number; active: number; lastSeenAt: number; firstSeenAt: number; totalSessions: Set<string> }>();
-  for (const r of rows) {
-    const name = agentNameOf(JSON.parse(r.attributes || '{}'));
-    const a = byName.get(name) ?? { name, sessions: new Set(), jobs: 0, ms: 0, active: 0, lastSeenAt: 0, firstSeenAt: r.joined_at, totalSessions: new Set() };
-    a.totalSessions.add(r.room_sid);
-    a.lastSeenAt = Math.max(a.lastSeenAt, r.left_at ?? now);
-    a.firstSeenAt = Math.min(a.firstSeenAt, r.joined_at);
-    if (!r.left_at) a.active++;
-    if (r.joined_at >= from) {
-      a.sessions.add(r.room_sid);
-      a.jobs++;
-      a.ms += (r.left_at ?? now) - r.joined_at;
-    }
-    byName.set(name, a);
-  }
-  res.json([...byName.values()].map((a) => ({ name: a.name, sessions: a.sessions.size, jobs: a.jobs, minutes: Math.round(a.ms / 60000), avgMs: a.jobs ? a.ms / a.jobs : 0, activeNow: a.active, lastSeenAt: a.lastSeenAt, firstSeenAt: a.firstSeenAt, totalSessions: a.totalSessions.size })).sort((x, y) => y.lastSeenAt - x.lastSeenAt));
+// Inventory survives sample cleanup; canonical identities aggregate explicitly linked source names.
+history.get('/agents',(req,res)=>{
+ syncInventory();const hours=intParam(req.query.hours,168,24*90),from=since(hours),now=Date.now();
+ const agents=listAgents(),byAlias=new Map<string,any>(),totals=new Map<string,any>();
+ for(const agent of agents){totals.set(agent.id,{...agent,sessions:new Set<string>(),jobs:0,ms:0,activeNow:0,lastSeenAt:null,totalSessions:new Set<string>()});for(const alias of agent.aliases)byAlias.set(alias,agent);}
+ for(const row of db.prepare(`SELECT room_sid,attributes,joined_at,left_at FROM participants WHERE kind IN ${AGENT}`).iterate()){
+  const r=row as any,name=agentNameOf(JSON.parse(r.attributes||'{}')),agent=byAlias.get(name);if(!agent)continue;
+  const t=totals.get(agent.id);t.totalSessions.add(r.room_sid);t.lastSeenAt=Math.max(t.lastSeenAt??0,r.left_at??now);t.firstSeenAt=Math.min(t.firstSeenAt??r.joined_at,r.joined_at);
+  if(!r.left_at)t.activeNow++;if(r.joined_at>=from){t.sessions.add(r.room_sid);t.jobs++;t.ms+=(r.left_at??now)-r.joined_at;}
+ }
+ res.json([...totals.values()].map(({ms,sessions,totalSessions,...a})=>({...a,sessions:sessions.size,totalSessions:totalSessions.size,minutes:Math.round(ms/60000),avgMs:a.jobs?ms/a.jobs:0})).sort((a,b)=>(b.lastSeenAt??0)-(a.lastSeenAt??0)||a.name.localeCompare(b.name)));
 });
 
-// Worker status polled from each configured agent worker (see workers.ts), with uptime and load over the range.
-// Workers are keyed by endpoint AND agent name: renaming an agent on the same endpoint keeps the old agent's history.
-// `former` lists every (endpoint, agent) pair that is no longer live, with why: "renamed" (the endpoint now runs another
-// agent) or "removed" (the endpoint is no longer polled). Both carry when they were last checked and last healthy.
-history.get('/agent-workers', (req, res) => {
-  const hours = intParam(req.query.hours, 168, 24 * 90);
-  const stats = db.prepare('SELECT COUNT(*) AS n, COALESCE(SUM(ok),0) AS up, AVG(CASE WHEN ok = 1 THEN load END) AS avgLoad FROM agent_worker_samples WHERE url = ? AND agent_name IS ? AND at >= ?');
-  const seen = db.prepare('SELECT MIN(at) AS firstSeenAt, MAX(CASE WHEN ok = 1 THEN at END) AS lastOkAt, MAX(at) AS lastCheckedAt FROM agent_worker_samples WHERE url = ? AND agent_name IS ?');
-  const last = db.prepare('SELECT worker_type AS workerType, sdk_version AS sdkVersion, project_type AS projectType FROM agent_worker_samples WHERE url = ? AND agent_name IS ? AND worker_type IS NOT NULL ORDER BY at DESC LIMIT 1');
-  // A worker's outages in the range: each run of failed checks, with when it began and when the worker came back.
-  const samplesOf = db.prepare('SELECT at, ok FROM agent_worker_samples WHERE url = ? AND agent_name IS ? AND at >= ? ORDER BY at');
-  const outagesOf = (url: string, agent: string | null, replaced: boolean) => {
-    const out: { from: number; to: number | null; checks: number }[] = [];
-    let open: { from: number; to: number | null; checks: number } | null = null;
-    const rows = samplesOf.all(url, agent, since(hours)) as { at: number; ok: number }[];
-    for (const r of rows) {
-      if (!r.ok) {
-        if (!open) out.push((open = { from: r.at, to: null, checks: 0 }));
-        open.checks++;
-      } else if (open) {
-        open.to = r.at;
-        open = null;
-      }
-    }
-    // After a rename the old agent's last checks are just the restart gap before the new one came up, not an ongoing outage.
-    if (replaced && open) out.pop();
-    return out.reverse().slice(0, 25);
-  };
-  const describe = (url: string, agent: string | null, replaced = false) => {
-    const x = stats.get(url, agent, since(hours)) as { n: number; up: number; avgLoad: number | null };
-    return {
-      ...(seen.get(url, agent) as { firstSeenAt: number | null; lastOkAt: number | null; lastCheckedAt: number | null }),
-      uptimePct: x.n ? Math.round((x.up / x.n) * 1000) / 10 : null,
-      avgLoadPct: x.avgLoad == null ? null : Math.round(x.avgLoad * 1000) / 10,
-      samples: x.n,
-      outages: outagesOf(url, agent, replaced),
-    };
-  };
-  const current = workerStatuses();
-  const liveUrls = new Set([...config.workerUrls, ...current.map((w) => w.url)]);
-  const isLive = (url: string, agent: string | null) => current.some((w) => w.url === url && w.agentName === agent);
-  const pairs = db.prepare('SELECT url, agent_name AS agentName FROM agent_worker_samples GROUP BY url, agent_name').all() as { url: string; agentName: string | null }[];
-  const named = new Set(pairs.filter((p) => p.agentName).map((p) => p.url));
-  res.json({
-    configured: config.workerUrls.length > 0,
-    // a dead worker can't report its type/SDK any more, so fall back to what it last reported
-    workers: current.map((w) => {
-      const was = (last.get(w.url, w.agentName) ?? {}) as { workerType?: string; sdkVersion?: string; projectType?: string };
-      return { ...w, workerType: w.workerType ?? was.workerType ?? null, sdkVersion: w.sdkVersion ?? was.sdkVersion ?? null, projectType: w.projectType ?? was.projectType ?? null, ...describe(w.url, w.agentName) };
-    }),
-    former: pairs
-      .filter((p) => !isLive(p.url, p.agentName) && !(p.agentName == null && named.has(p.url)))
-      .map((p) => {
-        const reason = liveUrls.has(p.url) ? 'renamed' : 'removed';
-        return { url: p.url, ok: false, agentName: p.agentName, reason, ...(last.get(p.url, p.agentName) as object | undefined), ...describe(p.url, p.agentName, reason === 'renamed') };
-      }),
-  });
+history.get('/agent-workers',(req,res)=>{
+ const hours=intParam(req.query.hours,168,24*3650);res.json(inventoryWorkerRows(hours,typeof req.query.agent==='string'?req.query.agent:undefined));
 });
 
 // Daily GitHub clone/view counts that the traffic sync (traffic.ts) has copied into the database.
@@ -273,15 +205,16 @@ history.get('/repo-traffic', (req, res) => {
 
 history.get('/agents/:name/overview', (req, res) => {
   const name = req.params.name;
+  const aliases=agentAliases(name);
   const hours = intParam(req.query.hours, 24, 24 * 90);
   const from = since(hours);
   const bucketMs = bucketFor(hours);
   const rows = db
     .prepare(
       `SELECT p.room_sid, p.joined_at, s.started_at FROM participants p JOIN sessions s ON s.room_sid = p.room_sid
-       WHERE p.kind IN ${AGENT} AND p.joined_at >= ? AND p.attributes LIKE '%"lk.agent.name":' || json_quote(?) || '%'`,
+       WHERE p.kind IN ${AGENT} AND p.joined_at >= ? AND ${sourceAgentSql} IN (SELECT value FROM json_each(?))`,
     )
-    .all(from, name) as { room_sid: string; joined_at: number; started_at: number }[];
+    .all(from, JSON.stringify(aliases)) as { room_sid: string; joined_at: number; started_at: number }[];
   const bySessions = new Map<number, Set<string>>();
   const joinByBucket = new Map<number, number[]>();
   for (const r of rows) {
@@ -293,10 +226,17 @@ history.get('/agents/:name/overview', (req, res) => {
   const all: number[] = [];
   joinByBucket.forEach((v) => all.push(...v));
   all.sort((a, b) => a - b);
-  const samples = db
-    .prepare(`SELECT (at / ${bucketMs}) * ${bucketMs} AS t, AVG(ok) AS up, AVG(CASE WHEN ok = 1 THEN load END) AS load FROM agent_worker_samples WHERE agent_name = ? AND at >= ? GROUP BY t ORDER BY t`)
-    .all(name, from) as { t: number; up: number; load: number | null }[];
-  const tot = db.prepare('SELECT COUNT(*) AS n, COALESCE(SUM(ok),0) AS up, AVG(CASE WHEN ok = 1 THEN load END) AS load FROM agent_worker_samples WHERE agent_name = ? AND at >= ?').get(name, from) as { n: number; up: number; load: number | null };
+  const rollups=workerRollups(name,Math.max(1,Math.ceil(hours/24)));
+  const roundedFrom=Math.floor(from/3600000)*3600000;
+  const byChecks=new Map<number,{t:number;n:number;up:number;loadSum:number;loadCount:number}>();
+  let checks=0,up=0,loadSum=0,loadCount=0;
+  for(const sample of rollups.series){
+    if(sample.t<roundedFrom)continue;
+    const t=Math.floor(sample.t/bucketMs)*bucketMs,existing=byChecks.get(t)??{t,n:0,up:0,loadSum:0,loadCount:0};
+    existing.n+=sample.samples;existing.up+=sample.up;existing.loadSum+=sample.loadSum;existing.loadCount+=sample.loadCount;byChecks.set(t,existing);
+    checks+=sample.samples;up+=sample.up;loadSum+=sample.loadSum;loadCount+=sample.loadCount;
+  }
+  const samples=[...byChecks.values()].sort((a,b)=>a.t-b.t);
   res.json({
     bucketMs,
     sessions: [...bySessions.entries()].sort((a, b) => a[0] - b[0]).map(([t, set]) => ({ t, n: set.size })),
@@ -305,11 +245,12 @@ history.get('/agents/:name/overview', (req, res) => {
       return { t, p50: percentile(sorted, 0.5), p90: percentile(sorted, 0.9), p95: percentile(sorted, 0.95) };
     }),
     joinLatencyTotals: { p50: percentile(all, 0.5), p90: percentile(all, 0.9), p95: percentile(all, 0.95), count: all.length },
-    uptime: samples.map((x) => ({ t: x.t, n: Math.round(x.up * 1000) / 10 })),
-    load: samples.map((x) => ({ t: x.t, n: x.load == null ? 0 : Math.round(x.load * 1000) / 10 })),
-    uptimePct: tot.n ? Math.round((tot.up / tot.n) * 1000) / 10 : null,
-    avgLoadPct: tot.load == null ? null : Math.round(tot.load * 1000) / 10,
-    samples: tot.n,
+    uptime: samples.map((x) => ({ t: x.t, n: Math.round(x.up/x.n * 1000) / 10 })),
+    load: samples.map((x) => ({ t: x.t, n: x.loadCount ? Math.round(x.loadSum/x.loadCount * 1000) / 10 : null })),
+    uptimePct: checks ? Math.round((up/checks)*1000)/10 : null,
+    avgLoadPct: loadCount ? Math.round((loadSum/loadCount)*1000)/10 : null,
+    samples: checks,
+    workerCoverage:{from:roundedFrom,to:rollups.to,resolutionMs:rollups.resolutionMs,retentionDays:rollups.retentionDays,basis:'sampled_endpoint_checks'},
   });
 });
 
@@ -318,10 +259,10 @@ history.get('/agents/:name', (req, res) => {
   const sessions = db
     .prepare(
       `SELECT s.room_sid, s.room_name, p.joined_at, p.left_at FROM participants p JOIN sessions s ON s.room_sid = p.room_sid
-       WHERE p.kind IN ${AGENT} AND p.attributes LIKE '%"lk.agent.name":' || json_quote(?) || '%' ORDER BY p.joined_at DESC LIMIT 10`,
+       WHERE p.kind IN ${AGENT} AND ${sourceAgentSql} IN (SELECT value FROM json_each(?)) ORDER BY p.joined_at DESC LIMIT 50`,
     )
-    .all(req.params.name);
-  res.json({ sessions });
+    .all(JSON.stringify(agentAliases(req.params.name)));
+  res.json({ sessions,agent:resolveAgent(req.params.name) });
 });
 
 history.get('/calls', (req, res) => {
