@@ -146,20 +146,21 @@ provider integrations. Aggregate Prometheus metrics alone do not establish per-s
 </ul>
 <h2 id="phase-4-persistent-agent-and-worker-inventory">Phase 4 — Persistent agent and worker inventory</h2>
 <ul>
-<li class="task pending"><input type="checkbox" disabled aria-label="Pending"> Introduce stable console identities for agents and worker instances; retain native IDs when reported.</li>
-<li class="task pending"><input type="checkbox" disabled aria-label="Pending"> Keep historical agent names/aliases so renaming does not hide earlier sessions or workers.</li>
-<li class="task pending"><input type="checkbox" disabled aria-label="Pending"> Persist worker IDs when available; clearly distinguish console IDs from LiveKit-native IDs.</li>
-<li class="task pending"><input type="checkbox" disabled aria-label="Pending"> Retain first seen, last seen, last healthy, stopped/dead state and deployment/version metadata.</li>
-<li class="task pending"><input type="checkbox" disabled aria-label="Pending"> Preserve archived inventory independently of the current 14-day worker sample cleanup.</li>
-<li class="task pending"><input type="checkbox" disabled aria-label="Pending"> Separate sampled endpoint availability from job registration/readiness and session-serving status.</li>
-<li class="task pending"><input type="checkbox" disabled aria-label="Pending"> Add long-range uptime/load rollups with configurable retention.</li>
-<li class="task pending"><input type="checkbox" disabled aria-label="Pending"> Link agents, worker instances, jobs, versions and sessions wherever source identifiers exist.</li>
+<li class="task done"><input type="checkbox" disabled aria-label="Completed" checked> Introduce stable console identities for agents and worker instances; retain native IDs when reported.</li>
+<li class="task done"><input type="checkbox" disabled aria-label="Completed" checked> Keep historical agent names/aliases so renaming does not hide earlier sessions or workers.</li>
+<li class="task done"><input type="checkbox" disabled aria-label="Completed" checked> Persist worker IDs when available; clearly distinguish console IDs from LiveKit-native IDs.</li>
+<li class="task done"><input type="checkbox" disabled aria-label="Completed" checked> Retain first seen, last seen, last healthy, stopped/dead state and deployment/version metadata.</li>
+<li class="task done"><input type="checkbox" disabled aria-label="Completed" checked> Preserve archived inventory independently of the current 14-day worker sample cleanup.</li>
+<li class="task done"><input type="checkbox" disabled aria-label="Completed" checked> Separate sampled endpoint availability from job registration/readiness and session-serving status.</li>
+<li class="task done"><input type="checkbox" disabled aria-label="Completed" checked> Add long-range uptime/load rollups with configurable retention.</li>
+<li class="task done"><input type="checkbox" disabled aria-label="Completed" checked> Link agents, worker instances, jobs, versions and sessions wherever source identifiers exist.</li>
 </ul>
 <p>Acceptance:</p>
 <ul>
-<li class="task pending"><input type="checkbox" disabled aria-label="Pending"> Rename an agent, restart its worker and restart the console; older history remains discoverable.</li>
-<li class="task pending"><input type="checkbox" disabled aria-label="Pending"> Removing an endpoint or expiring raw samples does not erase the archived worker inventory.</li>
+<li class="task done"><input type="checkbox" disabled aria-label="Completed" checked> Rename an agent, restart its worker and restart the console; older history remains discoverable.</li>
+<li class="task done"><input type="checkbox" disabled aria-label="Completed" checked> Removing an endpoint or expiring raw samples does not erase the archived worker inventory.</li>
 </ul>
+<p>Verification: isolated worker polling and fresh-process tests cover rename, native-ID changes, explicit alias merges, endpoint removal and raw-sample expiry. Browser acceptance covers archived/current workers, job/session links, independent long-range selection, mobile width and viewer restrictions. Production agent names remain unchanged.</p>
 <h2 id="phase-5-project-administration-and-operations">Phase 5 — Project administration and operations</h2>
 <ul>
 <li class="task pending"><input type="checkbox" disabled aria-label="Pending"> Support multiple configured LiveKit projects with isolated credentials, data and permissions.</li>

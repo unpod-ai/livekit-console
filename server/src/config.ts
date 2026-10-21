@@ -27,7 +27,22 @@ if (!Number.isInteger(recordingDays) || recordingDays < 1 || recordingDays > 365
 const diagnosticsRetentionDays=Number(process.env.DIAGNOSTICS_RETENTION_DAYS??30);
 if(!Number.isInteger(diagnosticsRetentionDays)||diagnosticsRetentionDays<1||diagnosticsRetentionDays>365)throw new Error('DIAGNOSTICS_RETENTION_DAYS must be an integer from 1 to 365');
 
+const workerRollupRetentionDays = Number(process.env.WORKER_ROLLUP_RETENTION_DAYS ?? 365);
+if (!Number.isInteger(workerRollupRetentionDays) || workerRollupRetentionDays < 14 || workerRollupRetentionDays > 3650) throw new Error('WORKER_ROLLUP_RETENTION_DAYS must be an integer from 14 to 3650');
+export type WorkerMetadata = Partial<Record<'instanceKey' | 'image' | 'version' | 'environment' | 'region' | 'host', string>>;
+const metadataRaw = process.env.AGENT_WORKER_METADATA ?? '{}';
+if (metadataRaw.length > 65536) throw new Error('AGENT_WORKER_METADATA is too large');
+const workerMetadata: Record<string, WorkerMetadata> = JSON.parse(metadataRaw);
+if (!workerMetadata || typeof workerMetadata !== 'object' || Array.isArray(workerMetadata) || Object.keys(workerMetadata).length > 100) throw new Error('AGENT_WORKER_METADATA must map at most 100 URLs to metadata');
+for (const [url, values] of Object.entries(workerMetadata)) {
+  const parsed = new URL(url);
+  if (!['http:', 'https:'].includes(parsed.protocol) || !values || typeof values !== 'object' || Array.isArray(values)) throw new Error('Invalid worker metadata');
+  for (const [key, value] of Object.entries(values)) if (!['instanceKey', 'image', 'version', 'environment', 'region', 'host'].includes(key) || typeof value !== 'string' || value.length > 512 || /[\x00-\x1f]/.test(value)) throw new Error('Invalid worker metadata field');
+}
+
 export const config = {
+  workerRollupRetentionDays,
+  workerMetadata,
   diagnosticsEnabled:process.env.DIAGNOSTICS_ENABLED==='true',
   diagnosticsRetentionDays,
   port: Number(process.env.PORT ?? 8080),

@@ -25,12 +25,13 @@ Agent status comes from the workers themselves, not from test jobs. The LiveKit 
 every worker (`GET /` for health, `GET /worker` for name, job type, load, active jobs and SDK version). Set
 `AGENT_WORKER_URLS` and the console polls them every 10 seconds.
 
-- **Agents list:** status (Running / Down), load, active jobs, SDK, uptime, sessions and agent minutes, plus a session
+- **Agents list:** sampled endpoint availability, load, active jobs, SDK, check availability, sessions and agent minutes, plus a session
   activity chart.
 - **Running now:** agents currently inside a room, with their state (listening, speaking, thinking).
-- **Agent page:** Overview (sessions served, connection latency p50/p90/p95 of when the agent joins a session, uptime,
-  average load), **Worker** (endpoint, job type, SDK, load, active jobs, status latency, last ping, last healthy,
-  uptime, dead workers) and Sessions.
+- **Agent page:** Overview (sessions served and connection latency p50/p90/p95 of when the agent joins a session),
+  **Inventory** (stable agent/worker console IDs, linked names, current/archived workers, native IDs when reported,
+  lifecycle, safe deployment metadata and independent 30/90/365-day sampled availability/load rollups), Sessions,
+  Usage and Performance. [Identity links](agent-inventory.md) include previous names without rewriting source reports.
 - **Job type:** `JT_ROOM` means one job per room, `JT_PUBLISHER` one per publishing participant, `JT_PARTICIPANT` one
   per participant.
 - **Worker ID:** shown only if the worker reports one; the status server does not include it.

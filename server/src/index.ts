@@ -10,6 +10,7 @@ import { config } from './config.js';
 import { recordingRouter } from './recordings.js';
 import { handleWebhook } from './collector.js';
 import { history } from './history.js';
+import { inventory } from './inventory.js';
 import { api } from './routes.js';
 import { startReconciler } from './reconcile.js';
 import { startTrafficSync } from './traffic.js';
@@ -33,6 +34,7 @@ app.use('/api/diagnostics', diagnosticReads);
 app.use('/api/recordings', recordingRouter());
 app.use('/api/users', requireAuth, requireAdmin, users);
 app.use('/api/agent-insights', requireAuth, requireAdmin, agentInsights);
+app.use('/api/inventory', inventory);
 app.use('/api/history', requireAuth, history);
 app.use('/api', requireAuth, enforceRole, api);
 

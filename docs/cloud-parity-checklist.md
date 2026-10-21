@@ -125,19 +125,21 @@ Acceptance:
 
 ## Phase 4 — Persistent agent and worker inventory
 
-- [ ] Introduce stable console identities for agents and worker instances; retain native IDs when reported.
-- [ ] Keep historical agent names/aliases so renaming does not hide earlier sessions or workers.
-- [ ] Persist worker IDs when available; clearly distinguish console IDs from LiveKit-native IDs.
-- [ ] Retain first seen, last seen, last healthy, stopped/dead state and deployment/version metadata.
-- [ ] Preserve archived inventory independently of the current 14-day worker sample cleanup.
-- [ ] Separate sampled endpoint availability from job registration/readiness and session-serving status.
-- [ ] Add long-range uptime/load rollups with configurable retention.
-- [ ] Link agents, worker instances, jobs, versions and sessions wherever source identifiers exist.
+- [x] Introduce stable console identities for agents and worker instances; retain native IDs when reported.
+- [x] Keep historical agent names/aliases so renaming does not hide earlier sessions or workers.
+- [x] Persist worker IDs when available; clearly distinguish console IDs from LiveKit-native IDs.
+- [x] Retain first seen, last seen, last healthy, stopped/dead state and deployment/version metadata.
+- [x] Preserve archived inventory independently of the current 14-day worker sample cleanup.
+- [x] Separate sampled endpoint availability from job registration/readiness and session-serving status.
+- [x] Add long-range uptime/load rollups with configurable retention.
+- [x] Link agents, worker instances, jobs, versions and sessions wherever source identifiers exist.
 
 Acceptance:
 
-- [ ] Rename an agent, restart its worker and restart the console; older history remains discoverable.
-- [ ] Removing an endpoint or expiring raw samples does not erase the archived worker inventory.
+- [x] Rename an agent, restart its worker and restart the console; older history remains discoverable.
+- [x] Removing an endpoint or expiring raw samples does not erase the archived worker inventory.
+
+Verification: isolated worker polling and fresh-process tests cover rename, native-ID changes, explicit alias merges, endpoint removal and raw-sample expiry. Browser acceptance covers archived/current workers, job/session links, independent long-range selection, mobile width and viewer restrictions. Production agent names remain unchanged.
 
 ## Phase 5 — Project administration and operations
 

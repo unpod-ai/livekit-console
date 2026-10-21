@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import type { Request, Response } from 'express';
 import { config } from './config.js';
+import { ensureAgentName } from './inventory-store.js';
 import { agentDispatch, createToken, rooms } from './livekit.js';
 import { SERVICES, TwirpError, twirp, type Service } from './twirp.js';
 
@@ -89,7 +90,15 @@ api.post('/lk/:service/:method', async (req, res) => {
     return;
   }
   try {
-    res.json(await twirp(service as Service, method, req.body));
+    const result = await twirp(service as Service, method, req.body);
+    // A configured dispatch name is discoverable before its first job or worker observation.
+    if (service === 'sip' && ['ListSIPDispatchRule', 'CreateSIPDispatchRule', 'UpdateSIPDispatchRule'].includes(method)) {
+      const value = result as { items?: unknown[]; roomConfig?: { agents?: { agentName?: string }[] } };
+      for (const rule of (value.items ?? [value]) as { roomConfig?: { agents?: { agentName?: string }[] } }[]) {
+        for (const agent of rule.roomConfig?.agents ?? []) if (agent.agentName) ensureAgentName(agent.agentName);
+      }
+    }
+    res.json(result);
   } catch (err) {
     // Never relay LiveKit's 401/403 as-is: the UI would read it as "logged out of the console".
     const status = err instanceof TwirpError && err.status >= 400 && err.status < 500 && err.status !== 401 && err.status !== 403 ? err.status : 502;
