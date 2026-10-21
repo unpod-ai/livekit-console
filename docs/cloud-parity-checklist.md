@@ -153,21 +153,33 @@ Verification: isolated worker polling and fresh-process tests cover rename, nati
 - [x] Monitor ingestion/storage growth and select indexes, rollups or external stores based on measured volume.
 - [x] Verify backup and restore after adding each new telemetry store.
 
-Earlier gateway acceptance covered isolation, permissions, policy, audit and backups. The current single-server
-cleanup supersedes that architecture; migration, direct permissions and live acceptance must pass again before this
-preview is called verified. Conditional OIDC remains deferred.
+Verification: the single-server migration preserved canonical accounts, roles and audit, with an atomic one-time
+import and verified snapshots. Live checks cover removed project UI/APIs, existing login/content permissions,
+retained sessions and archived workers, Operations/audit, authorized private recording Range playback, mobile
+containment and anonymous denial. Worker and collector stayed healthy with zero backlog/drops. Conditional OIDC
+remains deferred.
 
 ## Phase 6 — Deployment management and agent testing
 
 Requires an explicit integration with our deployment infrastructure; Cloud deployment APIs do not manage our
 self-hosted worker fleet.
 
-- [ ] Display deployed agent image/version, environment, replicas and region/host where available.
-- [ ] Integrate build/runtime logs and deployment status with Docker/Kubernetes or the chosen orchestrator.
-- [ ] Manage deployment secrets through the chosen secret store.
-- [ ] Support rolling deployments, draining and rollback with visible progress/failures.
-- [ ] Add a browser test session with explicit agent selection and live transcript/telemetry.
-- [ ] Add repeatable agent scenarios and compare results across versions.
+- [x] Display deployed agent image/version, environment, replicas and region/host where available.
+- [x] Integrate build/runtime logs and deployment status with Docker/Kubernetes or the chosen orchestrator.
+- [x] Manage deployment secrets through the chosen secret store.
+- [x] Support rolling deployments, draining and rollback with visible progress/failures.
+- [x] Add a browser test session with explicit agent selection and live transcript/telemetry.
+- [x] Add repeatable agent scenarios and compare results across versions.
+
+Verification: 132 server tests, 72 Python tests, two browser suites (7 checks each), web/server builds and protected
+CI pass. Independent review fixes have regressions for mixed-case content grants and scenario deletion races.
+A disposable real-Docker fixture passed 34 checks for build, immutable images, secrets/redaction, graceful drain
+with active-job timeout/reconcile, interrupted-state recovery, exact rollback revision and failed-candidate handling;
+all four fixture containers were removed after stopping. Live readonly production inventory denies mutations.
+Real LiveKit browser acceptance observed the selected dedicated responder, microphone enable/disable, four actual
+prompt responses across two same-revision runs, owned-room cleanup and comparisons with unknown version provenance.
+No model/speech provider or carrier calls were needed. Post-test snapshots include scenarios/runs/results and pass
+integrity checks. The production worker was not restarted for acceptance.
 
 ## Final UI step before the combined production release
 

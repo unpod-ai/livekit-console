@@ -60,7 +60,7 @@ GET `/targets/:id/logs?kind=runtime|build&lines=...` -> `{lines:[string],truncat
 GET `/targets/:id/secrets` -> `{revision,keys,allowedKeys}`. PUT same accepts `{values:{key:value},confirm:id}`.
 POST `/targets/:id/actions` body `{action:'build'|'deploy'|'drain'|'rollback'|'reconcile',image?,confirm:id,requestId}`
 -> operation `{id,targetId,action,state,startedAt,updatedAt,steps:[{at,state,message}],error?}`.
-Helper API same paths under `/...`; backend uses its own configured helper
+Helper API uses the same paths; backend uses its own configured helper
 service token, never the browser's credential. URL is trusted HTTP(S) base with no credentials/query/fragment.
 Per-target image selection comes from `allowedImages:[{reference,imageId}]`, never free-text. The console audits
 all mutations and logs/secret metadata reads; never log values. No automatic production mutations on page load.

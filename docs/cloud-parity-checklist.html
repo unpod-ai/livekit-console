@@ -173,20 +173,31 @@ provider integrations. Aggregate Prometheus metrics alone do not establish per-s
 <li class="task done"><input type="checkbox" disabled aria-label="Completed" checked> Monitor ingestion/storage growth and select indexes, rollups or external stores based on measured volume.</li>
 <li class="task done"><input type="checkbox" disabled aria-label="Completed" checked> Verify backup and restore after adding each new telemetry store.</li>
 </ul>
-<p>Earlier gateway acceptance covered isolation, permissions, policy, audit and backups. The current single-server
-cleanup supersedes that architecture; migration, direct permissions and live acceptance must pass again before this
-preview is called verified. Conditional OIDC remains deferred.</p>
+<p>Verification: the single-server migration preserved canonical accounts, roles and audit, with an atomic one-time
+import and verified snapshots. Live checks cover removed project UI/APIs, existing login/content permissions,
+retained sessions and archived workers, Operations/audit, authorized private recording Range playback, mobile
+containment and anonymous denial. Worker and collector stayed healthy with zero backlog/drops. Conditional OIDC
+remains deferred.</p>
 <h2 id="phase-6-deployment-management-and-agent-testing">Phase 6 — Deployment management and agent testing</h2>
 <p>Requires an explicit integration with our deployment infrastructure; Cloud deployment APIs do not manage our
 self-hosted worker fleet.</p>
 <ul>
-<li class="task pending"><input type="checkbox" disabled aria-label="Pending"> Display deployed agent image/version, environment, replicas and region/host where available.</li>
-<li class="task pending"><input type="checkbox" disabled aria-label="Pending"> Integrate build/runtime logs and deployment status with Docker/Kubernetes or the chosen orchestrator.</li>
-<li class="task pending"><input type="checkbox" disabled aria-label="Pending"> Manage deployment secrets through the chosen secret store.</li>
-<li class="task pending"><input type="checkbox" disabled aria-label="Pending"> Support rolling deployments, draining and rollback with visible progress/failures.</li>
-<li class="task pending"><input type="checkbox" disabled aria-label="Pending"> Add a browser test session with explicit agent selection and live transcript/telemetry.</li>
-<li class="task pending"><input type="checkbox" disabled aria-label="Pending"> Add repeatable agent scenarios and compare results across versions.</li>
+<li class="task done"><input type="checkbox" disabled aria-label="Completed" checked> Display deployed agent image/version, environment, replicas and region/host where available.</li>
+<li class="task done"><input type="checkbox" disabled aria-label="Completed" checked> Integrate build/runtime logs and deployment status with Docker/Kubernetes or the chosen orchestrator.</li>
+<li class="task done"><input type="checkbox" disabled aria-label="Completed" checked> Manage deployment secrets through the chosen secret store.</li>
+<li class="task done"><input type="checkbox" disabled aria-label="Completed" checked> Support rolling deployments, draining and rollback with visible progress/failures.</li>
+<li class="task done"><input type="checkbox" disabled aria-label="Completed" checked> Add a browser test session with explicit agent selection and live transcript/telemetry.</li>
+<li class="task done"><input type="checkbox" disabled aria-label="Completed" checked> Add repeatable agent scenarios and compare results across versions.</li>
 </ul>
+<p>Verification: 132 server tests, 72 Python tests, two browser suites (7 checks each), web/server builds and protected
+CI pass. Independent review fixes have regressions for mixed-case content grants and scenario deletion races.
+A disposable real-Docker fixture passed 34 checks for build, immutable images, secrets/redaction, graceful drain
+with active-job timeout/reconcile, interrupted-state recovery, exact rollback revision and failed-candidate handling;
+all four fixture containers were removed after stopping. Live readonly production inventory denies mutations.
+Real LiveKit browser acceptance observed the selected dedicated responder, microphone enable/disable, four actual
+prompt responses across two same-revision runs, owned-room cleanup and comparisons with unknown version provenance.
+No model/speech provider or carrier calls were needed. Post-test snapshots include scenarios/runs/results and pass
+integrity checks. The production worker was not restarted for acceptance.</p>
 <h2 id="final-ui-step-before-the-combined-production-release">Final UI step before the combined production release</h2>
 <ul>
 <li class="task pending"><input type="checkbox" disabled aria-label="Pending"> Add a day/night theme toggle in the top header.</li>
