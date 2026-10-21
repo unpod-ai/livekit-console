@@ -135,7 +135,7 @@ export function AgentInventory({ data, days, onDays }: { data: AgentInventoryDat
       ['Canonical name', data.agent.name], ['Console agent ID (not native)', <span className="mono">{data.agent.id}</span>], ['Linked names', data.agent.aliases.filter(n => n !== data.agent.name).join(', ') || 'None'], ['First seen', time(data.agent.firstSeenAt)], ['Last seen', time(data.agent.lastSeenAt)],
     ]} /></Panel>
     {me.data?.role === 'admin' ? <LinkPreviousName key={data.agent.id} agent={data.agent} /> : <Alert>Identity links are read-only. An administrator can link a previous name.</Alert>}
-    {data.jobsCoverage?.truncated && <Alert>Native-ID matched job links cover the latest {data.jobsCoverage.limit} retained jobs; older matches may be omitted.</Alert>}
+    {data.jobsCoverage?.truncated && <Alert>Native-ID matched job links show up to {data.jobsCoverage.limit} retained job matches; additional matches may be omitted.</Alert>}
     <WorkersPanel workers={data.workers} former={data.former} agent={data.agent.name} agentId={data.agent.id} aliases={data.agent.aliases} jobs={data.jobs} />
     <Panel title="Retained endpoint checks" actions={<select className="select" aria-label="Inventory range" value={days} onChange={e => onDays(Number(e.target.value))}>{[30, 90, 365].map(d => <option key={d} value={d}>Past {d} days</option>)}</select>} flush={false}>
       <p>Sampled endpoint availability measures successful checks, not continuous uptime. Worker info, registration/readiness and serving jobs are separate observations. Missing load measurements remain unavailable.</p>

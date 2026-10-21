@@ -160,7 +160,7 @@ provider integrations. Aggregate Prometheus metrics alone do not establish per-s
 <li class="task done"><input type="checkbox" disabled aria-label="Completed" checked> Rename an agent, restart its worker and restart the console; older history remains discoverable.</li>
 <li class="task done"><input type="checkbox" disabled aria-label="Completed" checked> Removing an endpoint or expiring raw samples does not erase the archived worker inventory.</li>
 </ul>
-<p>Verification: isolated worker polling and fresh-process tests cover rename, native-ID changes, explicit alias merges, endpoint removal and raw-sample expiry. Browser acceptance covers archived/current workers, job/session links, independent long-range selection, mobile width and viewer restrictions. Production agent names remain unchanged.</p>
+<p>Verification: isolated worker polling and fresh-process tests cover rename, native-ID changes, explicit alias merges, endpoint removal and raw-sample expiry. Browser acceptance covers archived/current workers, job/session links, independent long-range selection, mobile width and viewer restrictions. Production agent names remain unchanged. Live deployment checks also verified current and archived inventory, retained rollups, historical navigation, anonymous access denial and an integrity-checked backup of the inventory tables.</p>
 <h2 id="phase-5-project-administration-and-operations">Phase 5 — Project administration and operations</h2>
 <ul>
 <li class="task pending"><input type="checkbox" disabled aria-label="Pending"> Support multiple configured LiveKit projects with isolated credentials, data and permissions.</li>
