@@ -139,7 +139,7 @@ Acceptance:
 - [x] Rename an agent, restart its worker and restart the console; older history remains discoverable.
 - [x] Removing an endpoint or expiring raw samples does not erase the archived worker inventory.
 
-Verification: isolated worker polling and fresh-process tests cover rename, native-ID changes, explicit alias merges, endpoint removal and raw-sample expiry. Browser acceptance covers archived/current workers, job/session links, independent long-range selection, mobile width and viewer restrictions. Production agent names remain unchanged.
+Verification: isolated worker polling and fresh-process tests cover rename, native-ID changes, explicit alias merges, endpoint removal and raw-sample expiry. Browser acceptance covers archived/current workers, job/session links, independent long-range selection, mobile width and viewer restrictions. Production agent names remain unchanged. Live deployment checks also verified current and archived inventory, retained rollups, historical navigation, anonymous access denial and an integrity-checked backup of the inventory tables.
 
 ## Phase 5 — Project administration and operations
 
