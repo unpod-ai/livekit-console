@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link } from '../lib/router';
+import { Link } from 'react-router-dom';
 import { api } from '../lib/api';
 import { useApi, useMutate } from '../lib/hooks';
 import { useMe } from '../lib/me';

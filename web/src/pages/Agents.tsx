@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { Link, useNavigate } from '../lib/router';
+import { Link, useNavigate } from 'react-router-dom';
 import { Radio } from 'lucide-react';
 import { type Json } from '../lib/api';
 import { useApi, useLkList } from '../lib/hooks';
@@ -118,7 +118,7 @@ export function Agents() {
 
   return (
     <>
-      <PageHeader crumbs={[{ label: 'Project' }, { label: 'Agents' }]} title="Agents" sub="Worker status, agents running in calls, and agents seen in sessions" range />
+      <PageHeader crumbs={[{ label: 'Console' }, { label: 'Agents' }]} title="Agents" sub="Worker status, agents running in calls, and agents seen in sessions" range />
       {!configured && (
         <Alert kind="warn">No agent worker endpoints are configured, so worker status is unknown. Each worker serves its status on port 8081 (<span className="mono">GET /worker</span>). Set <span className="mono">AGENT_WORKER_URLS</span> (comma-separated base URLs, e.g. <span className="mono">http://127.0.0.1:18081</span>) on the console.</Alert>
       )}

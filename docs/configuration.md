@@ -18,15 +18,14 @@ server from starting when missing.
 | `WORKER_ROLLUP_RETENTION_DAYS` | | `365` | Hourly sampled availability/load retention, integer 14–3650 days; inventory survives expiry |
 | `AGENT_TELEMETRY_TOKEN` | | disabled | Separate upload-only bearer token (at least 32 characters); enables post-session agent reports |
 | `AGENT_TELEMETRY_RETENTION_DAYS` | | `30` | Content retention for newly received reports, integer 1–365 days |
+| `LIVEKIT_BROWSER_URL` | | derived from `LIVEKIT_URL` | Public WS(S) signaling endpoint for browser tests/tokens when server APIs use an internal address |
+| `DEPLOYMENT_HELPER_URL` / `DEPLOYMENT_HELPER_TOKEN` | | disabled | Restricted Docker helper; [setup and testing](agent-deployments-and-testing.md) |
 | `GITHUB_TOKEN` | | | Token with push access to the repo, to record clone/view traffic |
 | `GITHUB_REPO` | | `unpod-ai/livekit-console` | Repository whose traffic is recorded |
-| `CONSOLE_PROJECTS_FILE` | | default only | Private operator JSON defining configured projects; see [project administration](project-administration.md) |
-| `CONSOLE_CONTROL_DB_PATH` | | sibling `control.db` | Global accounts, memberships and audit database; back up separately |
-| `CONSOLE_BACKEND_PORT_BASE` | | `PORT + 1` | First private loopback project backend port |
 | `AUDIT_RETENTION_DAYS` | | `365` | Central audit retention, integer 1–3650 days |
 | `AGENT_LIVE_RETENTION_DAYS` / `AGENT_LOG_RETENTION_DAYS` | | report retention | Independent live/log content defaults; Operations policy persists subsequent changes |
 | `HISTORY_RETENTION_DAYS` / `TRAFFIC_RETENTION_DAYS` | | unlimited | Optional retained history/traffic defaults |
-| `RECORDING_ALLOW_DEFAULT_CREDENTIALS` | | `false` | Explicit opt-in to SDK shared/instance credential discovery; otherwise project keys are required |
+| `RECORDING_ALLOW_DEFAULT_CREDENTIALS` | | `false` | Explicit opt-in to SDK shared/instance credential discovery; otherwise explicit keys are required |
 
 ## What is stored
 SQLite holds events, sessions, participants, egress records, users, agent worker status samples (kept 14 days) and
@@ -41,9 +40,9 @@ for upload setup, excluded fields, retention and redaction limitations.
 `.env.deploy` (git-ignored; template in `.env.deploy.example`) holds the VM target for `deploy.sh`; see
 [deployment.md](deployment.md).
 
-The gateway copies existing users once into its separate control database; the original database becomes project
-`default`. Additional projects need explicit credentials and unique databases. See [project administration](project-administration.md)
-and [Operations](operations.md) for grants, ingestion URLs, policy, alerts and backup/restore.
+The console connects to one LiveKit server. Team accounts have admin/viewer roles and separate transcript, recording
+and log permissions. Existing gateway installations migrate canonical users and audit into the application database
+once; see [accounts and migration](accounts-and-migration.md) and [Operations](operations.md).
 
 ## Connection diagnostics
 

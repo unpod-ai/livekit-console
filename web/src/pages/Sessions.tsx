@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useRange } from '../lib/range';
-import { useNavigate, useParams, useSearchParams, Link } from '../lib/router';
+import { useNavigate, useParams, useSearchParams, Link } from 'react-router-dom';
 import { Info, Radio } from 'lucide-react';
 import { type Json } from '../lib/api';
 import { useApi } from '../lib/hooks';
@@ -52,7 +52,7 @@ export function Sessions() {
 
   return (
     <>
-      <PageHeader crumbs={[{ label: 'Project' }, { label: 'Sessions' }]} title="Sessions" sub="Room sessions recorded from LiveKit webhooks since the collector started" range />
+      <PageHeader crumbs={[{ label: 'Console' }, { label: 'Sessions' }]} title="Sessions" sub="Room sessions recorded from LiveKit webhooks since the collector started" range />
       <Kpis>
         <Kpi label="Unique participants" value={res.data?.uniqueParticipants ?? '…'} spark={res.data && <Spark points={res.data.peopleSeries} from={Date.now() - hours * 3600000} to={Date.now()} bucketMs={res.data.bucketMs} />} />
         <Kpi label="Total rooms" value={res.data?.totalRooms ?? '…'} spark={res.data && <Spark points={res.data.series} from={Date.now() - hours * 3600000} to={Date.now()} bucketMs={res.data.bucketMs} color="#dc85ff" />} />
@@ -109,7 +109,7 @@ export function SessionDetail() {
 
   return (
     <>
-      <PageHeader crumbs={[{ label: 'Project' }, { label: 'Sessions', to: '/sessions' }, { label: sid }]} title={s?.room_name ?? sid} range
+      <PageHeader crumbs={[{ label: 'Console' }, { label: 'Sessions', to: '/sessions' }, { label: sid }]} title={s?.room_name ?? sid} range
         sub={s && <StatusBadge status={s.ended_at ? 'closed' : 'active'} />}
         actions={s && !s.ended_at ? <Link className="btn secondary" to={`/rooms/${enc(s.room_name)}`}><Radio size={14} />Open live room</Link> : undefined} />
       {error && <Alert kind="bad">{(error as Error).message}{' '}This session may predate the collector; only sessions seen since webhooks were enabled are recorded.</Alert>}
@@ -167,7 +167,7 @@ export function ParticipantDetail() {
   const attrs = Object.entries(p?.attributes ?? {});
   return (
     <>
-      <PageHeader crumbs={[{ label: 'Project' }, { label: 'Sessions', to: '/sessions' }, { label: sid, to: `/sessions/${sid}` }, { label: psid }]} title={p?.identity ?? psid} range sub={p && <Badge>{kindLabel(p.kind)}</Badge>}
+      <PageHeader crumbs={[{ label: 'Console' }, { label: 'Sessions', to: '/sessions' }, { label: sid, to: `/sessions/${sid}` }, { label: psid }]} title={p?.identity ?? psid} range sub={p && <Badge>{kindLabel(p.kind)}</Badge>}
         actions={<>
           {p?.kind === 'SIP' && <Link className="btn secondary" to={`/telephony/calls/${p.sid}`}>View call</Link>}
           {p?.kind === 'EGRESS' && isEgressIdentity(p.identity) && <Link className="btn secondary" to={`/egress/${p.identity}`}>View egress</Link>}

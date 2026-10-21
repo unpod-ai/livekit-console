@@ -1,4 +1,4 @@
-import { Link, useSearchParams } from '../lib/router';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useMe, can } from '../lib/me';
 import { useApi } from '../lib/hooks';
 import { fromMs } from '../lib/format';

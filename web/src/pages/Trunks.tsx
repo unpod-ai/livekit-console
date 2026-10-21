@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Plus, Pencil, Trash2 } from 'lucide-react';
 import { lk, type Json } from '../lib/api';
 import { joinList, splitList, useLkList, useMutate } from '../lib/hooks';
-import { Link } from '../lib/router';
+import { Link } from 'react-router-dom';
 import { useConfirm } from '../lib/confirm';
 import { useInitialQuery } from '../lib/useTab';
 import { Drawer } from '../components/Drawer';

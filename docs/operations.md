@@ -1,8 +1,7 @@
-# Project operations
+# Console operations
 
-Project administrators can open Operations for collector health, measured storage, collection policy, in-console
-alerts and project audit history. Additional projects use the same controls with their own database and policy.
-See [projects and access](project-administration.md) for membership/content grants.
+Administrators can open Operations for collector health, measured storage, collection policy, in-console alerts
+and audit history. See [accounts and migration](accounts-and-migration.md) for account roles and content grants.
 
 ## Policy and local data controls
 
@@ -22,7 +21,7 @@ exceeded. Upstream webhook/egress credential payloads are excluded from metadata
 confirmation of the exact category. Content digests/tombstones remain so known retries cannot restore deleted text.
 Local history, traffic or worker check metadata can be collected again from upstream sources; deletion does not stop
 collection or erase upstream data. Recording controls disable/expire console access and never delete S3 objects.
-Users, memberships, credentials and audit are excluded from project category deletion.
+Users, credentials and audit are excluded from category deletion.
 
 ## Health, storage and alerts
 
@@ -41,26 +40,29 @@ operators can acknowledge/resolve events. These are in-console alerts; external 
 
 ## Audit
 
-The control database records project-filtered administrative actions and sensitive content access with actor, time,
+The application database records administrative actions and sensitive content access with actor, time,
 request ID, route shape/path digest and response status. Request bodies, credentials and query strings are not stored.
 A durable pending record is written before starting mutations/content access; if that fails, the operation is denied.
 If completion cannot be recorded, the pending result stays unknown rather than implying a committed operation was
-rolled back. AUDIT_RETENTION_DAYS controls central audit retention (default 365; range 1–3650). Project admins cannot
-erase the central audit trail through data-category deletion.
+rolled back. AUDIT_RETENTION_DAYS controls audit retention (default 365; range 1–3650). Administrators cannot
+erase the audit trail through data-category deletion.
 
 ## Backup and restore
 
-Create consistent SQLite snapshots with VACUUM INTO or the SQLite backup API. Back up the control database and every
-project database; copying only console.db misses accounts/memberships/audit after the gateway migration. Capture the
-private project-config/env files separately with restricted access. They contain credentials and are not part of JSON
-exports or public repository artifacts.
+Create consistent snapshots of `console.db` with VACUUM INTO or the SQLite backup API. This includes accounts,
+permissions, audit, history, telemetry, Operations and agent test scenarios/runs/results. Back up the private environment
+separately with restricted access. Credentials are not part of JSON exports or public repository artifacts.
 
-To restore, stop the console gateway and its children, restore the matching control/project snapshots and private
-operator configuration, then restart with the same project IDs and correct database paths. Check PRAGMA integrity_check,
-accounts/memberships, policies/tombstones, collectors/rules/alerts and representative session/worker/recording links.
-Do not publish backups or operational screenshots.
+Stop the console before restoring a consistent snapshot and private environment. Check PRAGMA integrity_check,
+accounts/permissions, policies/tombstones, collectors/rules/alerts and representative session/worker/recording links.
+Upgrades from the former gateway require the old control database for a one-time migration; see
+[accounts and migration](accounts-and-migration.md). Do not publish backups or operational screenshots.
 
 Failure-count alert windows use one-minute counter buckets, including the first partial boundary minute. Worker
 outage rules additionally require a recent failed check; threshold counts failed observations, not a proven outage
 duration. Failed-call rules count distinct observed call IDs with explicit final failure stages, excluding SIP
 401/407 challenges and unknown outcomes. A later recognized successful outcome supersedes a failure for that call.
+
+Agent testing scenarios, runs and results are included in the live-content category. Its retention, redaction, export
+and deletion controls apply to their prompt/expectation/response content too. Deployment helper state and versioned
+secret files need a separate private backup; see [deployments and testing](agent-deployments-and-testing.md).

@@ -1,4 +1,4 @@
-import { Link, useNavigate } from '../lib/router';
+import { Link, useNavigate } from 'react-router-dom';
 import { ArrowRight, AlertTriangle, BarChart3, BookOpen, Cable, CheckCircle2, GitBranch, Hash } from 'lucide-react';
 import { type Json } from '../lib/api';
 import { useApi } from '../lib/hooks';
@@ -62,7 +62,7 @@ export function Overview() {
 
   return (
     <>
-      <PageHeader crumbs={[{ label: 'Project' }, { label: 'Overview' }]} title="Overview" sub="Live state of your self-hosted LiveKit server" range />
+      <PageHeader crumbs={[{ label: 'Console' }, { label: 'Overview' }]} title="Overview" sub="Live state of your self-hosted LiveKit server" range />
       <Kpis>
         <Kpi label="Active rooms" value={rooms.data?.length ?? '…'} accent to="/rooms" />
         <Kpi label="Participants online" value={rooms.data ? online : '…'} to="/rooms" />
@@ -75,7 +75,7 @@ export function Overview() {
           { to: '/telephony/trunks', icon: Cable, label: 'Manage SIP trunks' },
           { to: '/telephony/dispatch', icon: GitBranch, label: 'Configure dispatch rules' },
           { to: '/telephony/phone-numbers', icon: Hash, label: 'Review phone numbers' },
-          { to: '/usage', icon: BarChart3, label: 'View project usage' },
+          { to: '/usage', icon: BarChart3, label: 'View server usage' },
         ].map((a) => (
           <Link key={a.to} to={a.to} className="kpi link" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px' }}><a.icon size={16} color="var(--accent)" aria-hidden />{a.label}<ArrowRight size={13} style={{ marginLeft: 'auto', opacity: 0.6 }} /></Link>
         ))}

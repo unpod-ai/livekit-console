@@ -5,6 +5,9 @@ const need = (k: string): string => {
 };
 
 const livekitUrl = need('LIVEKIT_URL');
+const browserUrl = process.env.LIVEKIT_BROWSER_URL ?? livekitUrl.replace(/^http/, 'ws');
+const browserEndpoint = new URL(browserUrl);
+if (!['ws:', 'wss:'].includes(browserEndpoint.protocol) || browserEndpoint.username || browserEndpoint.password || browserEndpoint.search || browserEndpoint.hash) throw new Error('LIVEKIT_BROWSER_URL must be a WS(S) signaling URL without credentials or query parameters');
 const telemetryToken = process.env.AGENT_TELEMETRY_TOKEN ?? '';
 if (telemetryToken && telemetryToken.length < 32) throw new Error('AGENT_TELEMETRY_TOKEN must be at least 32 characters');
 const telemetryRetentionDays = Number(process.env.AGENT_TELEMETRY_RETENTION_DAYS ?? 30);
@@ -49,7 +52,17 @@ const retention = (key: string, fallback: number | null): number | null => {
 const recordingAccessKey = process.env.RECORDING_AWS_ACCESS_KEY_ID ?? process.env.AWS_ACCESS_KEY_ID ?? '';
 const recordingSecretKey = process.env.RECORDING_AWS_SECRET_ACCESS_KEY ?? process.env.AWS_SECRET_ACCESS_KEY ?? '';
 if (!!recordingAccessKey !== !!recordingSecretKey) throw new Error('Recording AWS credentials require both access and secret keys');
+const deploymentHelperUrl = process.env.DEPLOYMENT_HELPER_URL ?? '';
+const deploymentHelperToken = process.env.DEPLOYMENT_HELPER_TOKEN ?? '';
+if (deploymentHelperUrl) {
+  const url = new URL(deploymentHelperUrl);
+  if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.search || url.hash) throw new Error('DEPLOYMENT_HELPER_URL must be a trusted HTTP(S) base URL');
+}
+if (!!deploymentHelperUrl !== !!deploymentHelperToken || deploymentHelperToken && deploymentHelperToken.length < 32) throw new Error('Deployment helper requires a URL and separate token of at least 32 characters');
+
 export const config = {
+  deploymentHelperUrl: deploymentHelperUrl.replace(/\/+$/, ''),
+  deploymentHelperToken,
   liveRetentionDays: retention('AGENT_LIVE_RETENTION_DAYS', telemetryRetentionDays)!,
   logRetentionDays: retention('AGENT_LOG_RETENTION_DAYS', telemetryRetentionDays)!,
   historyRetentionDays: retention('HISTORY_RETENTION_DAYS', null),
@@ -61,7 +74,7 @@ export const config = {
   diagnosticsEnabled:process.env.DIAGNOSTICS_ENABLED==='true',
   diagnosticsRetentionDays,
   port: Number(process.env.PORT ?? 8080),
-  wsUrl: livekitUrl.replace(/^http/, 'ws'),
+  wsUrl: browserUrl,
   httpUrl: livekitUrl.replace(/^ws/, 'http'),
   apiKey: need('LIVEKIT_API_KEY'),
   apiSecret: need('LIVEKIT_API_SECRET'),

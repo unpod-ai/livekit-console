@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, useNavigate, useParams } from '../lib/router';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { Plus, Trash2, UserMinus, Bot } from 'lucide-react';
 import { api, type Json } from '../lib/api';
 import { useApi, useMutate } from '../lib/hooks';
@@ -31,7 +31,7 @@ export function Rooms() {
   ];
   return (
     <>
-      <PageHeader crumbs={[{ label: 'Project' }, { label: 'Live rooms' }]} title="Live rooms" sub="Rooms that exist on the server right now" actions={<button className="btn" onClick={() => setCreating(true)}><Plus size={15} />Create room</button>} />
+      <PageHeader crumbs={[{ label: 'Console' }, { label: 'Live rooms' }]} title="Live rooms" sub="Rooms that exist on the server right now" actions={<button className="btn" onClick={() => setCreating(true)}><Plus size={15} />Create room</button>} />
       <Panel>
         <DataTable rows={rooms.data} cols={cols} rowKey={(r) => r.sid} loading={rooms.isLoading} error={rooms.error} storageKey="rooms" onRow={(r) => navigate(`/rooms/${encodeURIComponent(r.name)}`)} empty={{ title: 'No active rooms', hint: 'Rooms are created when a participant joins, or create one here.' }}
           rowActions={(r) => <button className="btn ghost icon sm" aria-label={`Delete ${r.name}`} onClick={async () => (await confirm({ title: 'Delete room?', message: `${r.name} will be closed and all participants disconnected.`, confirmLabel: 'Delete room', danger: true })) && del.mutate(r.name)}><Trash2 size={14} color="var(--bad)" /></button>} />
@@ -70,7 +70,7 @@ export function RoomDetail() {
   ];
   return (
     <>
-      <PageHeader crumbs={[{ label: 'Project' }, { label: 'Live rooms', to: '/rooms' }, { label: name }]} title={name} sub="Live participants and agent dispatch" actions={<Link className="btn secondary" to={`/sessions?q=${encodeURIComponent(name)}`}>Session history</Link>} />
+      <PageHeader crumbs={[{ label: 'Console' }, { label: 'Live rooms', to: '/rooms' }, { label: name }]} title={name} sub="Live participants and agent dispatch" actions={<Link className="btn secondary" to={`/sessions?q=${encodeURIComponent(name)}`}>Session history</Link>} />
       {parts.error && <Alert kind="bad">{(parts.error as Error).message}</Alert>}
       <Panel title={`Participants (${parts.data?.length ?? 0})`}>
         <DataTable rows={parts.data} cols={cols} rowKey={(p) => p.sid} loading={parts.isLoading} pageSize={false} empty={{ title: 'Nobody is in this room' }}

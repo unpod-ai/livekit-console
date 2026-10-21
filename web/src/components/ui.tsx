@@ -1,5 +1,5 @@
 import { Fragment, useState, type ReactNode } from 'react';
-import { Link } from '../lib/router';
+import { Link } from 'react-router-dom';
 import { Check, ChevronRight, Copy, HelpCircle, Inbox } from 'lucide-react';
 import { HeaderControls } from './HeaderControls';
 

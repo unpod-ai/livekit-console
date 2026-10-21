@@ -9,6 +9,7 @@ API key/secret so the browser never sees them, receives LiveKit webhooks and sto
 - [Features](docs/features.md): every page and what it shows
 - [Configuration](docs/configuration.md): all environment variables
 - [Deployment](docs/deployment.md): deploy to a VM with HTTPS and an IP allowlist
+- [Agent deployments and testing](docs/agent-deployments-and-testing.md): restricted Docker integration, dedicated browser tests and scenarios
 - [Cloud coverage and validation](docs/parity-and-validation.md): supported capabilities and remaining acceptance checks
 - [Agent session reports](docs/agent-telemetry.md): opt-in uploads, administrator-only transcripts/turn timings and per-agent model usage charts
 - [Structured agent logs](docs/agent-logs.md): opt-in job-linked logs with administrator-only search, filters and retention
@@ -35,9 +36,9 @@ agent telemetry, measured connection quality and SIP diagnostics, including pre-
 PCAP capture, number purchasing and billing are not included.
 
 ## Agents
-For multiple configured projects and scoped access, see [project administration](docs/project-administration.md).
+The console manages one LiveKit server. See [accounts and migration](docs/accounts-and-migration.md) for account permissions and upgrades.
 The [Operations page](docs/operations.md) provides collector/storage measurements, retention/privacy controls,
-in-console alert rules and audit history. Back up the gateway control database as well as each project database.
+in-console alert rules and audit history. Back up the console database and private environment.
 
 Agent status comes from the workers themselves, not from test jobs. Every LiveKit Agents worker serves a small status
 server (port 8081 by default: `GET /` health, `GET /worker` name, job type, load, active jobs, SDK version). Set

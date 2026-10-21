@@ -1,7 +1,6 @@
-import { projectResource } from '../lib/api';
 import { can, useMe } from '../lib/me';
 import { useEffect, useState } from 'react';
-import { Link, useSearchParams } from '../lib/router';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useApi } from '../lib/hooks';
 import { fromMsPrecise } from '../lib/format';
 import { Alert, Badge, KV, Panel } from './ui';
@@ -38,7 +37,7 @@ export function LiveInsights({ sid }: { sid: string }) {
   async function download() {
     setExporting(true); setExportError('');
     try {
-      const res = await fetch(projectResource(`/api/agent-insights/sessions/${encodeURIComponent(sid)}/export${job ? `?jobId=${encodeURIComponent(job)}` : ''}`), { credentials: 'same-origin' });
+      const res = await fetch(`/api/agent-insights/sessions/${encodeURIComponent(sid)}/export${job ? `?jobId=${encodeURIComponent(job)}` : ''}`, { credentials: 'same-origin' });
       if (!res.ok) throw new Error((await res.json()).error ?? 'Export failed');
       const url = URL.createObjectURL(await res.blob());
       const a = document.createElement('a'); a.href = url; a.download = `${sid}_agent-session.json`; a.click();

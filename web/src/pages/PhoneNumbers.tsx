@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { Link } from '../lib/router';
+import { Link } from 'react-router-dom';
 import { useInitialQuery } from '../lib/useTab';
 import { type Json } from '../lib/api';
 import { useLkList } from '../lib/hooks';

@@ -1,4 +1,4 @@
-import { Link } from '../lib/router';
+import { Link } from 'react-router-dom';
 import { PlayCircle } from 'lucide-react';
 import { baseName, type EgressFile } from '../lib/egress';
 import { can, useMe } from '../lib/me';

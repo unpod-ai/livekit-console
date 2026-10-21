@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useRange } from '../lib/range';
-import { Link, useNavigate, useParams, useSearchParams } from '../lib/router';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ArrowDownLeft, ArrowUpRight, Info } from 'lucide-react';
 import { type Json } from '../lib/api';
 import { useApi } from '../lib/hooks';

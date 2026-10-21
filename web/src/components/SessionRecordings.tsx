@@ -1,7 +1,6 @@
-import { projectResource } from '../lib/api';
 import { can, useMe } from '../lib/me';
 import { useEffect, useRef, useState } from 'react';
-import { useSearchParams } from '../lib/router';
+import { useSearchParams } from 'react-router-dom';
 import { useApi } from '../lib/hooks';
 import { recordingOffset, waveformPeaks } from '../lib/waveform';
 import { Alert, Badge, Panel } from './ui';
@@ -17,7 +16,7 @@ export function SessionRecordings({sid}:{sid:string}) {
   const file=requested?result.data?.files.find(f=>f.id===requested):result.data?.files.find(f=>f.state==='ready')??result.data?.files[0];
   const media=useRef<HTMLVideoElement>(null);
   const [position,setPosition]=useState(0),[duration,setDuration]=useState<number|null>(null),[error,setError]=useState(''),[peaks,setPeaks]=useState<number[]>([]),[waveState,setWaveState]=useState('');
-  const stream=file?projectResource(`/api/recordings/${encodeURIComponent(file.egressId)}/${file.index}/stream`):'';
+  const stream=file?`/api/recordings/${encodeURIComponent(file.egressId)}/${file.index}/stream`:'';
   const target=params.get('mediaAt'),at=target!==null?Number(target):null;
   const knownDuration=duration??(file?.durationMs!=null?file.durationMs/1000:null);
   const offset=at!==null&&file?recordingOffset(at,file.startMs,knownDuration):null;

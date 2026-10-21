@@ -17,7 +17,7 @@ export function Usage() {
   const n = (v?: number) => (v == null ? '…' : v.toLocaleString());
   return (
     <>
-      <PageHeader crumbs={[{ label: 'Project' }, { label: 'Usage' }]} title="Usage" sub="Computed from webhook history and attributed to the time each session or participant started" refresh={false} range />
+      <PageHeader crumbs={[{ label: 'Console' }, { label: 'Usage' }]} title="Usage" sub="Computed from webhook history and attributed to the time each session or participant started" refresh={false} range />
       <div className="grid-2">
         <Panel title="Agents">
           <Kpis><Kpi label="Agent session minutes" value={n(t?.agentSessionMinutes)} /></Kpis>

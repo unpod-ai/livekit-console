@@ -13,7 +13,7 @@ performance.get('/analytics',(req,res)=>{
   let agents:string[]=[];
   if(req.query.agents!==undefined){if(typeof req.query.agents!=='string'||req.query.agents.length>2000)throw new QueryError('Invalid agents');try{agents=JSON.parse(req.query.agents);}catch{throw new QueryError('Invalid agents');}if(!Array.isArray(agents)||agents.length>4||agents.some(a=>typeof a!=='string'||!a||a.length>200))throw new QueryError('Compare at most four agent names');agents=[...new Set(agents)];}
   const availableAgents=(db.prepare('SELECT agent_name FROM agent_session_reports UNION SELECT agent_name FROM agent_live_jobs ORDER BY agent_name LIMIT 1000').all() as {agent_name:string}[]).map(r=>r.agent_name);
-  if (!agents.length && availableAgents.length>100) throw new QueryError('Select up to four agents to investigate this larger project',413);
+  if (!agents.length && availableAgents.length>100) throw new QueryError('Select up to four agents to investigate this larger dataset',413);
   const clause=agents.length?` AND agent_name IN (${agents.map(()=>'?').join(',')})`:'';
   function* inputs():Iterable<Input>{
    let count=0;
