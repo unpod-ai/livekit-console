@@ -1,4 +1,4 @@
-# Cloud coverage and preview validation
+# Cloud coverage and validation
 
 This console provides an administration UI for a self-hosted LiveKit deployment. It does not include LiveKit Cloud's
 managed infrastructure or its analytics pipeline. LiveKit's own
@@ -13,19 +13,19 @@ See the [Cloud parity checklist](cloud-parity-checklist.md) for prioritized impl
 |---|---|---|
 | Rooms and participants | Live admin APIs, room actions, participant details and session links | Historical records depend on webhook collection |
 | Sessions and calls | Webhook history, SIP attributes, participant/call/agent/egress links | Inbound/outbound direction is inferred; calls that never join a room are not recorded |
-| Agent workers | Worker endpoint health, load, SDK, job count, last check and retained worker history | No managed builds, deployments or region inventory; worker IDs require the worker to expose them |
-| Agent analytics | Sessions served, join latency, sampled uptime/load; admin-only reports, measured latency comparisons, model usage, structured logs and recording alignment | Opt-in retained SDK events/spans and configured Egress files only; unavailable stages remain explicit |
+| Agent workers | Worker endpoint health, load, SDK, job count, last check and retained worker history | Optional restricted Docker helper adds allowlisted deployment/build/log/secret/drain/rollback management; registration and worker IDs require native evidence |
+| Agent analytics | Sessions served, join latency, sampled uptime/load; permission-gated reports, measured latency comparisons, model usage, structured logs and recording alignment | Opt-in retained SDK events/spans and configured Egress files only; unavailable stages remain explicit |
 | SIP configuration | Inbound/outbound trunks, dispatch rules, numbers referenced by configuration | Phone number purchasing and provider billing remain with the SIP provider |
-| Recordings and ingress | Egress/ingress admin APIs, egress history, recording location links | Admin-only configured S3 streaming, native playback/waveform/seek; other storage/playlist sources remain unsupported; media is not stored in SQLite |
+| Recordings and ingress | Egress/ingress admin APIs, egress history, recording location links | Recording-grant protected configured S3 streaming, native playback/waveform/seek; other storage/playlist sources remain unsupported; media is not stored in SQLite |
 | Usage and charts | Counts and participant durations derived from stored events | Opt-in native participant/track quality is available under diagnostics; no retrospective reconstruction or Cloud billing measurements |
-| Accounts | Local admin/viewer accounts and bootstrap admin | No organization SSO or Cloud account management |
+| Accounts | Single-server accounts with admin/viewer roles, content grants and audit | No organization SSO or Cloud account management |
 
 LiveKit exposes room administration through its
 [Room service API](https://docs.livekit.io/reference/other/roomservice-api/). Matching the remaining observability
 features requires collecting additional client, SIP-service or agent telemetry and storing it separately; adding UI
 controls alone cannot supply those measurements.
 
-## Preview checks
+## Validation checks
 
 - Frontend and backend type checks and production builds run in CI.
 - Browser checks cover login redirects, navigation, encoded room names and URL-backed tabs.
@@ -77,3 +77,11 @@ intelligibility or provider billing. See [recordings and analytics](recordings-a
 ## Connection diagnostics
 
 [Connection quality and SIP diagnostics](connection-diagnostics.md) adds opt-in native track samples, configured host resource snapshots and projected SIP logs. It preserves measured units, exact source identifiers and unavailable states. Service aggregates never stand in for participant/track quality. Browser checks cover scope, missing FPS, SIP failure timelines and administrator-only reads. Native quality acceptance used generated audio and impairment confined to a disposable test container; no production network interface was changed. Live deployment acceptance is tracked in the parity checklist.
+
+## Production phase acceptance
+
+All six implementation phases and the final System/Light/Dark appearance phase passed their recorded checks. The
+single-server migration preserved canonical accounts/permissions/audit and existing history/private recordings.
+Phase 6 includes isolated real-Docker lifecycle and deterministic real RTC scenario acceptance; theme checks cover
+both palettes and system changes on desktop/mobile. See the [checklist](cloud-parity-checklist.md) and
+[v0.1.0 release](releases/0.1.0.md). This evidence does not establish parity with every Cloud-managed service.

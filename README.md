@@ -4,6 +4,8 @@ A self-hostable admin console for a **self-hosted LiveKit** server, modeled on t
 (which has no open-source equivalent). React + Vite + TypeScript frontend; a small Express backend that holds the
 API key/secret so the browser never sees them, receives LiveKit webhooks and stores history in SQLite.
 
+Stable release: [v0.1.0](https://github.com/unpod-ai/livekit-console/releases/tag/v0.1.0) · [release notes](docs/releases/0.1.0.md).
+
 ## Documentation
 - [Getting started](docs/getting-started.md): configure, run, enable webhooks and agent status
 - [Features](docs/features.md): every page and what it shows
@@ -11,8 +13,8 @@ API key/secret so the browser never sees them, receives LiveKit webhooks and sto
 - [Deployment](docs/deployment.md): deploy to a VM with HTTPS and an IP allowlist
 - [Agent deployments and testing](docs/agent-deployments-and-testing.md): restricted Docker integration, dedicated browser tests and scenarios
 - [Cloud coverage and validation](docs/parity-and-validation.md): supported capabilities and remaining acceptance checks
-- [Agent session reports](docs/agent-telemetry.md): opt-in uploads, administrator-only transcripts/turn timings and per-agent model usage charts
-- [Structured agent logs](docs/agent-logs.md): opt-in job-linked logs with administrator-only search, filters and retention
+- [Agent session reports](docs/agent-telemetry.md): opt-in uploads, permission-gated transcripts/turn timings and per-agent model usage charts
+- [Structured agent logs](docs/agent-logs.md): opt-in job-linked logs with permission-gated search, filters and retention
 
 ## Screenshots
 Taken from a demo instance with simulated data (`server/scripts/simulate-webhooks.ts`).

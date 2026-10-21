@@ -1,7 +1,7 @@
 # Features
 
 Layout and styling follow the LiveKit Cloud dashboard. Everything below works against a self-hosted server. What
-LiveKit Cloud computes but a self-hosted server does not expose is not faked; see [Not available](#not-available).
+LiveKit Cloud computes but a self-hosted server does not expose is not faked; see [Limits](#limits).
 
 ## Overview
 Live state (rooms, participants, active calls, LiveKit reachability, time of the last webhook), shortcuts, and
@@ -83,24 +83,35 @@ computed from webhook history.
 - **Search:** `Ctrl K` jumps to any page.
 - **Cross-links:** sessions, participants, calls, egress, trunks, dispatch rules and agents link to one another.
 
+## Appearance
+
+The top header and login provide System, Light and Dark buttons. System follows device appearance changes;
+manual choices persist across navigation and reloads. Charts, forms, tables, dialogs and media controls share the palette.
+
 ## Access control
-Sign in with the `.env` admin, then add users under **Settings → Team members**. **Admin** can change anything.
-**Viewer** can read standard console data and change nothing; agent conversation reports require **Admin** access.
-This is enforced on the server. Role changes and removals apply on
-the person's next request.
 
-## Not available
-A self-hosted LiveKit server does not expose: per-session bandwidth, latency and FPS graphs, agent observability and
-versions, PCAP and codec details per call, calls rejected before a room exists (those never produce a webhook; check
-the `livekit-sip` logs), number purchasing, and billing.
+Sign in with the environment bootstrap administrator, then manage accounts in Settings → Team members. Administrators
+can mutate console resources; viewers read standard resources. Transcript, recording and log grants are independent
+and enforced on every request. Account changes take effect on subsequent requests. See [accounts](accounts-and-migration.md).
 
-Optional agent report uploads collect a limited set of insights directly from the agent process, independently
-of those server APIs. They do not reproduce Cloud's full observability pipeline.
+## Limits
+
+Native observability requires opt-in SDK/client/SIP collection; room webhooks and worker health cannot reconstruct
+missing conversation, stage timings or per-track quality. Worker registration/version remains unknown without native
+evidence. Cloud-managed inference, hosting/autoscaling, phone purchasing, telecom billing and Cloud account management
+are outside this console. The [coverage guide](parity-and-validation.md) records implementation and validation boundaries.
 
 ### Measured agent performance
 
-Project → Agent analytics compares retained turn timings and native stage durations, with nearest-rank percentiles, exact contributor drilldowns, drag-selected ranges and shareable measurement drawers. Finalized model usage is shown alongside timing coverage; missing data is not counted as zero.
+Agent analytics compares retained turn timings and native stage durations, with nearest-rank percentiles, exact contributor drilldowns, drag-selected ranges and shareable measurement drawers. Finalized model usage is shown alongside timing coverage; missing data is not counted as zero.
 
 ## Measured connection and telephony diagnostics
 
 Administrators can inspect service CPU/memory and aggregate metrics, native participant/track quality charts, reconnect/disconnect events and retained SIP attempts, including pre-room failures. Collection is opt-in; unavailable values remain explicit. See [setup and limits](connection-diagnostics.md).
+
+## Deployment management and agent testing
+
+A separately configured restricted Docker helper exposes allowlisted targets, redacted logs, versioned write-only
+secrets and graceful build/deploy/drain/reconcile/rollback with progress. Existing targets may stay read-only. Browser
+tests create owned rooms for a selected agent and support microphone/audio/text, persisted scenarios and comparisons
+that distinguish browser results from observed native provenance. See [setup and limits](agent-deployments-and-testing.md).

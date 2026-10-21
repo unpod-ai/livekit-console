@@ -21,3 +21,9 @@ keyboard actions, mobile layout, charts/dialogs/recording controls, pre-React re
 Measured normal text/status contrast >=4.5:1 and chart/form-boundary contrast >=3:1 in both palettes.
 Independent review found and verified the form-border fix. Screenshots inspected for light desktop and dark mobile.
 Live theme verification and combined production release follow protected CI/deployment.
+
+## Live acceptance
+
+Protected PR #28 merged and deployed. System follows live OS changes; explicit choices survive reload and OS updates.
+Light/dark across eleven console pages, mobile forms/dialogs and absence of project state passed with zero page errors.
+All phases are verified; the single combined production release can now be prepared.
