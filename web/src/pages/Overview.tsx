@@ -1,4 +1,4 @@
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from '../lib/router';
 import { ArrowRight, AlertTriangle, BarChart3, BookOpen, Cable, CheckCircle2, GitBranch, Hash } from 'lucide-react';
 import { type Json } from '../lib/api';
 import { useApi } from '../lib/hooks';

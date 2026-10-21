@@ -46,9 +46,15 @@ if [[ "${1:-}" == "--sync-env" ]]; then
 fi
 
 echo "==> Building image and restarting container"
-"${SSH[@]}" bash -s -- "$DEPLOY_DIR" "$CONSOLE_PORT" "${LIVEKIT_INTERNAL_URL:-ws://127.0.0.1:7880}" "${AGENT_WORKER_URLS:-}" <<'REMOTE'
+"${SSH[@]}" bash -s -- "$DEPLOY_DIR" "$CONSOLE_PORT" "${LIVEKIT_INTERNAL_URL:-ws://127.0.0.1:7880}" "${AGENT_WORKER_URLS:-}" "${PROJECT_CONFIG_DIR:-}" "${CONSOLE_BACKEND_PORT_BASE:-}" <<'REMOTE'
 set -euo pipefail
-dir="$1"; port="$2"; lk_url="$3"; worker_urls="$4"
+dir="$1"; port="$2"; lk_url="$3"; worker_urls="$4"; config_dir="$5"; backend_base="$6"
+extra_args=()
+if [[ -n "$config_dir" ]]; then
+  [[ "$config_dir" = /* && -d "$config_dir" ]] || { echo "PROJECT_CONFIG_DIR must be an existing absolute VM directory" >&2; exit 1; }
+  extra_args+=(-v "$config_dir:/config:ro")
+fi
+if [[ -n "$backend_base" ]]; then extra_args+=(-e "CONSOLE_BACKEND_PORT_BASE=$backend_base"); fi
 cd ~/"$dir"
 [[ -f .env ]] || { echo "No .env on the VM; run ./deploy.sh --sync-env" >&2; exit 1; }
 
@@ -57,6 +63,7 @@ docker rm -f livekit-console >/dev/null 2>&1 || true
 # Host networking so a host-networked LiveKit is reachable on 127.0.0.1 and can POST webhooks to us.
 # Explicit -e flags override the values in .env: the console talks to the LiveKit server on this machine.
 docker run -d --name livekit-console --restart unless-stopped --network host \
+  "${extra_args[@]}" \
   --env-file .env \
   -e HOST=127.0.0.1 -e PORT="$port" \
   -e LIVEKIT_URL="$lk_url" \
@@ -65,7 +72,7 @@ docker run -d --name livekit-console --restart unless-stopped --network host \
   -v livekit-console-data:/data \
   livekit-console:latest >/dev/null
 
-for _ in $(seq 1 15); do
+for _ in $(seq 1 45); do
   if curl -fsS "http://127.0.0.1:$port/healthz" >/dev/null 2>&1; then
     echo "==> Healthy on 127.0.0.1:$port"
     docker image prune -f >/dev/null

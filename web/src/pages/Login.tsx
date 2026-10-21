@@ -1,11 +1,10 @@
 import { useState, type FormEvent } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { Waypoints } from 'lucide-react';
+import { projectHref } from '../lib/project';
 import { api } from '../lib/api';
 import { Alert, Field, errText } from '../components/ui';
 
 export function Login() {
-  const navigate = useNavigate();
   const [error, setError] = useState<string>();
   const [busy, setBusy] = useState(false);
   const submit = async (e: FormEvent<HTMLFormElement>) => {
@@ -14,7 +13,7 @@ export function Login() {
     setBusy(true);
     try {
       await api('/auth/login', { method: 'POST', body: { username: f.get('username'), password: f.get('password') } });
-      navigate('/');
+      window.location.assign(projectHref('/'));
     } catch (err) {
       setError(errText(err));
       setBusy(false);

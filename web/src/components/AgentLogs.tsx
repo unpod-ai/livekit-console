@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from '../lib/router';
 import { useApi } from '../lib/hooks';
-import { useMe } from '../lib/me';
+import { useMe, can } from '../lib/me';
 import { fromMsPrecise } from '../lib/format';
 import { Alert, Badge, Panel } from './ui';
 import { DataTable } from './DataTable';
@@ -10,7 +10,7 @@ type Row = { id: string; jobId: string; agentName: string; at: number; level: st
   logger: string | null; turnId: string | null; traceId: string | null; spanId: string | null; expiresAt: number };
 type Data = { enabled: boolean; retentionDays: number; rows: Row[]; total: number; expired: number; page: number; pageSize: number; jobs: { jobId: string; agentName: string }[] };
 export function AgentLogs({ sid }: { sid: string }) {
-  const me = useMe(), admin = me.data?.role === 'admin';
+  const me = useMe(), admin = can(me.data, 'logs');
   const [params, setParams] = useSearchParams();
   const job = params.get('logJob') ?? params.get('reportJob') ?? '';
   const level = params.get('logLevel') ?? '', q = params.get('logQ') ?? '', page = params.get('logPage') ?? '1';
@@ -23,7 +23,7 @@ export function AgentLogs({ sid }: { sid: string }) {
     setParams(old => { const next = new URLSearchParams(old); next.set(key, value); if (key !== 'logPage') next.delete('logPage'); return next; });
   }
   if (me.isLoading) return <Alert>Checking access…</Alert>;
-  if (!admin) return <Alert>Agent logs require an administrator account.</Alert>;
+  if (!admin) return <Alert>Agent logs require logs access.</Alert>;
   if (result.error) return <Alert kind="bad">{(result.error as Error).message}</Alert>;
   const data = result.data;
   return <>

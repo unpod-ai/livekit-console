@@ -1,3 +1,4 @@
+import { recordCollector } from './operations-observability.js';
 import { db } from './db.js';
 import { importFromLiveKit } from './importer.js';
 import { rooms } from './livekit.js';
@@ -12,6 +13,7 @@ export async function reconcileSessions(): Promise<number> {
   try {
     live = new Set((await rooms.listRooms()).map((r) => r.sid));
   } catch {
+    recordCollector('reconcile',{ok:false,error:'upstream'});
     return 0;
   }
   const open = db.prepare('SELECT room_sid, started_at FROM sessions WHERE ended_at IS NULL').all() as { room_sid: string; started_at: number }[];
@@ -27,6 +29,7 @@ export async function reconcileSessions(): Promise<number> {
     endParticipants.run(endedAt, s.room_sid);
     closed++;
   }
+  recordCollector('reconcile',{ok:true});
   return closed;
 }
 
@@ -34,11 +37,11 @@ export function startReconciler(): void {
   const run = () =>
     reconcileSessions()
       .then((n) => n && console.log(`reconciler closed ${n} stale session(s)`))
-      .catch((err) => console.error('reconcile failed', err));
+      .catch(() => {recordCollector('reconcile',{ok:false,error:'storage'});console.error('reconcile failed');});
   const sync = () =>
     importFromLiveKit()
       .then((n) => n && console.log(`synced ${n} egress record(s) from LiveKit`))
-      .catch((err) => console.error('egress sync failed', err));
+      .catch(() => {recordCollector('egress',{ok:false,error:'storage'});console.error('egress sync failed');});
   setTimeout(run, 10_000);
   setInterval(run, 60_000).unref();
   // Covers egress that started before webhooks did, and any whose webhook was missed.

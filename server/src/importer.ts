@@ -1,3 +1,4 @@
+import { recordCollector } from './operations-observability.js';
 import { db } from './db.js';
 import { twirp } from './twirp.js';
 
@@ -20,6 +21,7 @@ export async function importFromLiveKit(): Promise<number> {
   try {
     items = ((await twirp('egress', 'ListEgress', {})) as { items?: any[] }).items ?? [];
   } catch {
+    recordCollector('egress',{ok:false,error:'upstream'});
     return 0; // LiveKit unreachable: leave what we have
   }
   let n = 0;
@@ -38,5 +40,6 @@ export async function importFromLiveKit(): Promise<number> {
     db.exec('ROLLBACK');
     throw err;
   }
+  recordCollector('egress',{ok:true});
   return n;
 }

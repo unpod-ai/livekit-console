@@ -1,6 +1,9 @@
-import { useQuery } from '@tanstack/react-query';
-import { Navigate, Route, Routes } from 'react-router-dom';
-import { api } from './lib/api';
+import { Navigate, Route, Routes } from './lib/router';
+import { ApiError } from './lib/api';
+import { useMe, can } from './lib/me';
+import { ProjectSelector, SignOut } from './lib/projects';
+import { Alert } from './components/ui';
+import { Operations } from './pages/Operations';
 import { AppShell } from './components/AppShell';
 import { AgentDetail } from './pages/AgentDetail';
 import { Agents } from './pages/Agents';
@@ -22,9 +25,16 @@ import { Trunks } from './pages/Trunks';
 import { Usage } from './pages/Usage';
 
 function Protected() {
-  const me = useQuery({ queryKey: ['me'], queryFn: () => api('/auth/me'), retry: false });
+  const me = useMe();
   if (me.isPending) return null;
-  return me.isError ? <Navigate to="/login" replace /> : <AppShell />;
+  if (me.error instanceof ApiError && me.error.status === 401) return <Navigate to="/login" replace />;
+  if (me.isError) return <div className="page"><Alert kind="bad">{me.error instanceof ApiError && me.error.status === 403 ? 'You no longer have access to this project.' : 'This project is temporarily unavailable.'}</Alert><button className="btn secondary" onClick={() => me.refetch()}>Retry</button><ProjectSelector /><SignOut /></div>;
+  return <AppShell />;
+}
+
+function ContentAccess({ children }: { children: React.ReactNode }) {
+  const me = useMe();
+  return can(me.data, 'transcripts') ? <>{children}</> : <Alert>Transcript access is required to view usage.</Alert>;
 }
 
 export function App() {
@@ -43,7 +53,8 @@ export function App() {
         <Route path="agents/:name" element={<AgentDetail />} />
         <Route path="diagnostics" element={<Diagnostics />} />
         <Route path="telephony/diagnostics" element={<TelephonyDiagnostics />} />
-        <Route path="usage" element={<Usage />} />
+        <Route path="usage" element={<ContentAccess><Usage /></ContentAccess>} />
+        <Route path="operations" element={<Operations />} />
         <Route path="telephony/calls" element={<Calls />} />
         <Route path="telephony/calls/:id" element={<CallDetail />} />
         <Route path="telephony/dispatch" element={<Dispatch />} />

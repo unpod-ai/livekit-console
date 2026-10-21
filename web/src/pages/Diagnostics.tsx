@@ -1,4 +1,4 @@
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams } from '../lib/router';
 import { useMe } from '../lib/me';
 import { fromMsPrecise } from '../lib/format';
 import { DataTable } from '../components/DataTable';

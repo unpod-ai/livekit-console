@@ -1,5 +1,7 @@
+import { projectResource } from '../lib/api';
+import { can, useMe } from '../lib/me';
 import { useEffect, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from '../lib/router';
 import { useApi } from '../lib/hooks';
 import { fromMsPrecise } from '../lib/format';
 import { Alert, Badge, KV, Panel } from './ui';
@@ -19,6 +21,8 @@ function Timing({ metrics }: { metrics?: Record<string, number> }) {
   return <span>{Object.entries(metrics ?? {}).map(([k, v]) => <span key={k} style={{ display: 'block' }}>{k.replace(/_/g, ' ')}: {k.includes('tokens') || k === 'total_requests' ? v : `${(v * 1000).toFixed(1)} ms`}</span>)}</span>;
 }
 export function LiveInsights({ sid }: { sid: string }) {
+  const me = useMe();
+  const allowed = can(me.data, 'transcripts') && can(me.data, 'logs');
   const [params, setParams] = useSearchParams();
   const job = params.get('reportJob') ?? '', turn = params.get('liveTurn') ?? '', trace = params.get('liveTrace') ?? '';
   const kind = params.get('liveKind') ?? '', page = params.get('livePage') ?? '1';
@@ -27,20 +31,21 @@ export function LiveInsights({ sid }: { sid: string }) {
   const validTrace = !draftTrace || /^[a-f0-9]{32}$/.test(draftTrace);
   const [exporting, setExporting] = useState(false), [exportError, setExportError] = useState('');
   const q = new URLSearchParams({ page, ...(job && { jobId: job }), ...(turn && { turnId: turn }), ...(trace && { traceId: trace }), ...(kind && { kind }) });
-  const result = useApi<Data>(['live-insights', sid, job, turn, trace, kind, page], `/agent-insights/sessions/${encodeURIComponent(sid)}/telemetry?${q}`);
+  const result = useApi<Data>(['live-insights', sid, job, turn, trace, kind, page], `/agent-insights/sessions/${encodeURIComponent(sid)}/telemetry?${q}`, { enabled: allowed });
   function filter(key: string, value: string) {
     setParams(old => { const next = new URLSearchParams(old); value ? next.set(key, value) : next.delete(key); if (key !== 'livePage') next.delete('livePage'); return next; });
   }
   async function download() {
     setExporting(true); setExportError('');
     try {
-      const res = await fetch(`/api/agent-insights/sessions/${encodeURIComponent(sid)}/export${job ? `?jobId=${encodeURIComponent(job)}` : ''}`, { credentials: 'same-origin' });
+      const res = await fetch(projectResource(`/api/agent-insights/sessions/${encodeURIComponent(sid)}/export${job ? `?jobId=${encodeURIComponent(job)}` : ''}`), { credentials: 'same-origin' });
       if (!res.ok) throw new Error((await res.json()).error ?? 'Export failed');
       const url = URL.createObjectURL(await res.blob());
       const a = document.createElement('a'); a.href = url; a.download = `${sid}_agent-session.json`; a.click();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
     } catch (e) { setExportError((e as Error).message); } finally { setExporting(false); }
   }
+  if (!allowed) return <Alert>Live telemetry and combined exports require transcript and log access.</Alert>;
   if (result.error) return <Alert kind="bad">{(result.error as Error).message}</Alert>;
   if (!result.data) return <Alert>Loading live telemetry…</Alert>;
   const data = result.data, selected = data.jobs.find(j => j.jobId === job);

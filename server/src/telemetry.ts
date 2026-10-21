@@ -1,6 +1,8 @@
 import express, { Router, type ErrorRequestHandler } from 'express';
 import { createHash } from 'node:crypto';
 import { agentAliases } from './inventory-store.js';
+import { contentExpiry } from './operations-policy.js';
+import { noteSourceTimestamp } from './operations-observability.js';
 import { config } from './config.js';
 import { db } from './db.js';
 import { normalizeReport, ReportValidationError } from './agent-report.js';
@@ -38,7 +40,8 @@ telemetryIngest.post('/session-reports', requireTelemetry, express.json({ limit:
     const liveJob = db.prepare('SELECT agent_name FROM agent_live_jobs WHERE room_sid=? AND job_id=?').get(roomSid, jobId);
     if (liveJob && liveJob.agent_name !== agentName) { res.status(409).json({ error: 'Conflicting job identity' }); return; }
     db.prepare(`INSERT INTO agent_session_reports(room_sid,job_id,agent_name,participant_sid,worker_id,sdk_version,reported_at,received_at,expires_at,digest,content)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?)`).run(roomSid, jobId, agentName, participantSid, workerId, sdkVersion, reportedAt, now, now + config.telemetryRetentionDays * 86400000, digest, JSON.stringify(redactContent(content, config.telemetryRedaction, config.telemetryRedactTerms)));
+      VALUES (?,?,?,?,?,?,?,?,?,?,?)`).run(roomSid, jobId, agentName, participantSid, workerId, sdkVersion, reportedAt, now, contentExpiry('reports', now, roomSid, jobId), digest, JSON.stringify(redactContent(content, config.telemetryRedaction, config.telemetryRedactTerms)));
+    noteSourceTimestamp('reports',reportedAt);
     res.status(201).json({ roomSid, jobId, duplicate: false });
   } catch (err) {
     if (err instanceof ReportValidationError) { res.status(422).json({ error: err.message }); return; }

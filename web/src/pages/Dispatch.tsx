@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from '../lib/router';
 import { Plus, Pencil, Trash2 } from 'lucide-react';
 import { lk, type Json } from '../lib/api';
 import { joinList, splitList, useLkList, useMutate } from '../lib/hooks';

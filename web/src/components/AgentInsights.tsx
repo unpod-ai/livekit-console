@@ -1,5 +1,5 @@
-import { Link, useSearchParams } from 'react-router-dom';
-import { useMe } from '../lib/me';
+import { Link, useSearchParams } from '../lib/router';
+import { useMe, can } from '../lib/me';
 import { useApi } from '../lib/hooks';
 import { fromMs, fromMsPrecise } from '../lib/format';
 import { DataTable, type Col } from './DataTable';
@@ -25,13 +25,13 @@ const ms = (value: number | undefined) => value == null ? '—' : `${Math.round(
 
 export function AgentInsights({ sid }: { sid: string }) {
   const me = useMe();
-  const admin = me.data?.role === 'admin';
+  const admin = can(me.data, 'transcripts');
   const [params, setParams] = useSearchParams();
   const jobId = params.get('reportJob') ?? '';
   const setJobId = (job: string) => setParams(old => { const next = new URLSearchParams(old); next.set('reportJob', job); return next; });
   const query = useApi<Reports>(['agent-insights', sid, jobId], `/agent-insights/sessions/${encodeURIComponent(sid)}${jobId ? `?jobId=${encodeURIComponent(jobId)}` : ''}`, { enabled: admin });
   if (me.isLoading) return <Alert>Checking access…</Alert>;
-  if (!admin) return <Alert>Agent Insights contains conversation content and requires an administrator account.</Alert>;
+  if (!admin) return <><SessionRecordings sid={sid} /><LiveInsights sid={sid} /><Alert>Transcript access is required to view agent reports.</Alert></>;
   if (query.error) return <Alert kind="bad">{(query.error as Error).message}</Alert>;
   if (!query.data) return <Alert>Loading agent reports…</Alert>;
   const data = query.data;
@@ -61,7 +61,7 @@ export function AgentInsights({ sid }: { sid: string }) {
       </select></label></div>
       {data.total > data.reports.length && <p className="muted">Showing the latest {data.reports.length} of {data.total} reports.</p>}
       {report && <KV items={[
-        ['Logs', <Link className="rowlink" to={`/sessions/${encodeURIComponent(sid)}?tab=logs&logJob=${encodeURIComponent(report.jobId)}`}>View this job's logs</Link>],
+        ['Logs', can(me.data, 'logs') ? <Link className="rowlink" to={`/sessions/${encodeURIComponent(sid)}?tab=logs&logJob=${encodeURIComponent(report.jobId)}`}>View this job's logs</Link> : 'Log access is required'],
         ['Agent', report.agentName], ['Job ID', <span className="mono">{report.jobId}</span>], ['SDK', report.sdkVersion ?? 'Not reported'],
         ['Participant SID', report.participantSid ?? 'Not reported'], ['Worker ID', report.workerId ?? 'Not reported'],
         ['Reported', fromMs(report.reportedAt)], ['Received', fromMs(report.receivedAt)], ['Content expires', fromMs(report.expiresAt)],

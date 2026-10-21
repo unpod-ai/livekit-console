@@ -1,5 +1,7 @@
+import { projectResource } from '../lib/api';
+import { can, useMe } from '../lib/me';
 import { useEffect, useRef, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams } from '../lib/router';
 import { useApi } from '../lib/hooks';
 import { recordingOffset, waveformPeaks } from '../lib/waveform';
 import { Alert, Badge, Panel } from './ui';
@@ -8,13 +10,14 @@ type Data={files:File[];agentRecording:string;accessDays:number};
 const MAX_BYTES=16*1024*1024,MAX_SECONDS=300;
 const clock=(n:number)=>`${Math.floor(n/60)}:${String(Math.floor(n%60)).padStart(2,'0')}`;
 export function SessionRecordings({sid}:{sid:string}) {
+  const allowed = can(useMe().data, 'recordings');
   const [params,setParams]=useSearchParams();
-  const result=useApi<Data>(['recordings',sid],`/recordings/sessions/${encodeURIComponent(sid)}`);
+  const result=useApi<Data>(['recordings',sid],`/recordings/sessions/${encodeURIComponent(sid)}`, { enabled: allowed });
   const requested=params.get('recording');
   const file=requested?result.data?.files.find(f=>f.id===requested):result.data?.files.find(f=>f.state==='ready')??result.data?.files[0];
   const media=useRef<HTMLVideoElement>(null);
   const [position,setPosition]=useState(0),[duration,setDuration]=useState<number|null>(null),[error,setError]=useState(''),[peaks,setPeaks]=useState<number[]>([]),[waveState,setWaveState]=useState('');
-  const stream=file?`/api/recordings/${encodeURIComponent(file.egressId)}/${file.index}/stream`:'';
+  const stream=file?projectResource(`/api/recordings/${encodeURIComponent(file.egressId)}/${file.index}/stream`):'';
   const target=params.get('mediaAt'),at=target!==null?Number(target):null;
   const knownDuration=duration??(file?.durationMs!=null?file.durationMs/1000:null);
   const offset=at!==null&&file?recordingOffset(at,file.startMs,knownDuration):null;
@@ -44,6 +47,7 @@ export function SessionRecordings({sid}:{sid:string}) {
     return()=>{cancelled=true;controller.abort();};
   },[file?.id,file?.state,waveDuration,stream]);
   function seek(seconds:number){if(!media.current||knownDuration==null)return;const value=Math.min(knownDuration,Math.max(0,seconds));media.current.currentTime=value;if(file?.startMs!=null)setParams(old=>{const next=new URLSearchParams(old);next.set('mediaAt',String(Math.round(file.startMs!+value*1000)));next.set('recording',file.id);return next;});}
+  if(!allowed)return <Alert>Recording access is required for playback.</Alert>;
   if(result.error)return <Alert kind="bad">{(result.error as Error).message}</Alert>;
   if(!result.data)return <Alert>Loading recordings…</Alert>;
   return <Panel title="Session recording">
@@ -54,7 +58,7 @@ export function SessionRecordings({sid}:{sid:string}) {
         {file.state!=='ready'?<Alert kind="warn">Recording {file.state}. {file.state==='unconfigured'?'An administrator must configure trusted storage access.':file.state==='expired'?'The console access window has expired.':file.state==='unsupported'?'This source cannot be streamed safely by the configured integration.':file.state==='unavailable'?'The access window cannot be verified because source timestamps were not reported.':'The file is missing from the stored Egress results.'}</Alert>:<>
           <video ref={media} key={file.id} controls preload="metadata" src={stream} aria-label="Session recording playback" style={{width:'100%',maxHeight:file.mime?.startsWith('audio/')?64:420,background:'var(--surface-2)'}}
             onLoadedMetadata={()=>{const d=media.current?.duration;if(d!=null&&Number.isFinite(d)){setDuration(d);const value=at!==null?recordingOffset(at,file.startMs,d):null;if(value!==null)media.current!.currentTime=value;}}}
-            onTimeUpdate={()=>setPosition(media.current?.currentTime??0)} onError={()=>{setError('Recording could not be loaded.');fetch(stream,{method:'HEAD',credentials:'same-origin'}).then(r=>{if(!r.ok)setError(r.status===404?'Recording file is missing.':r.status===410?'Recording access has expired.':r.status===401||r.status===403?'Recording access requires an administrator login.':'Recording storage is unavailable or this codec is unsupported.');}).catch(()=>{});}} />
+            onTimeUpdate={()=>setPosition(media.current?.currentTime??0)} onError={()=>{setError('Recording could not be loaded.');fetch(stream,{method:'HEAD',credentials:'same-origin'}).then(r=>{if(!r.ok)setError(r.status===404?'Recording file is missing.':r.status===410?'Recording access has expired.':r.status===401||r.status===403?'Recording access is no longer available.':'Recording storage is unavailable or this codec is unsupported.');}).catch(()=>{});}} />
           {error&&<Alert kind="bad">{error}</Alert>}
           {peaks.length>0?<svg viewBox={`0 0 ${peaks.length} 64`} style={{width:'100%',height:72,cursor:'pointer',background:'var(--surface-2)'}} role="slider" aria-label="Recording waveform seek" aria-valuemin={0} aria-valuemax={knownDuration??0} aria-valuenow={Math.min(knownDuration??0,position)} tabIndex={0}
             onClick={e=>{const box=e.currentTarget.getBoundingClientRect();seek((e.clientX-box.left)/box.width*(knownDuration??0));}}

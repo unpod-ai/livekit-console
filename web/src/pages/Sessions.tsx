@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useRange } from '../lib/range';
-import { useNavigate, useParams, useSearchParams, Link } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams, Link } from '../lib/router';
 import { Info, Radio } from 'lucide-react';
 import { type Json } from '../lib/api';
 import { useApi } from '../lib/hooks';

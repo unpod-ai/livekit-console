@@ -21,6 +21,10 @@ cp .env.example .env                 # the console's own settings
 - The container uses host networking and binds `127.0.0.1:<CONSOLE_PORT>`, so a host-networked LiveKit can reach
   `/webhook` and the console can reach LiveKit and agent workers on the same machine.
 - History lives in the `livekit-console-data` Docker volume.
+- The gateway binds the console port; isolated project backends bind subsequent loopback ports. The gateway's
+  sibling `control.db` holds accounts, memberships and audit history. Include it and every project DB in backups.
+- Additional projects use private operator files mounted read-only with `PROJECT_CONFIG_DIR`; see
+  [project administration](project-administration.md). Leave it unset for the existing default-only deployment.
 - Reach it through an SSH tunnel (`ssh -L 8090:127.0.0.1:8090 <host>`) or the HTTPS step below.
 
 ## HTTPS and access control
@@ -35,6 +39,9 @@ If a worker runs in a container, publish its status port on loopback (for exampl
 ## Back up the database
 
 The `livekit-console-data` volume contains accounts, session/event history, worker samples and repository traffic.
+It now also contains the gateway control database and project operations policy, collector, alert and deletion
+tombstone stores. The whole-volume method below includes them. A single-file online backup must be repeated for
+the control database and every configured project database; see [Operations backup/restore](operations.md#backup-and-restore).
 Back up the VM's `.env` and deployment configuration separately in secure storage: the bootstrap admin and LiveKit
 credentials are not stored in the database. Archives contain password hashes and private call data; keep them out of
 Git, restrict access, and encrypt copies kept off the VM.

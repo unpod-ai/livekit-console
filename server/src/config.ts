@@ -40,7 +40,22 @@ for (const [url, values] of Object.entries(workerMetadata)) {
   for (const [key, value] of Object.entries(values)) if (!['instanceKey', 'image', 'version', 'environment', 'region', 'host'].includes(key) || typeof value !== 'string' || value.length > 512 || /[\x00-\x1f]/.test(value)) throw new Error('Invalid worker metadata field');
 }
 
+const retention = (key: string, fallback: number | null): number | null => {
+  if (process.env[key] === undefined) return fallback;
+  const value = Number(process.env[key]);
+  if (!Number.isInteger(value) || value < 1 || value > 3650) throw new Error(`${key} must be an integer from 1 to 3650`);
+  return value;
+};
+const recordingAccessKey = process.env.RECORDING_AWS_ACCESS_KEY_ID ?? process.env.AWS_ACCESS_KEY_ID ?? '';
+const recordingSecretKey = process.env.RECORDING_AWS_SECRET_ACCESS_KEY ?? process.env.AWS_SECRET_ACCESS_KEY ?? '';
+if (!!recordingAccessKey !== !!recordingSecretKey) throw new Error('Recording AWS credentials require both access and secret keys');
 export const config = {
+  liveRetentionDays: retention('AGENT_LIVE_RETENTION_DAYS', telemetryRetentionDays)!,
+  logRetentionDays: retention('AGENT_LOG_RETENTION_DAYS', telemetryRetentionDays)!,
+  historyRetentionDays: retention('HISTORY_RETENTION_DAYS', null),
+  trafficRetentionDays: retention('TRAFFIC_RETENTION_DAYS', null),
+  recordingAllowDefaultCredentials: process.env.RECORDING_ALLOW_DEFAULT_CREDENTIALS === 'true',
+  recordingCredentials: recordingAccessKey && recordingSecretKey ? { accessKeyId: recordingAccessKey, secretAccessKey: recordingSecretKey, ...(process.env.RECORDING_AWS_SESSION_TOKEN ?? process.env.AWS_SESSION_TOKEN ? {sessionToken: process.env.RECORDING_AWS_SESSION_TOKEN ?? process.env.AWS_SESSION_TOKEN} : {}) } : undefined,
   workerRollupRetentionDays,
   workerMetadata,
   diagnosticsEnabled:process.env.DIAGNOSTICS_ENABLED==='true',

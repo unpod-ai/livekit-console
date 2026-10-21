@@ -1,6 +1,8 @@
 import express, { Router, type ErrorRequestHandler } from 'express';
 import { createHash } from 'node:crypto';
 import { db } from './db.js';
+import { contentExpiry } from './operations-policy.js';
+import { noteSourceTimestamp } from './operations-observability.js';
 import { config } from './config.js';
 import { requireTelemetry } from './telemetry-auth.js';
 import { ReportValidationError } from './report-validation.js';
@@ -95,7 +97,7 @@ liveIngest.post('/', requireTelemetry, (_req, res, next) => {
       const existing = job?.[k === 'participantSid' ? 'participant_sid' : 'worker_id'];
       if (existing && b[k] && existing !== b[k]) throw new Conflict('Conflicting participant/worker identity');
     }
-    const expiry = job?.expires_at ?? now + config.telemetryRetentionDays * 86400000;
+    const expiry = Math.min(job?.expires_at ?? Infinity, contentExpiry('live', job?.first_received ?? now, b.roomSid, b.jobId));
     const terminal = b.entries.filter((e: Obj) => e.kind === 'collection' && e.state !== 'receiving') as Obj[];
     if (terminal.length > 1 || (terminal[0] && job?.terminal_id && terminal[0].id !== job.terminal_id)) throw new Conflict('Conflicting collection completion');
     for (const e of b.entries) {
@@ -105,7 +107,8 @@ liveIngest.post('/', requireTelemetry, (_req, res, next) => {
     const insert = db.prepare('INSERT OR IGNORE INTO agent_live_records(room_sid,job_id,id,kind,at,turn_id,trace_id,span_id,content,digest,received_at,expires_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)');
     for (const e of b.entries as Obj[]) {
       const content = privacy(e);
-      insert.run(b.roomSid, b.jobId, e.id, e.kind, e.at, e.turnId, e.traceId, e.spanId, expiry > now ? JSON.stringify(content) : null, hash(e), now, expiry);
+      const entryExpiry = e.kind === 'log' ? contentExpiry('logs', now, b.roomSid, b.jobId) : expiry;
+      insert.run(b.roomSid, b.jobId, e.id, e.kind, e.at, e.turnId, e.traceId, e.spanId, entryExpiry > now ? JSON.stringify(content) : null, hash(e), now, entryExpiry);
       if (e.kind === 'log') {
         const log = normalizeLogBatch({ schemaVersion: 1, roomSid: b.roomSid, jobId: b.jobId, agentName: b.agentName, batchId: b.batchId, entries: [{ ...e, at: e.at / 1000 }] }).entries[0];
         const logDigest = hash({ roomSid: b.roomSid, jobId: b.jobId, agentName: b.agentName, entry: log });
@@ -113,7 +116,7 @@ liveIngest.post('/', requireTelemetry, (_req, res, next) => {
         if (old && old.digest !== logDigest) throw new Conflict('Conflicting structured log');
         const privateLog = privacy(log);
         db.prepare(`INSERT OR IGNORE INTO agent_log_entries(room_sid,job_id,entry_id,agent_name,at,level,message,logger,turn_id,trace_id,span_id,received_at,expires_at,digest) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(
-          b.roomSid, b.jobId, e.id, b.agentName, e.at, log.level, expiry > now ? privateLog.message : null, expiry > now ? privateLog.logger : null, expiry > now ? e.turnId : null, expiry > now ? e.traceId : null, expiry > now ? e.spanId : null, now, expiry, logDigest);
+          b.roomSid, b.jobId, e.id, b.agentName, e.at, log.level, entryExpiry > now ? privateLog.message : null, entryExpiry > now ? privateLog.logger : null, entryExpiry > now ? e.turnId : null, entryExpiry > now ? e.traceId : null, entryExpiry > now ? e.spanId : null, now, entryExpiry, logDigest);
       }
     }
     const mode = !job || job.mode === 'unknown' ? b.mode : b.mode === 'unknown' || b.mode === job.mode ? job.mode : 'mixed';
@@ -124,7 +127,7 @@ liveIngest.post('/', requireTelemetry, (_req, res, next) => {
       terminal_id=COALESCE(excluded.terminal_id,terminal_id),terminal_state=COALESCE(excluded.terminal_state,terminal_state),expected_count=COALESCE(excluded.expected_count,expected_count),dropped_count=MAX(dropped_count,excluded.dropped_count)`).run(
       b.roomSid,b.jobId,b.agentName,b.sdk.language,b.sdk.version,b.participantSid,b.workerId,mode,JSON.stringify(caps),now,now,expiry,terminal[0]?.id ?? null,terminal[0]?.state ?? null,terminal[0]?.expectedCount ?? null,Math.max(0,...b.entries.filter((e: Obj) => e.kind === 'collection').map((e: Obj) => e.droppedCount)));
     db.prepare('INSERT INTO agent_live_batches(room_sid,job_id,batch_id,digest) VALUES (?,?,?,?)').run(b.roomSid,b.jobId,b.batchId,digest);
-    db.exec('COMMIT'); transaction = false; res.status(201).json({ duplicate: false });
+    db.exec('COMMIT'); transaction = false; noteSourceTimestamp('live',Math.max(...b.entries.map((e:Obj)=>e.at))); res.status(201).json({ duplicate: false });
   } catch (err) {
     if (transaction) db.exec('ROLLBACK');
     res.status(err instanceof Conflict ? 409 : err instanceof ReportValidationError ? 422 : 500).json({ error: err instanceof Conflict || err instanceof ReportValidationError ? err.message : 'Could not store live telemetry' });
@@ -179,7 +182,7 @@ liveInsights.get('/sessions/:sid/telemetry', (req,res) => {
     const {where,args}=filters(req), total=db.prepare(`SELECT COUNT(*) AS n FROM agent_live_records WHERE ${where}`).get(...args)!.n as number;
     const page=Math.min(p,Math.max(1,Math.ceil(total/100)));
     const rows=db.prepare(`SELECT job_id,content FROM agent_live_records WHERE ${where} ORDER BY at,id LIMIT 100 OFFSET ?`).all(...args,(page-1)*100).map(r=>({...privacy(JSON.parse(r.content as string)),jobId:r.job_id}));
-    res.json({enabled:config.telemetryEventsEnabled&&!!config.telemetryToken,redaction:config.telemetryRedaction,retentionDays:config.telemetryRetentionDays,jobs:jobs(req.params.sid),rows,total,page,pageSize:100});
+    res.json({enabled:config.telemetryEventsEnabled&&!!config.telemetryToken,redaction:config.telemetryRedaction,retentionDays:config.liveRetentionDays,jobs:jobs(req.params.sid),rows,total,page,pageSize:100});
   } catch(err) { res.status(err instanceof ReportValidationError?422:500).json({error:err instanceof ReportValidationError?err.message:'Could not read live telemetry'}); }
 });
 liveInsights.get('/sessions/:sid/export',(req,res)=>{

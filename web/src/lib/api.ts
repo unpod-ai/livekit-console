@@ -1,3 +1,5 @@
+import { projectResource } from './project';
+export { projectResource } from './project';
 export type Json = Record<string, any>;
 
 export class ApiError extends Error {
@@ -7,7 +9,7 @@ export class ApiError extends Error {
 }
 
 export async function api<T = any>(path: string, init?: { method?: string; body?: unknown }): Promise<T> {
-  const res = await fetch(`/api${path}`, {
+  const res = await fetch(projectResource(`/api${path}`), {
     method: init?.method ?? 'GET',
     headers: init?.body !== undefined ? { 'Content-Type': 'application/json' } : undefined,
     body: init?.body !== undefined ? JSON.stringify(init.body) : undefined,

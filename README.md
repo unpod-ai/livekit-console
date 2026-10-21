@@ -30,10 +30,15 @@ Taken from a demo instance with simulated data (`server/scripts/simulate-webhook
 | Egress (start/stop/inspect), ingress (create/delete) | LiveKit egress/ingress API |
 | Sessions, participants, events, calls, usage, overview insights | Webhooks stored in SQLite (history starts when the collector starts) |
 
-Not available on a self-hosted server (so not faked): per-session bandwidth/latency analytics, agent observability,
-PCAP/codec/SIP response per call, calls rejected before a room is created, number purchasing, billing.
+LiveKit's server APIs alone do not expose Cloud's full observability pipeline. Optional console integrations collect
+agent telemetry, measured connection quality and SIP diagnostics, including pre-room failures. Full Cloud parity,
+PCAP capture, number purchasing and billing are not included.
 
 ## Agents
+For multiple configured projects and scoped access, see [project administration](docs/project-administration.md).
+The [Operations page](docs/operations.md) provides collector/storage measurements, retention/privacy controls,
+in-console alert rules and audit history. Back up the gateway control database as well as each project database.
+
 Agent status comes from the workers themselves, not from test jobs. Every LiveKit Agents worker serves a small status
 server (port 8081 by default: `GET /` health, `GET /worker` name, job type, load, active jobs, SDK version). Set
 `AGENT_WORKER_URLS` (comma-separated base URLs) and the console polls them every 10s. Endpoint availability, valid

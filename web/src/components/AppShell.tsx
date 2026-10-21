@@ -1,21 +1,25 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { NavLink, Outlet, useNavigate } from '../lib/router';
 import {
   Activity, BarChart3, GitFork, Bot, Cable, CircleDot, DoorOpen, Download, GitBranch, Hash, KeyRound,
   LayoutDashboard, LogOut, PanelLeftClose, PanelLeftOpen, PhoneCall, Search, Settings, Waypoints,
 } from 'lucide-react';
+import { ProjectSelector, useProjects } from '../lib/projects';
+import { selectedProject, projectHref } from '../lib/project';
 import { api } from '../lib/api';
-import { useMe } from '../lib/me';
+import { Alert } from './ui';
+import { useMe, can } from '../lib/me';
 
-type Item = { to: string; label: string; icon: typeof Activity; admin?: boolean };
+type Item = { to: string; label: string; icon: typeof Activity; admin?: boolean; transcripts?: boolean };
 const GROUPS: { title: string; items: Item[] }[] = [
   { title: 'Project', items: [
     { to: '/', label: 'Overview', icon: LayoutDashboard },
     { to: '/sessions', label: 'Sessions', icon: Activity },
     { to: '/rooms', label: 'Live rooms', icon: DoorOpen },
     { to: '/agents', label: 'Agents', icon: Bot },
-    { to: '/agent-analytics', label: 'Agent analytics', icon: Activity },
-    { to: '/usage', label: 'Usage', icon: BarChart3 },
+    { to: '/agent-analytics', label: 'Agent analytics', icon: Activity, transcripts: true },
+    { to: '/usage', label: 'Usage', icon: BarChart3, transcripts: true },
+    { to: '/operations', label: 'Operations', icon: Settings, admin: true },
     { to: '/diagnostics', label: 'Diagnostics', icon: Activity, admin: true },
   ] },
   { title: 'Telephony', items: [
@@ -38,7 +42,7 @@ function Palette({ onClose }: { onClose: () => void }) {
   const [q, setQ] = useState('');
   const [i, setI] = useState(0);
   const me = useMe();
-  const list = useMemo(() => ALL.filter(x => (!x.admin || me.data?.role === 'admin') && x.label.toLowerCase().includes(q.toLowerCase())), [q, me.data?.role]);
+  const list = useMemo(() => ALL.filter(x => (!x.admin || me.data?.role === 'admin') && (!x.transcripts || can(me.data, 'transcripts')) && x.label.toLowerCase().includes(q.toLowerCase())), [q, me.data]);
   const go = (to: string) => { onClose(); navigate(to); };
   return (
     <>
@@ -66,10 +70,11 @@ function Palette({ onClose }: { onClose: () => void }) {
 }
 
 export function AppShell() {
-  const navigate = useNavigate();
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem('lkc.collapsed') === '1');
   const [palette, setPalette] = useState(false);
   const me = useMe();
+  const projects = useProjects();
+  const project = projects.find(p => p.id === selectedProject());
   const mac = useRef(/Mac/i.test(navigator.platform));
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -79,7 +84,7 @@ export function AppShell() {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
   const toggle = () => { localStorage.setItem('lkc.collapsed', collapsed ? '0' : '1'); setCollapsed(!collapsed); };
-  const logout = async () => { await api('/auth/logout', { method: 'POST' }); navigate('/login'); };
+  const logout = async () => { await api('/auth/logout', { method: 'POST' }); window.location.assign(projectHref('/login')); };
 
   return (
     <div className={`shell ${collapsed ? 'collapsed' : ''}`}>
@@ -94,7 +99,7 @@ export function AppShell() {
         {GROUPS.map((g) => (
           <div key={g.title}>
             <div className="nav-group">{g.title}</div>
-            {g.items.filter(it => !it.admin || me.data?.role === 'admin').map((it) => (
+            {g.items.filter(it => (!it.admin || me.data?.role === 'admin') && (!it.transcripts || can(me.data, 'transcripts'))).map((it) => (
               <NavLink key={it.to} to={it.to} end={it.to === '/'} className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`} title={it.label}>
                 <it.icon size={16} aria-hidden /><span className="nav-label">{it.label}</span>
               </NavLink>
@@ -110,7 +115,7 @@ export function AppShell() {
           </button>
         </div>
       </aside>
-      <main className="content"><div className="page"><Outlet /></div></main>
+      <main className="content"><div className="page"><div className="project-bar"><ProjectSelector />{project && <span className="muted">{project.backend.state === 'ready' ? 'Ready' : `Project status: ${project.backend.state}`}</span>}</div>{project && project.backend.state !== 'ready' ? <><Alert kind="warn">{project.backend.state === 'starting' ? 'This project is starting. Please retry shortly.' : 'This project is temporarily unavailable. Select another project or retry.'}</Alert><button className="btn secondary" onClick={() => window.location.reload()}>Retry project</button></> : <Outlet />}</div></main>
       {palette && <Palette onClose={() => setPalette(false)} />}
     </div>
   );

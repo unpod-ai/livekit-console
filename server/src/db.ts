@@ -7,6 +7,7 @@ mkdirSync(path.dirname(file), { recursive: true });
 
 export const db = new DatabaseSync(file);
 db.exec(`
+  PRAGMA busy_timeout = 5000;
   PRAGMA journal_mode = WAL;
   CREATE TABLE IF NOT EXISTS events (
     id TEXT PRIMARY KEY, ts INTEGER NOT NULL, type TEXT NOT NULL,

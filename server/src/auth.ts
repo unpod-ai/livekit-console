@@ -6,7 +6,9 @@ import { db } from './db.js';
 
 const COOKIE = 'lkc_session';
 export type Role = 'admin' | 'viewer';
-export type Auth = { user: string; role: Role; source: 'env' | 'db'; id?: number };
+export type ContentGrant = 'transcripts' | 'recordings' | 'logs';
+export type ContentCapabilities = Record<ContentGrant, boolean>;
+export type Auth = { user: string; role: Role; source: 'env' | 'db' | 'gateway'; id?: number; capabilities?: ContentCapabilities; globalAdmin?: boolean; projectId?: string };
 
 const safeEqual = (a: string, b: string): boolean => {
   const ab = Buffer.from(a);
@@ -28,6 +30,7 @@ const DUMMY = hashPassword('not-a-real-password'); // keeps unknown-user logins 
 type UserRow = { id: number; username: string; password_hash: string; role: Role };
 
 export function login(req: Request, res: Response): void {
+  if (process.env.CONSOLE_PROJECT_CHILD === '1') { res.status(404).json({ error: 'Use console gateway login' }); return; }
   const { username, password } = req.body ?? {};
   if (typeof username !== 'string' || typeof password !== 'string' || !username || !password) {
     res.status(401).json({ error: 'Invalid credentials' });
@@ -63,8 +66,17 @@ export const authOf = (req: Request): Auth => (req as Request & { auth: Auth }).
 
 export function requireAuth(req: Request, res: Response, next: NextFunction): void {
   try {
+    if (process.env.CONSOLE_PROJECT_CHILD === '1') {
+      const key = process.env.CONSOLE_GATEWAY_SECRET;
+      if (!key || !process.env.CONSOLE_PROJECT_ID) throw new Error('Gateway not configured');
+      const p = jwt.verify(req.get('x-console-gateway') ?? '', key, { algorithms: ['HS256'], audience: 'console-project:' + process.env.CONSOLE_PROJECT_ID }) as jwt.JwtPayload;
+      if (typeof p.sub !== 'string' || !p.sub || p.sub.length > 64 || !['admin', 'viewer'].includes(p.role) || typeof p.exp !== 'number' || !p.capabilities || ['transcripts', 'recordings', 'logs'].some(k => typeof p.capabilities[k] !== 'boolean')) throw new Error('Invalid gateway identity');
+      (req as Request & { auth: Auth }).auth = { user: p.sub, role: p.role, source: 'gateway', capabilities: p.capabilities, globalAdmin: p.globalAdmin === true, projectId: process.env.CONSOLE_PROJECT_ID };
+      next(); return;
+    }
     const p = jwt.verify(req.cookies?.[COOKIE] ?? '', config.sessionSecret) as { sub: string; src: 'env' | 'db'; uid?: number };
     if (p.src === 'env') {
+      if (p.sub !== config.adminUser) throw new Error('Bootstrap user changed');
       (req as Request & { auth: Auth }).auth = { user: p.sub, role: 'admin', source: 'env' };
     } else {
       // Role is read from the table on every request, so demoting or removing someone takes effect immediately.
@@ -79,9 +91,17 @@ export function requireAuth(req: Request, res: Response, next: NextFunction): vo
 }
 
 export function me(req: Request, res: Response): void {
-  const { user, role, source } = authOf(req);
-  res.json({ user, role, source });
+  const { user, role, source, capabilities, globalAdmin, projectId } = authOf(req);
+  res.json({ user, role, source, ...(capabilities ? { capabilities, globalAdmin, projectId } : {}) });
 }
+
+export const requireContent = (...grants: ContentGrant[]) => (req: Request, res: Response, next: NextFunction): void => {
+  const auth = authOf(req);
+  if (auth.source === 'gateway' ? grants.some(grant => !auth.capabilities?.[grant]) : auth.role !== 'admin') {
+    res.status(403).json({ error: 'Content access required: ' + grants.join(', ') }); return;
+  }
+  next();
+};
 
 export function requireAdmin(req: Request, res: Response, next: NextFunction): void {
   if (authOf(req).role !== 'admin') {
