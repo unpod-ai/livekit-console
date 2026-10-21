@@ -1,5 +1,5 @@
-import { Link, useSearchParams } from 'react-router-dom';
-import { useMe } from '../lib/me';
+import { Link, useSearchParams } from '../lib/router';
+import { useMe, can } from '../lib/me';
 import { useApi } from '../lib/hooks';
 import { fromMs } from '../lib/format';
 import { AreaChart, BarsChart, PALETTE } from './Charts';
@@ -17,7 +17,7 @@ type Data = {
 const key = (u: Usage) => JSON.stringify([u.type, u.provider, u.model]);
 export function AgentUsage({ name, hours }: { name: string; hours: number }) {
   const me = useMe();
-  const admin = me.data?.role === 'admin';
+  const admin = can(me.data, 'transcripts');
   const [params, setParams] = useSearchParams();
   const model = params.get('usageModel') ?? '';
   const page = params.get('usagePage') ?? '1';
@@ -32,7 +32,7 @@ export function AgentUsage({ name, hours }: { name: string; hours: number }) {
     });
   }
   if (me.isLoading) return <Alert>Checking access…</Alert>;
-  if (!admin) return <Alert>Agent usage analytics requires an administrator account.</Alert>;
+  if (!admin) return <Alert>Agent usage analytics requires transcripts access.</Alert>;
   if (result.error) return <Alert kind="bad">{(result.error as Error).message}</Alert>;
   if (!result.data) return <Alert>Loading model usage…</Alert>;
   const data = result.data, c = data.coverage;

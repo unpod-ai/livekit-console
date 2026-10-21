@@ -1,3 +1,4 @@
+import { recordCollector } from './operations-observability.js';
 import { config } from './config.js';
 import { db } from './db.js';
 
@@ -23,14 +24,16 @@ export async function syncTraffic(): Promise<void> {
         headers: { Authorization: `Bearer ${config.githubToken}`, Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28' },
         signal: AbortSignal.timeout(15_000),
       });
-      if (!res.ok) throw new Error(`GitHub ${kind}: ${res.status} ${(await res.text()).slice(0, 120)}`);
+      if (!res.ok) throw new Error('upstream');
       const body = (await res.json()) as Record<string, Day[]>;
       for (const d of body[kind] ?? []) upsert.run(Date.parse(d.timestamp), kind, d.count, d.uniques);
     }
+    recordCollector('traffic',{ok:true});
     lastSyncAt = Date.now();
     lastError = null;
   } catch (err) {
-    lastError = err instanceof Error ? err.message : String(err);
+    lastError = 'upstream';
+    recordCollector('traffic',{ok:false,error:'upstream'});
     console.error('traffic sync failed:', lastError);
   }
 }

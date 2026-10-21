@@ -1,6 +1,8 @@
 import express,{Router} from 'express';
 import {createHash} from 'node:crypto';
 import {db} from './db.js';
+import {contentExpiry} from './operations-policy.js';
+import {noteSourceTimestamp} from './operations-observability.js';
 import {config} from './config.js';
 import {requireTelemetry} from './telemetry-auth.js';
 import {requireAdmin,requireAuth} from './auth.js';
@@ -30,10 +32,10 @@ diagnosticIngest.post('/',requireTelemetry,express.json({limit:'256kb'}),(req,re
    const content=JSON.stringify(r),digest=createHash('sha256').update(content).digest('hex');
    const prior=db.prepare('SELECT digest FROM diagnostic_records WHERE id=?').get(r.id);
    if(prior){if(prior.digest!==digest)throw new Error('Conflicting diagnostic record ID');continue;}
-   const expires=r.at+config.diagnosticsRetentionDays*86400000;
+   const expires=contentExpiry('diagnostics',r.at);
    db.prepare(`INSERT INTO diagnostic_records(id,kind,at,received_at,expires_at,room_sid,participant_sid,track_sid,call_id,sip_call_id,provider_call_id,instance_id,digest,content) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(r.id,r.kind,r.at,Date.now(),expires,expires>Date.now()?r.roomSid??null:null,expires>Date.now()?r.participantSid??null:null,expires>Date.now()?r.trackSid??null:null,expires>Date.now()?r.callId??null:null,expires>Date.now()?r.sipCallId??null:null,expires>Date.now()?r.providerCallId??null:null,expires>Date.now()?r.instanceId??null:null,digest,expires>Date.now()?content:null);inserted++;
   }
-  db.exec('COMMIT');res.json({inserted,duplicates:records.length-inserted});
+  db.exec('COMMIT');noteSourceTimestamp('diagnostics',Math.max(...records.map(r=>r.at)));res.json({inserted,duplicates:records.length-inserted});
  }catch{db.exec('ROLLBACK');res.status(409).json({error:'Conflicting diagnostic record ID'});}
 });
 diagnosticIngest.use((err:any,_req:any,res:any,_next:any)=>{res.status(err.type==='entity.too.large'?413:400).json({error:'Invalid diagnostic upload'});});

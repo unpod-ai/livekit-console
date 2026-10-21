@@ -1,3 +1,4 @@
+import { recordCollector, workerSource } from './operations-observability.js';
 import { config } from './config.js';
 import { inventoryWorkerRows, lastWorkerObservation, pruneInventory, recordWorkerObservation, syncInventory, type Observation } from './inventory-store.js';
 
@@ -33,13 +34,13 @@ async function probe(url: string): Promise<WorkerStatus> {
  ]);
  const errors: string[] = [];
  if (health.status === 'fulfilled') { result.ok = health.value.ok; if (!result.ok) errors.push(`status endpoint answered ${health.value.status}`); }
- else errors.push(String(health.reason?.message ?? health.reason));
+ else errors.push('Status endpoint unavailable');
  if (info.status === 'fulfilled') {
   const j = info.value; const id = textField(j.worker_id) ?? textField(j.id);
   Object.assign(result, { infoAvailable: true, agentName: textField(j.agent_name) ?? result.agentName, workerId: id && /^AW_[A-Za-z0-9_-]+$/.test(id) ? id : null, workerType: textField(j.worker_type), load: finite(j.worker_load, 1), activeJobs: finite(j.active_jobs, Number.MAX_SAFE_INTEGER), sdkVersion: textField(j.sdk_version), projectType: textField(j.project_type) });
   if (typeof j.registered === 'boolean') result.registrationState = j.registered ? 'registered' : 'unregistered';
   if (typeof j.ready === 'boolean') result.readiness = j.ready ? 'ready' : 'not_ready';
- } else errors.push(String(info.reason?.message ?? info.reason));
+ } else errors.push('Worker info unavailable');
  result.error = errors.length ? errors.join('; ') : null; result.latencyMs = Date.now() - started;
  return result;
 }
@@ -49,7 +50,10 @@ export function pollWorkers(): Promise<void> {
  running = (async () => {
   syncInventory();
   const observations = await Promise.all(config.workerUrls.map(probe));
-  for (const observation of observations) recordWorkerObservation(observation);
+  for (const observation of observations) {
+   recordWorkerObservation(observation);
+   recordCollector(workerSource(observation.url),{ok:observation.ok,...(!observation.ok?{error:'upstream' as const}:{})});
+  }
  })().finally(() => { running = null; });
  return running;
 }
@@ -58,7 +62,7 @@ let started = false;
 export function startWorkerPolling(): void {
  if (started) return; started = true;
  syncInventory(); pruneInventory();
- const run = () => pollWorkers().catch(err => console.error('worker poll failed', err));
+ const run = () => pollWorkers().catch(() => console.error('worker poll failed'));
  run(); setInterval(run, 10_000).unref();
  setInterval(() => pruneInventory(), 6 * 3600_000).unref();
 }

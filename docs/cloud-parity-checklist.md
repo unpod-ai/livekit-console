@@ -143,15 +143,17 @@ Verification: isolated worker polling and fresh-process tests cover rename, nati
 
 ## Phase 5 — Project administration and operations
 
-- [ ] Support multiple configured LiveKit projects with isolated credentials, data and permissions.
-- [ ] Add project-scoped access and configurable access to transcripts, recordings and logs.
-- [ ] Add SSO/OIDC if organizational access requires it.
-- [ ] Record administrative changes and destructive actions in an audit history.
-- [ ] Configure retention, deletion, export and redaction for each collected data category.
-- [ ] Show collector health, ingestion lag, last successful sync and collection failures.
-- [ ] Alert on worker outages, ingestion failures, call failures and measured latency/quality thresholds.
-- [ ] Monitor ingestion/storage growth and select indexes, rollups or external stores based on measured volume.
-- [ ] Verify backup and restore after adding each new telemetry store.
+- [x] Support multiple configured LiveKit projects with isolated credentials, data and permissions.
+- [x] Add project-scoped access and configurable access to transcripts, recordings and logs.
+- [x] Evaluate organizational SSO/OIDC requirements; retain local accounts until an identity provider is required (OIDC integration deferred, not implemented).
+- [x] Record administrative changes and destructive actions in an audit history.
+- [x] Configure retention, deletion, export and redaction for each collected data category.
+- [x] Show collector health, ingestion lag, last successful sync and collection failures.
+- [x] Alert on worker outages, ingestion failures, call failures and measured latency/quality thresholds.
+- [x] Monitor ingestion/storage growth and select indexes, rollups or external stores based on measured volume.
+- [x] Verify backup and restore after adding each new telemetry store.
+
+Verification: isolated project backends with colliding IDs and distinct SDK/upload credentials, role/content grants, immediate subsequent-request revocation, raw ingestion/Range proxying, sanitized audit, retroactive policy/deletion, measured alerts/storage and control/operations snapshot restore are covered by tests. Browser checks cover project switching, scoped resources, access recovery, Operations and desktop/mobile layouts. Live default-project migration is verified separately before closing the phase.
 
 ## Phase 6 — Deployment management and agent testing
 

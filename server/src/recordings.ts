@@ -2,17 +2,21 @@ import { Router } from 'express';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { S3Client, GetObjectCommand, HeadObjectCommand } from '@aws-sdk/client-s3';
+import { getPolicy } from './operations-policy.js';
 import { config } from './config.js';
 import { db } from './db.js';
-import { requireAdmin, requireAuth } from './auth.js';
+import { requireContent, requireAuth } from './auth.js';
 import { resolveRecording, validateRange, type EgressRow } from './recording-source.js';
 
-export function recordingRouter(storage = config.recordingStorage, client = new S3Client({
+export function recordingRouter(storage = config.recordingStorage, suppliedClient?: S3Client) {
+  const client = suppliedClient ?? new S3Client({
   region: config.recordingRegion, endpoint: config.recordingEndpoint, forcePathStyle: config.recordingPathStyle,
+  credentials: config.recordingCredentials ?? (config.recordingAllowDefaultCredentials ? undefined : async () => { throw new Error('Recording credentials are not configured'); }),
   maxAttempts: 2, requestHandler: { connectionTimeout: 3000, requestTimeout: 15000 },
-})) {
+});
   const router=Router();
-  router.use(requireAuth,requireAdmin,(_req,res,next)=>{res.set({'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'});next();});
+  router.use(requireAuth,requireContent('recordings'),(_req,res,next)=>{res.set({'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'});next();});
+  router.use((_req,res,next)=>{if(!getPolicy().categories.recordings.accessEnabled){res.status(403).json({error:'Recording access is disabled by project policy'});return;}next();});
   router.get('/sessions/:sid',(req,res)=>{
     const rows=db.prepare('SELECT egress_id,started_at,ended_at,info FROM egress WHERE room_sid=? ORDER BY started_at DESC LIMIT 100').all(req.params.sid) as EgressRow[];
     const files=rows.flatMap(row=>{const n=JSON.parse(row.info).fileResults?.length??0;return Array.from({length:Math.min(n,20)},(_,index)=>{const {key,...file}=resolveRecording(row,index,storage);return file;});});
@@ -25,6 +29,7 @@ export function recordingRouter(storage = config.recordingStorage, client = new 
     if(!row){res.status(404).json({error:'Recording not found'});return;}
     const file=resolveRecording(row,Number(req.params.index),storage);
     if(file.state!=='ready'||!file.key){res.status(file.state==='expired'?410:file.state==='missing'?404:503).json({error:`Recording ${file.state}`});return;}
+    if(!suppliedClient&&!config.recordingCredentials&&!config.recordingAllowDefaultCredentials){res.status(503).json({error:'Recording storage credentials are not configured'});return;}
     let range:string|undefined;
     try{range=validateRange(req.headers.range);}catch{res.status(416).json({error:'Use a single valid byte range'});return;}
     const controller=new AbortController();let body:Readable|undefined;

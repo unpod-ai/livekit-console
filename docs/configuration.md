@@ -20,6 +20,13 @@ server from starting when missing.
 | `AGENT_TELEMETRY_RETENTION_DAYS` | | `30` | Content retention for newly received reports, integer 1–365 days |
 | `GITHUB_TOKEN` | | | Token with push access to the repo, to record clone/view traffic |
 | `GITHUB_REPO` | | `unpod-ai/livekit-console` | Repository whose traffic is recorded |
+| `CONSOLE_PROJECTS_FILE` | | default only | Private operator JSON defining configured projects; see [project administration](project-administration.md) |
+| `CONSOLE_CONTROL_DB_PATH` | | sibling `control.db` | Global accounts, memberships and audit database; back up separately |
+| `CONSOLE_BACKEND_PORT_BASE` | | `PORT + 1` | First private loopback project backend port |
+| `AUDIT_RETENTION_DAYS` | | `365` | Central audit retention, integer 1–3650 days |
+| `AGENT_LIVE_RETENTION_DAYS` / `AGENT_LOG_RETENTION_DAYS` | | report retention | Independent live/log content defaults; Operations policy persists subsequent changes |
+| `HISTORY_RETENTION_DAYS` / `TRAFFIC_RETENTION_DAYS` | | unlimited | Optional retained history/traffic defaults |
+| `RECORDING_ALLOW_DEFAULT_CREDENTIALS` | | `false` | Explicit opt-in to SDK shared/instance credential discovery; otherwise project keys are required |
 
 ## What is stored
 SQLite holds events, sessions, participants, egress records, users, agent worker status samples (kept 14 days) and
@@ -33,6 +40,10 @@ for upload setup, excluded fields, retention and redaction limitations.
 ## Deployment settings
 `.env.deploy` (git-ignored; template in `.env.deploy.example`) holds the VM target for `deploy.sh`; see
 [deployment.md](deployment.md).
+
+The gateway copies existing users once into its separate control database; the original database becomes project
+`default`. Additional projects need explicit credentials and unique databases. See [project administration](project-administration.md)
+and [Operations](operations.md) for grants, ingestion URLs, policy, alerts and backup/restore.
 
 ## Connection diagnostics
 

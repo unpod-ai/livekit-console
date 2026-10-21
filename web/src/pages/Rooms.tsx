@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from '../lib/router';
 import { Plus, Trash2, UserMinus, Bot } from 'lucide-react';
 import { api, type Json } from '../lib/api';
 import { useApi, useMutate } from '../lib/hooks';

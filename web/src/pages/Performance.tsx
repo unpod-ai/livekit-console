@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from '../lib/router';
 import { useRange } from '../lib/range';
 import { useApi } from '../lib/hooks';
-import { useMe } from '../lib/me';
+import { useMe, can } from '../lib/me';
 import { fromMsPrecise } from '../lib/format';
 import { Alert, Badge, KV, PageHeader, Panel } from '../components/ui';
 import { DataTable } from '../components/DataTable';
@@ -17,7 +17,7 @@ const fmt=(n:number|null)=>n===null?'Unavailable':`${n.toFixed(2)} ms`;
 const local=(at:number)=>{const d=new Date(at);if(!Number.isFinite(d.getTime()))return '';return new Date(at-d.getTimezoneOffset()*60000).toISOString().slice(0,19);};
 const link=(s:Sample)=>`/sessions/${encodeURIComponent(s.roomSid)}?${new URLSearchParams({tab:'insights',reportJob:s.jobId,mediaAt:String(s.at),reportItem:s.itemId,...(s.traceId?{liveTrace:s.traceId}:{}),...(s.turnId?{liveTurn:s.turnId}:{})})}`;
 export function Performance({initialAgent}:{initialAgent?:string}) {
- const me=useMe(),admin=me.data?.role==='admin',{hours}=useRange(),[params,setParams]=useSearchParams();
+ const me=useMe(),admin=can(me.data, 'transcripts'),{hours}=useRange(),[params,setParams]=useSearchParams();
  const anchor=useMemo(()=>Date.now(),[hours]);
  const from=Number(params.get('perfFrom')??anchor-hours*3600000),to=Number(params.get('perfTo')??anchor);
  const selectedAgents=params.get('perfAgents')??JSON.stringify(initialAgent?[initialAgent]:[]),metric=params.get('perfMetric')??'e2e_latency';
@@ -33,7 +33,7 @@ export function Performance({initialAgent}:{initialAgent?:string}) {
  function range(a:number,b:number){setRangeDirty(false);update({perfFrom:String(a),perfTo:String(b)});}
  let agents:string[]=[];try{const parsed=JSON.parse(selectedAgents);if(Array.isArray(parsed))agents=parsed.filter(v=>typeof v==='string');}catch{/* The server returns an explicit invalid-filter error. */}
  if(me.isLoading)return <Alert>Checking access…</Alert>;
- if(!admin)return <Alert>Measured agent analytics requires an administrator account.</Alert>;
+ if(!admin)return <Alert>Measured agent analytics requires transcripts access.</Alert>;
  const data=result.data;
  return <>
   {!initialAgent&&<PageHeader crumbs={[{label:'Project'},{label:'Agent analytics'}]} title="Agent performance" sub="Measured turn timings, stage durations and final-report usage" range/>}

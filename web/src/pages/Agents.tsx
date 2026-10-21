@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from '../lib/router';
 import { Radio } from 'lucide-react';
 import { type Json } from '../lib/api';
 import { useApi, useLkList } from '../lib/hooks';

@@ -2,7 +2,9 @@ import { useState } from 'react';
 import { KeyRound, Plus, Trash2 } from 'lucide-react';
 import { api, type Json } from '../lib/api';
 import { useApi, useMutate } from '../lib/hooks';
-import { useMe } from '../lib/me';
+import { useMe, isGlobalAdmin } from '../lib/me';
+import { isLegacyDefault, selectedProject } from '../lib/project';
+import { ProjectMembers } from '../components/ProjectMembers';
 import { useConfirm } from '../lib/confirm';
 import { useTab } from '../lib/useTab';
 import { fmtBytes, fromMs, relTime } from '../lib/format';
@@ -21,7 +23,7 @@ function AddMember({ onClose }: { onClose: () => void }) {
       footer={<><button className="btn secondary" onClick={onClose}>Cancel</button><button className="btn" disabled={!ok || add.isPending} onClick={() => add.mutate(undefined, { onSuccess: onClose })}>Add member</button></>}>
       <Field label="Username" hint="3-64 characters: letters, digits, . _ @ -"><input className="input" value={f.username} onChange={(e) => setF({ ...f, username: e.target.value })} autoComplete="off" /></Field>
       <Field label="Password" hint="At least 10 characters. Share it with them securely; they can't change it themselves yet."><input className="input" type="password" value={f.password} onChange={(e) => setF({ ...f, password: e.target.value })} autoComplete="new-password" /></Field>
-      <Field label="Role" hint={f.role === 'admin' ? 'Full access, including trunks, rules, egress and members.' : 'Can view everything but cannot change anything.'}>
+      <Field label="Role" hint={f.role === 'admin' ? 'Full access, including trunks, rules, egress and members.' : 'Read-only account. Project access and content permissions are assigned separately.'}>
         <select className="select" value={f.role} onChange={(e) => setF({ ...f, role: e.target.value })}><option value="viewer">Viewer (read-only)</option><option value="admin">Admin</option></select>
       </Field>
     </Drawer>
@@ -41,14 +43,14 @@ function ResetPassword({ member, onClose }: { member: Member; onClose: () => voi
 
 function Team() {
   const me = useMe();
-  const list = useApi<Member[]>(['users'], '/users', { live: false });
+  const list = useApi<Member[]>(['users'], '/users', { live: false, enabled: isGlobalAdmin(me.data) });
   const [adding, setAdding] = useState(false);
   const [resetting, setResetting] = useState<Member | null>(null);
   const confirm = useConfirm();
   const setRole = useMutate((v: { id: number; role: string }) => api(`/users/${v.id}`, { method: 'PATCH', body: { role: v.role } }), { invalidate: [['users']], success: 'Role updated' });
   const remove = useMutate((id: number) => api(`/users/${id}`, { method: 'DELETE' }), { invalidate: [['users']], success: 'Member removed' });
 
-  if (me.data && me.data.role !== 'admin') return <Alert>Only admins can manage team members.</Alert>;
+  if (!isGlobalAdmin(me.data)) return <Alert>Only global administrators can manage the team directory.</Alert>;
   const cols: Col<Member>[] = [
     { key: 'user', header: 'Member', cell: (m) => <span>{m.username}{m.username === me.data?.user && <> <Badge tone="info">You</Badge></>}</span>, text: (m) => m.username, sort: (m) => m.username },
     { key: 'role', header: 'Role', cell: (m) => m.source === 'env'
@@ -76,23 +78,25 @@ function Team() {
 }
 
 export function Settings() {
-  const [tab, setTab] = useTab('general', ['general', 'team', 'webhooks', 'keys'] as const);
+  const globalAdmin = isGlobalAdmin(useMe().data);
+  const [tab, setTab] = useTab('general', ['general', 'team', 'memberships', 'webhooks', 'keys'] as const);
   const cfg = useApi<{ wsUrl: string; sipUri: string | null }>(['config'], '/config', { live: false });
   const col = useApi<Json>(['collector'], '/history/collector');
   const c = col.data;
-  const hook = `${location.origin}/webhook`;
+  const hook = `${location.origin}${isLegacyDefault() ? '' : `/p/${encodeURIComponent(selectedProject())}`}/webhook`;
   const copyable = (v?: string | null) => (v ? <span className="mono">{v} <CopyButton text={v} label="Copy" /></span> : '—');
   return (
     <>
       <PageHeader crumbs={[{ label: 'Settings' }]} title="Settings" refresh={false} />
-      <Tabs value={tab} onChange={setTab} tabs={[{ id: 'general', label: 'General' }, { id: 'team', label: 'Team members' }, { id: 'webhooks', label: 'Webhooks & history' }, { id: 'keys', label: 'API keys' }]} />
+      <Tabs value={tab} onChange={setTab} tabs={[{ id: 'general', label: 'General' }, ...(globalAdmin ? [{ id: 'team' as const, label: 'Team members' }, { id: 'memberships' as const, label: 'Project access' }] : []), { id: 'webhooks', label: 'Webhooks & history' }, { id: 'keys', label: 'API keys' }]} />
       {tab === 'general' && (
         <>
           <Panel title="Project"><KV items={[['Console URL', copyable(location.origin)], ['LiveKit server URL', copyable(cfg.data?.wsUrl)], ['SIP URI', cfg.data?.sipUri ? copyable(cfg.data.sipUri) : <span className="muted">Not configured (set SIP_URI in the console .env)</span>]]} /></Panel>
           <Panel title="History database"><KV items={[['Sessions', c?.sessions ?? '…'], ['Participants', c?.participants ?? '…'], ['Events', c?.events ?? '…'], ['Egress records', c?.egress ?? '…'], ['First event', c ? fromMs(c.firstEventAt) : '…'], ['Last event', c ? `${fromMs(c.lastEventAt)} (${relTime(c.lastEventAt)})` : '…'], ['Database size', c ? fmtBytes(c.dbBytes) : '…']]} /></Panel>
         </>
       )}
-      {tab === 'team' && <Team />}
+      {tab === 'team' && (globalAdmin ? <Team /> : <Alert>Only global administrators can manage team members.</Alert>)}
+      {tab === 'memberships' && (globalAdmin ? <ProjectMembers /> : <Alert>Only global administrators can manage project access.</Alert>)}
       {tab === 'webhooks' && (
         <>
           <Panel title="Webhook endpoint" actions={<CopyButton text={hook} />}><div className="panel-body"><div className="secret"><span>{hook}</span></div></div></Panel>

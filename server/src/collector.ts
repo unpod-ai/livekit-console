@@ -1,5 +1,6 @@
 import type { Request, Response } from 'express';
 import { WebhookReceiver } from 'livekit-server-sdk';
+import { noteSourceTimestamp } from './operations-observability.js';
 import { config } from './config.js';
 import { db } from './db.js';
 
@@ -29,14 +30,15 @@ export async function handleWebhook(req: Request, res: Response): Promise<void> 
   try {
     event = await receiver.receive(req.body.toString('utf8'), req.get('Authorization') ?? undefined);
   } catch (err) {
-    res.status(401).json({ error: err instanceof Error ? err.message : 'invalid webhook' });
+    res.status(401).json({ error: 'Invalid webhook signature' });
     return;
   }
   try {
     record(event as any);
+    noteSourceTimestamp('webhook',secs((event as any).createdAt));
     res.json({ ok: true });
   } catch (err) {
-    console.error('webhook processing failed', err);
+    console.error('webhook processing failed');
     res.status(500).json({ error: 'processing failed' });
   }
 }

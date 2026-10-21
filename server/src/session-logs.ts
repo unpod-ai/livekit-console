@@ -1,6 +1,8 @@
 import express, { Router, type ErrorRequestHandler } from 'express';
 import { createHash } from 'node:crypto';
 import { db } from './db.js';
+import { contentExpiry } from './operations-policy.js';
+import { noteSourceTimestamp } from './operations-observability.js';
 import { config } from './config.js';
 import { requireTelemetry } from './telemetry-auth.js';
 import { ReportValidationError } from './report-validation.js';
@@ -69,15 +71,16 @@ logIngest.post('/', requireTelemetry, (_req, res, next) => {
       const saved = db.prepare('SELECT digest FROM agent_log_entries WHERE room_sid=? AND job_id=? AND entry_id=?').get(roomSid, jobId, row.entry.id);
       if (saved && saved.digest !== row.digest) { db.exec('ROLLBACK'); transaction = false; res.status(409).json({ error: 'Conflicting log entry' }); return; }
     }
-    const now = Date.now(), expires = now + config.telemetryRetentionDays * 86400000;
+    const now = Date.now(), expires = contentExpiry('logs', now, roomSid, jobId);
     const insert = db.prepare(`INSERT OR IGNORE INTO agent_log_entries(room_sid,job_id,entry_id,agent_name,at,level,message,logger,turn_id,trace_id,span_id,received_at,expires_at,digest)
       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`);
     for (const { entry, digest } of entries) {
       const e = redactContent(entry, config.telemetryRedaction, config.telemetryRedactTerms);
-      insert.run(roomSid, jobId, e.id, agentName, e.at, e.level, e.message, e.logger, e.turnId, e.traceId, e.spanId, now, expires, digest);
+      insert.run(roomSid, jobId, e.id, agentName, e.at, e.level, expires > now ? e.message : null, expires > now ? e.logger : null, expires > now ? e.turnId : null, expires > now ? e.traceId : null, expires > now ? e.spanId : null, now, expires, digest);
     }
     db.prepare('INSERT INTO agent_log_batches(room_sid,job_id,batch_id,digest,received_at) VALUES (?,?,?,?,?)').run(roomSid, jobId, batchId, digest, now);
     db.exec('COMMIT'); transaction = false;
+    noteSourceTimestamp('logs',Math.max(...batch.entries.map(e=>e.at)));
     res.status(201).json({ duplicate: false });
   } catch (err) {
     if (transaction) db.exec('ROLLBACK');
@@ -111,6 +114,6 @@ logInsights.get('/sessions/:sid/logs', (req, res) => {
       FROM agent_log_entries WHERE ${where} ORDER BY at DESC,job_id,entry_id LIMIT 50 OFFSET ?`).all(...args, (current - 1) * 50);
     const expired = db.prepare(`SELECT COUNT(*) AS n FROM agent_log_entries WHERE room_sid=? AND expires_at<=? ${job ? 'AND job_id=?' : ''}`).get(req.params.sid, now, ...(job ? [job] : []))!.n;
     const jobs = db.prepare('SELECT DISTINCT job_id AS jobId,agent_name AS agentName FROM agent_log_entries WHERE room_sid=? ORDER BY job_id LIMIT 100').all(req.params.sid);
-    res.json({ enabled: config.agentLogsEnabled && !!config.telemetryToken, retentionDays: config.telemetryRetentionDays, total, expired, rows: redactContent(rows, config.telemetryRedaction, config.telemetryRedactTerms), jobs, page: current, pageSize: 50 });
+    res.json({ enabled: config.agentLogsEnabled && !!config.telemetryToken, retentionDays: config.logRetentionDays, total, expired, rows: redactContent(rows, config.telemetryRedaction, config.telemetryRedactTerms), jobs, page: current, pageSize: 50 });
   } catch (err) { res.status(err instanceof ReportValidationError ? 422 : 500).json({ error: err instanceof ReportValidationError ? err.message : 'Could not read logs' }); }
 });

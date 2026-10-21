@@ -1,12 +1,12 @@
 import { useMemo, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from '../lib/router';
 import { Plus, Square } from 'lucide-react';
 import { lk, type Json } from '../lib/api';
 import { useApi, useLkList, useMutate } from '../lib/hooks';
 import { useInitialQuery, useTab } from '../lib/useTab';
 import { useConfirm } from '../lib/confirm';
 import { durationMs, fmtBytes, fmtMs, fromMs, fromMsPrecise } from '../lib/format';
-import { egressDestination, egressFiles, isUrl, type EgressFile } from '../lib/egress';
+import { egressDestination, egressFiles, type EgressFile } from '../lib/egress';
 import { Drawer } from '../components/Drawer';
 import { JsonEditor, parseJson } from '../components/JsonEditor';
 import { DataTable, type Col } from '../components/DataTable';
@@ -130,7 +130,7 @@ export function EgressDetail() {
                 <div key={i} className="panel-body" style={{ borderTop: i ? '1px solid var(--border)' : 0 }}>
                   <div className="kv" style={{ margin: -14 }}>
                     <div><div className="k">Target</div><div className="v mono">{f.name || '—'} {row.roomSid && /\.(ogg|opus|mp3|wav|mp4|m4a|webm)$/i.test(f.name) && <Link className="rowlink" to={`/sessions/${encodeURIComponent(row.roomSid)}?${new URLSearchParams({tab:'insights',recording:`${row.id}/${i}`})}`}>Play in console</Link>}</div></div>
-                    <div><div className="k">URL</div><div className="v mono">{f.location || '—'} {f.location && <CopyButton text={f.location} label="Copy URL" />} {isUrl(f.location) && <a href={f.location} target="_blank" rel="noopener noreferrer">Open</a>}</div></div>
+
                     <div><div className="k">Size / duration</div><div className="v">{f.size != null ? fmtBytes(f.size) : '—'} · {f.durationMs != null ? fmtMs(f.durationMs) : '—'}</div></div>
                   </div>
                 </div>
