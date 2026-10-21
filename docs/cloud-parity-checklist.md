@@ -18,7 +18,7 @@ Complete the phases in order; telemetry-dependent screens require their collecti
 - [x] Local admin/viewer accounts with server-enforced permissions.
 - [x] Documented deployment and database backup/restore.
 
-## Before calling the current preview verified
+## Baseline live validation
 
 - [x] Verify a real inbound provider call reaches the intended room and agent.
 - [x] Verify inbound direction and trunk/rule references against that real call.
@@ -181,12 +181,18 @@ prompt responses across two same-revision runs, owned-room cleanup and compariso
 No model/speech provider or carrier calls were needed. Post-test snapshots include scenarios/runs/results and pass
 integrity checks. The production worker was not restarted for acceptance.
 
-## Final UI step before the combined production release
+## Final UI step and combined production release
 
-- [ ] Add a day/night theme toggle in the top header.
-- [ ] Remember the selected theme across navigation and reloads.
-- [ ] Verify text, charts, tables, forms, dialogs and recordings in both themes on desktop and mobile.
-- [ ] Finish every phase's acceptance checks before publishing one combined production release; do not publish intermediate milestone releases.
+- [x] Add Light, Dark and System appearance buttons in the top header and login.
+- [x] Remember explicit choices across navigation/reloads; System follows live OS changes.
+- [x] Verify text, charts, tables, forms, dialogs and recordings in both themes on desktop/mobile.
+- [x] Finish every phase's acceptance checks before preparing one combined production release.
+
+Verification: local Chrome theme/administration suite9/9 and RTC/deployment suite7/7, zero errors. Tests cover
+pre-React appearance resolution, disabled storage, system/manual overrides, cross-tab changes, keyboard control,
+measured text/status contrast >=4.5:1 and chart/form boundaries >=3:1 in both palettes. Live acceptance passed
+OS-following, persistence and both themes across eleven pages, mobile forms/dialogs and zero page errors.
+The combined production release is v0.1.0; no intermediate phase releases were published.
 
 ## Scope boundary
 
