@@ -17,3 +17,7 @@ roles and sensitive-content permissions, plus the unfinished Phase 6 work. No th
 
 Ownership: parent startup/auth/audit/app/config/users/deployments/docs/integration; existing UI worker web/**;
 backend worker only single-server-migration module/tests; helper worker helper/installer/fixture/tests.
+
+Acceptance: completed through protected PR #26. Single-server UI/API removal, direct account grants/audit, canonical
+account migration, retained history/private recording playback, responsive views, test scenarios, snapshot integrity
+and worker/collector health all verified live. No releases.

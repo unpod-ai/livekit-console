@@ -18,7 +18,7 @@ version/theme changes. Unknown health/registration/version/latency remain explic
 - [x] 2. Test/implement TS deployment adapter/config/routes and account grants/audit; install private helper, no production mutations.
 - [x] 3. Test/implement owned-room runs, explicit agent dispatch/tokens, scenario/results/compare and cleanup/retention/privacy/backup integration.
 - [x] 4. Add Deployment/testing UI, official browser RTC/text/audio/mic lifecycle and scenario runner; verify responsive state/grants/single-server authentication.
-- [ ] 5. Fresh branch review, full server/Python/build/browser plus real isolated Docker and deterministic LiveKit text test; backups, protected PR merge/deploy and live health. Update both checklists, no release.
+- [x] 5. Fresh branch review, full server/Python/build/browser plus real isolated Docker and deterministic LiveKit text test; backups, protected PR merge/deploy and live health. Update both checklists, no release.
 
 ## Ownership/interfaces
 Host worker: scripts/deployment-helper.py, scripts/install-deployment-helper.sh, server/tests/test_deployment_helper.py,
@@ -48,4 +48,15 @@ Single-server source/build and 132 server tests pass. Python suite: 72 pass. Bot
 zero page errors. Independent backend review fixes cover mixed-case insight grants and deletion during deployment
 lookup (both reproduced before fixes). Disposable real-Docker build, health, active-job timeout/reconcile, interrupted
 state, exact secret/image rollback, failed candidate and drain checks passed. Production worker remains read-only.
-Live browser RTC/migration and post-deploy backups still pending; no release.
+Live browser RTC/migration and post-deploy backups subsequently passed as recorded below; no release.
+
+## Live acceptance
+
+Implementation merged through protected PR #26 and deployed. The single-server console preserved accounts, history,
+archived workers, Operations/audit and private recording Range206. Canonical account/audit import and the migration
+marker were verified; a post-test application snapshot includes all three agent-test tables and passes integrity.
+Real dedicated RTC acceptance passed browser connection, observed agent participant, microphone enable/disable,
+four sequential responses across two runs, room cleanup and honest unknown-version comparisons. Docker fixture:34
+checks, four containers removed after graceful shutdown. Production worker/collector remain healthy, no backlog or
+drops. Helper production target is read-only and rejects writes. Private helper state/config backed up separately.
+No tags/releases/version changes. Final day/night header toggle remains pending.
