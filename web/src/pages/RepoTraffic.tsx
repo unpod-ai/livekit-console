@@ -54,9 +54,10 @@ export function RepoTraffic() {
         actions={<Dropdown title="Repo traffic range" icon={<Clock size={14} aria-hidden />} label={OPTIONS.find(([d]) => d === days)?.[1]} value={days} onSelect={(d) => choose(Number(d))} items={OPTIONS.map(([id, label]) => ({ id, label }))} />} />
       {isPending && <div className="empty" role="status">Loading repository traffic…</div>}
       {error && <Alert kind="bad">Could not load repository traffic: {errText(error)}. {data && 'Showing the last loaded data. '}Use Refresh now to retry.</Alert>}
-      {data && !data.configured && <Alert kind="warn">Not recording yet. Set <span className="mono">GITHUB_TOKEN</span> (a token with push access to the repository) in the console's environment; <span className="mono">GITHUB_REPO</span> defaults to <span className="mono">unpod-ai/livekit-console</span>.</Alert>}
+      {data && !data.configured && <Alert kind="warn">Not recording yet. Configure repository traffic collection using the details below.</Alert>}
       {data?.lastError && <Alert kind="bad">Last sync failed: {data.lastError}</Alert>}
-      {covered && <Alert>History starts {fromMs(first)}: GitHub only keeps 14 days, so the console has only been able to record from when it started syncing.</Alert>}
+      <details className="context-help"><summary>Traffic collection and retention</summary>{data && !data.configured && <p className="inline-note">Set <span className="mono">GITHUB_TOKEN</span> (a token with push access to the repository) in the console's environment; <span className="mono">GITHUB_REPO</span> defaults to <span className="mono">unpod-ai/livekit-console</span>.</p>}<p className="inline-note">GitHub provides the latest 14 days of traffic. The console syncs hourly and retains daily observations according to its repository traffic policy; earlier history is available only if it was collected and retained. Unique visitors and cloners are summed per day, so the same person can count on multiple days. This range applies only to repository traffic.</p></details>
+      {covered && <Alert>Partial coverage: retained history starts {fromMs(first)}.</Alert>}
       {data && <>
       <Kpis>
         <Kpi label="Clones" value={n(t?.clones)} foot={`Today: ${(today?.clones ?? 0).toLocaleString()}`} />

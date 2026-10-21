@@ -70,21 +70,22 @@ export function Egress() {
   }, [live.data, hist.data]);
 
   const cols: Col<Row>[] = [
-    { key: 'id', header: 'Egress ID', cell: (e) => <Link className="rowlink mono" to={`/egress/${e.id}`} onClick={(ev) => ev.stopPropagation()}>{e.id}</Link>, text: (e) => e.id },
+    { key: 'recordingName', header: 'Recording / session', wrap: true, cell: e => <Link className="rowlink" to={`/egress/${e.id}`} onClick={ev=>ev.stopPropagation()}><b>{e.room || e.files[0]?.name || 'Recording'}</b><span className="record-secondary">{e.type} · {e.files.length} output{e.files.length===1?'':'s'}</span></Link>, text: e=>[e.room,e.id,...e.files.map(f=>f.name)].join(' ') },
+    { key: 'id', hidden: true, header: 'Egress ID', cell: (e) => <Link className="rowlink mono" to={`/egress/${e.id}`} onClick={(ev) => ev.stopPropagation()}>{e.id}</Link>, text: (e) => e.id },
     { key: 'start', header: 'Started at', cell: (e) => fromMs(e.started), sort: (e) => e.started ?? 0 },
     { key: 'dur', header: 'Duration', cell: (e) => durationMs(e.started, e.ended) },
     { key: 'status', header: 'Status', cell: (e) => <StatusBadge status={e.status} />, text: (e) => e.status },
-    { key: 'type', header: 'Type', cell: (e) => e.type, text: (e) => e.type },
-    { key: 'room', header: 'Source (session)', cell: (e) => (e.room ? <Link className="rowlink" to={sessionLink(e)} onClick={(ev) => ev.stopPropagation()}>{e.room}</Link> : '—'), text: (e) => e.room },
-    { key: 'dest', header: 'Destination', cell: (e) => <span className="mono">{e.dest}</span>, text: (e) => e.dest },
-    { key: 'rec', header: 'Recording', cell: (e) => <span onClick={(ev) => ev.stopPropagation()}><Recording file={e.files[0]} sessionSid={e.roomSid} egressId={e.id} /></span>, text: (e) => e.files.map((f) => `${f.name} ${f.location}`).join(' ') },
+    { key: 'type', hidden: true, header: 'Type', cell: (e) => e.type, text: (e) => e.type },
+    { key: 'room', hidden: true, header: 'Source (session)', cell: (e) => (e.room ? <Link className="rowlink" to={sessionLink(e)} onClick={(ev) => ev.stopPropagation()}>{e.room}</Link> : '—'), text: (e) => e.room },
+    { key: 'dest', hidden: true, header: 'Destination', cell: (e) => <span className="mono">{e.dest}</span>, text: (e) => e.dest },
+    { key: 'rec', header: 'Recording', cell: (e) => <span onClick={(ev) => ev.stopPropagation()}><Recording compact file={e.files[0]} sessionSid={e.roomSid} egressId={e.id} /></span>, text: (e) => e.files.map((f) => `${f.name} ${f.location}`).join(' ') },
     { key: 'size', header: 'Size', hidden: true, cell: (e) => (e.files[0]?.size ? fmtBytes(e.files[0].size) : '—') },
   ];
   return (
     <>
       <PageHeader crumbs={[{ label: 'Media' }, { label: 'Egress' }]} title="Egress" sub="Recordings and streams" actions={<button className="btn" onClick={() => setStarting(true)}><Plus size={15} />Start egress</button>} />
       <Panel>
-        <DataTable rows={rows} cols={cols} rowKey={(e) => e.id} loading={live.isLoading} error={live.error} storageKey="egress" initialQuery={initialQuery} onRow={(e) => navigate(`/egress/${e.id}`)} empty={{ title: 'No egress', hint: 'Start a recording, or egress appears here when a room is recorded.' }}
+        <DataTable rows={rows} cols={cols} rowKey={(e) => e.id} loading={live.isLoading} error={live.error} mobile storageKey="egress-polished" initialQuery={initialQuery} onRow={(e) => navigate(`/egress/${e.id}`)} empty={{ title: 'No egress', hint: 'Start a recording, or egress appears here when a room is recorded.' }}
           rowActions={(e) => active(e.status) ? <button className="btn danger sm" onClick={async () => (await confirm({ title: 'Stop egress?', message: `${e.id} will finish and upload what it has recorded.`, confirmLabel: 'Stop', danger: true })) && stop.mutate(e.id)}><Square size={12} />Stop</button> : null} />
       </Panel>
       {starting && <StartDrawer onClose={() => setStarting(false)} />}
@@ -108,11 +109,12 @@ export function EgressDetail() {
     : st ? { id, room: st.roomName ?? '', roomSid: st.roomSid ?? undefined, status: st.status, started: st.startedAt, ended: st.endedAt, type: st.type, dest: st.destination, files: st.files ?? [], error: st.error ?? undefined } : null;
   const request = lkRaw ? requestOf(lkRaw) : stored.data?.request;
   const loading = fromLk.isLoading || (stored.isLoading && !row);
+  const playableIndex=row?.files.findIndex(f=>/\.(ogg|opus|mp3|wav|mp4|m4a|webm)$/i.test(f.name))??-1;
 
   return (
     <>
       <PageHeader crumbs={[{ label: 'Media' }, { label: 'Egress', to: '/egress' }, { label: id }]} title={id} sub={row && <StatusBadge status={row.status} />}
-        actions={row && active(row.status) ? <button className="btn danger" onClick={async () => (await confirm({ title: 'Stop egress?', message: `${id} will finish and upload what it has recorded.`, confirmLabel: 'Stop', danger: true })) && stop.mutate()}><Square size={13} />Stop egress</button> : undefined} />
+        actions={<>{row?.roomSid&&playableIndex>=0&&<Link className="btn secondary" to={`/sessions/${encodeURIComponent(row.roomSid)}?${new URLSearchParams({tab:'insights',recording:`${row.id}/${playableIndex}`})}`}>Play recording</Link>}{row&&active(row.status)&&<button className="btn danger" onClick={async ()=>(await confirm({title:'Stop egress?',message:`${id} will finish and upload what it has recorded.`,confirmLabel:'Stop',danger:true}))&&stop.mutate()}><Square size={13}/>Stop egress</button>}</>} />
       {!row && !loading && <Alert kind="bad">This egress is no longer retained by LiveKit and was not seen by the collector.</Alert>}
       <Tabs value={tab} onChange={setTab} tabs={[{ id: 'overview', label: 'Egress overview' }, { id: 'events', label: 'Events', count: stored.data?.events?.length }]} />
       {row && tab === 'overview' && (
@@ -120,10 +122,10 @@ export function EgressDetail() {
           <Panel><KV items={[
             ['Egress ID', <span className="mono">{row.id}</span>], ['Started at', fromMs(row.started)], ['Ended at', fromMs(row.ended)], ['Duration', durationMs(row.started, row.ended)],
             ['Type', row.type], ['Status', <StatusBadge status={row.status} />],
-            ['Source (session)', row.room ? <Link to={sessionLink(row)}>{row.room}</Link> : '—'], ['Destination', <span className="mono">{row.dest}</span>],
+            ['Source (session)', row.room ? <Link to={sessionLink(row)}>{row.room}</Link> : '—'],
           ]} /></Panel>
           {row.error && <Alert kind="bad">{row.error}</Alert>}
-          <Panel title={`Destinations (${row.files.length})`}>
+          <details className="context-help"><summary>Storage destinations ({row.files.length})</summary><Panel title={`Destinations (${row.files.length})`}><KV items={[['Destination',row.dest]]}/>
             {row.files.length === 0
               ? <div className="panel-body muted">{active(row.status) ? 'The file location appears when the egress finishes.' : 'No output files were reported for this egress.'}</div>
               : row.files.map((f, i) => (
@@ -135,15 +137,15 @@ export function EgressDetail() {
                   </div>
                 </div>
               ))}
-          </Panel>
+          </Panel></details>
           {row.files.some((f) => /\.s3[.-]/i.test(f.location) || f.name.includes('private')) && (
-            <Alert kind="info">Recordings in a private bucket cannot be opened with this plain link. Use Play in console for authorized access through configured storage.</Alert>
+            <p className="muted">Private recordings use authorized console playback through configured storage.</p>
           )}
-          <Panel title="Request" actions={request && <CopyButton text={JSON.stringify(request, null, 2)} label="Copy request" />}>
+          <details className="context-help"><summary>Request details</summary><Panel title="Request" actions={request && <CopyButton text={JSON.stringify(request, null, 2)} label="Copy request" />}>
             {request && Object.keys(request).length
               ? <pre className="mono" style={{ whiteSpace: 'pre-wrap', margin: 0, padding: 14 }}>{JSON.stringify(request, null, 2)}</pre>
               : <div className="panel-body muted">The request is not available for this egress.</div>}
-          </Panel>
+          </Panel></details>
         </>
       )}
       {tab === 'events' && (

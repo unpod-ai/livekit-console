@@ -1,3 +1,4 @@
+import { Combobox } from './Combobox';
 import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useApi } from '../lib/hooks';
@@ -9,7 +10,7 @@ import { DataTable } from './DataTable';
 type Row = { id: string; jobId: string; agentName: string; at: number; level: string; message: string;
   logger: string | null; turnId: string | null; traceId: string | null; spanId: string | null; expiresAt: number };
 type Data = { enabled: boolean; retentionDays: number; rows: Row[]; total: number; expired: number; page: number; pageSize: number; jobs: { jobId: string; agentName: string }[] };
-export function AgentLogs({ sid }: { sid: string }) {
+export function AgentLogs({ sid, compact=false }: { sid: string; compact?: boolean }) {
   const me = useMe(), admin = can(me.data, 'logs');
   const [params, setParams] = useSearchParams();
   const job = params.get('logJob') ?? params.get('reportJob') ?? '';
@@ -27,18 +28,18 @@ export function AgentLogs({ sid }: { sid: string }) {
   if (result.error) return <Alert kind="bad">{(result.error as Error).message}</Alert>;
   const data = result.data;
   return <>
-    <Alert>Structured logs submitted by the agent are linked by room and job. Collection follows the header refresh setting. Logs appear independently of final reports; only explicitly submitted application events are available.</Alert>
+    {!compact&&<Alert>Structured logs submitted by the agent are linked by room and job. Collection follows the header refresh setting. Logs appear independently of final reports; only explicitly submitted application events are available.</Alert>}
     {data && !data.enabled && <Alert kind="warn">New structured log collection is disabled. Any retained logs remain available until expiry.</Alert>}
     {data && data.expired > 0 && <Alert>{data.expired} log entries for this room/job have expired. Expired text cannot be searched or restored by retrying an upload.</Alert>}
     <Panel title="Agent logs">
       <form onSubmit={e => { e.preventDefault(); filter('logQ', search.trim()); }} style={{ display: 'flex', flexWrap: 'wrap', gap: 12, padding: 14 }}>
-        <label style={{ minWidth: 0, maxWidth: '100%', flex: '1 1 240px' }}>Job <select className="select" aria-label="Log job" value={job} onChange={e => filter('logJob', e.target.value)}><option value="">All jobs</option>
-          {job && !data?.jobs.some(j => j.jobId === job) && <option value={job}>{job}</option>}
-          {data?.jobs.map(j => <option key={`${j.jobId}/${j.agentName}`} value={j.jobId}>{j.agentName} · {j.jobId}</option>)}
-        </select></label>
+        <label style={{ minWidth: 0, maxWidth: '100%', flex: '1 1 240px' }}>Job <Combobox label="Log job" value={job} onChange={value=>filter('logJob',value)} options={[
+          {value:'',label:'All jobs'},...(job&&!data?.jobs.some(j=>j.jobId===job)?[{value:job,label:job}]:[]),
+          ...(data?.jobs??[]).map(j=>({value:j.jobId,label:`${j.agentName} · ${j.jobId}`})),
+        ]}/></label>
         <label style={{ minWidth: 0, maxWidth: '100%', flex: '1 1 140px' }}>Severity <select className="select" aria-label="Log severity" value={level} onChange={e => filter('logLevel', e.target.value)}><option value="">All levels</option>{['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'].map(l => <option key={l}>{l}</option>)}</select></label>
         <label style={{ minWidth: 0, maxWidth: '100%', flex: '1 1 200px' }}>Message <input className="input" aria-label="Search log messages" maxLength={200} value={search} onChange={e => setSearch(e.target.value)} /></label>
-        {([['logTurn', 'Turn', turn], ['logTrace', 'Trace', trace], ['logSpan', 'Span', span]] as const).map(([key, label, value]) => <label key={key} style={{ minWidth: 0, flex: '1 1 180px' }}>{label}<input className="input" aria-label={`Log ${label.toLowerCase()}`} value={value} maxLength={200} onChange={e => filter(key, e.target.value)} /></label>)}
+        <details className="insights-advanced" open={!!turn||!!trace||!!span}><summary>Advanced correlation filters</summary><div className="insights-filter-row">{([['logTurn', 'Turn', turn], ['logTrace', 'Trace', trace], ['logSpan', 'Span', span]] as const).map(([key, label, value]) => <label key={key} style={{ minWidth: 0, flex: '1 1 180px' }}>{label}<input className="input" aria-label={`Log ${label.toLowerCase()}`} value={value} maxLength={200} onChange={e => filter(key, e.target.value)} /></label>)}</div></details>
         <button className="btn secondary sm" type="submit" style={{ alignSelf: 'end' }}>Search logs</button>
       </form>
       <DataTable rows={data?.rows ?? []} loading={result.isLoading} search={false} pageSize={false} rowKey={r => `${r.jobId}/${r.id}`} empty={{ title: 'No retained logs match these filters' }} cols={[

@@ -1,29 +1,30 @@
 export const METRICS = {
   e2e_latency:'Response latency',llm_node_ttft:'LLM first token',tts_node_ttfb:'TTS first audio',
-  transcription_delay:'Transcription delay',end_of_turn_delay:'End-of-turn delay',
+  transcription_delay:'Transcription delay',end_of_turn_delay:'End-of-turn delay', on_user_turn_completed_delay: 'Turn callback delay',
   stt_duration:'STT node duration',llm_duration:'LLM node duration',tts_duration:'TTS node duration',tool_duration:'Tool duration',
 } as const;
 export type Metric=keyof typeof METRICS;
 export class MeasurementLimitError extends Error {}
 export type Input={kind:string;roomSid:string;jobId:string;agentName:string;itemId:string;messageId?:string|null;role?:string;at:number;end?:number|null;expiresAt:number;receivedAt:number;metrics:Record<string,number>;spanName?:string;traceId?:string|null;spanId?:string|null;turnId?:string|null;interrupted?:boolean;isError?:boolean};
-export type Sample={id:string;roomSid:string;jobId:string;agentName:string;itemId:string;at:number;metric:Metric;valueMs:number;source:string;traceId:string|null;spanId:string|null;turnId:string|null;interrupted:boolean;isError:boolean};
+export type Sample={id:string;roomSid:string;jobId:string;agentName:string;itemId:string;recordId?:string|null;at:number;metric:Metric;valueMs:number;source:string;traceId:string|null;spanId:string|null;turnId:string|null;interrupted:boolean;isError:boolean};
 export function canonicalMeasurements(inputs:Iterable<Input>,now:number):Sample[]{
   const chosen=new Map<string,{row:Sample;priority:number;receivedAt:number}>();
   for(const input of inputs){
     if(input.expiresAt<=now||!Number.isFinite(input.at))continue;
-    if(input.kind!=='span'&&input.role!=='assistant')continue;
+    if(input.kind!=='span'&&input.role!=='assistant'&&input.role!=='user')continue;
     const nativeId=input.kind==='span'?`span:${input.itemId}`:`message:${input.messageId??input.itemId}`;
     const fields={...input.metrics};
     if(input.kind==='span'){
       const metric=({stt_node:'stt_duration',llm_node:'llm_duration',tts_node:'tts_duration',function_tool:'tool_duration'} as Record<string,string>)[input.spanName??''];
       if(metric&&input.end!=null&&input.end>=input.at)fields[metric]=(input.end-input.at)/1000;
       // Node span timing and message timing are different populations; avoid a second response-latency sample.
-      for(const k of ['e2e_latency','llm_node_ttft','tts_node_ttfb','transcription_delay','end_of_turn_delay'])delete fields[k];
+      for(const k of ['e2e_latency','llm_node_ttft','tts_node_ttfb','transcription_delay','end_of_turn_delay','on_user_turn_completed_delay'])delete fields[k];
     }
     for(const [key,value]of Object.entries(fields)){
+      if(input.kind!=='span'&&input.role==='user'&&!['transcription_delay','end_of_turn_delay','on_user_turn_completed_delay'].includes(key))continue;
       if(!Object.hasOwn(METRICS,key)||!Number.isFinite(value)||value<0||value>Number.MAX_SAFE_INTEGER/1000)continue;
       const metric=key as Metric,id=JSON.stringify([input.roomSid,input.jobId,nativeId,metric]);
-      const row:Sample={id,roomSid:input.roomSid,jobId:input.jobId,agentName:input.agentName,itemId:input.messageId??input.itemId,at:input.at,metric,valueMs:value*1000,source:input.kind==='report'?'final_report':input.kind==='span'?'native_span':'live_message',traceId:input.traceId??null,spanId:input.spanId??null,turnId:input.turnId??null,interrupted:!!input.interrupted,isError:!!input.isError};
+      const row:Sample={id,roomSid:input.roomSid,jobId:input.jobId,agentName:input.agentName,itemId:input.messageId??input.itemId,recordId:input.kind==='report'?null:input.itemId,at:input.at,metric,valueMs:value*1000,source:input.kind==='report'?'final_report':input.kind==='span'?'native_span':'live_message',traceId:input.traceId??null,spanId:input.spanId??null,turnId:input.turnId??null,interrupted:!!input.interrupted,isError:!!input.isError};
       const previous=chosen.get(id),priority=input.kind==='report'?2:1;
       if(!previous||priority>previous.priority||(priority===previous.priority&&input.receivedAt>=previous.receivedAt))chosen.set(id,{row:{...row,traceId:row.traceId??previous?.row.traceId??null,spanId:row.spanId??previous?.row.spanId??null,turnId:row.turnId??previous?.row.turnId??null},priority,receivedAt:input.receivedAt});
       else if(previous){previous.row.traceId??=row.traceId;previous.row.spanId??=row.spanId;previous.row.turnId??=row.turnId;}

@@ -4,7 +4,7 @@ A self-hostable admin console for a **self-hosted LiveKit** server, modeled on t
 (which has no open-source equivalent). React + Vite + TypeScript frontend; a small Express backend that holds the
 API key/secret so the browser never sees them, receives LiveKit webhooks and stores history in SQLite.
 
-Stable release: [v0.1.0](https://github.com/unpod-ai/livekit-console/releases/tag/v0.1.0) · [release notes](docs/releases/0.1.0.md).
+Stable release: [v0.2.0](https://github.com/unpod-ai/livekit-console/releases/tag/v0.2.0) · [release notes](docs/releases/0.2.0.md).
 
 ## Documentation
 - [Getting started](docs/getting-started.md): configure, run, enable webhooks and agent status
@@ -45,10 +45,25 @@ in-console alert rules and audit history. Back up the console database and priva
 Agent status comes from the workers themselves, not from test jobs. Every LiveKit Agents worker serves a small status
 server (port 8081 by default: `GET /` health, `GET /worker` name, job type, load, active jobs, SDK version). Set
 `AGENT_WORKER_URLS` (comma-separated base URLs) and the console polls them every 10s. Endpoint availability, valid
-worker information, reported registration/readiness and serving jobs are separate facts. Each agent's **Inventory**
+worker information, reported registration/readiness and serving jobs are separate facts. Each agent's **Workers**
 tab retains stable console IDs, explicitly linked previous names, archived workers and long-range sampled check/load
 rollups. Native worker IDs (`AW_...`) appear only when reported; endpoint observations cannot prove an anonymous process
 restart. See [persistent inventory](docs/agent-inventory.md) for identity linking and retention.
+
+## Agent and session latency
+
+Agents show a source-scoped latency summary and a **Latency** tab for measured trends and contributing turns.
+Session **Agent insights → Transcript** shows message timings inline: response latency, LLM first token (TTFT),
+TTS first audio (TTFB), and reported transcription/end-of-turn delays. Select a timing to inspect the exact
+measurement and seek its recording. Speech delays may be attached to user messages; missing values remain unavailable.
+Model names are reported at job level, without inferred per-turn model attribution.
+
+## Branding
+
+Set `CONSOLE_NAME`, `CONSOLE_DOMAIN`, `CONSOLE_LOGO_URL` and `CONSOLE_FAVICON_URL` on the server to customise the
+console without rebuilding it. Logos link to the console home and the sidebar footer shows the configured domain.
+Use public asset paths or HTTPS image URLs. The default bundled symbol is independent of LiveKit Cloud branding.
+Keep deployment-specific assets and environment files outside version control.
 
 ## Repo traffic
 GitHub keeps only 14 days of clone and view counts. Set `GITHUB_TOKEN` (push access to the repo) and optionally `GITHUB_REPO`

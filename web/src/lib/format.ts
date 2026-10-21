@@ -72,3 +72,6 @@ export function fromMsPrecise(v?: number | null): string {
   const d = new Date(v);
   return `${d.toLocaleDateString(undefined, { month: 'short', day: '2-digit' })} ${d.toLocaleTimeString([], { hour12: false })}.${String(d.getMilliseconds()).padStart(3, '0')}`;
 }
+
+/** Readable summaries; exact source precision remains available in details. */
+export const latencySummary = (milliseconds: number | null) => milliseconds == null ? 'Unavailable' : milliseconds >= 1000 ? `${Number((milliseconds / 1000).toFixed(2))} s` : `${Number(milliseconds.toFixed(1))} ms`;

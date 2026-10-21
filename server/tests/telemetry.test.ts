@@ -371,6 +371,14 @@ test('live events reject oversized bodies and paginate without mixing room/job i
   assert.equal((await post({ ...header, batchId: 'too-many', entries: [...entries, entries[0]] })).status, 422);
   const data = await (await fetch(base + '/api/agent-insights/sessions/RM_pages/telemetry?page=2&jobId=AJ_pages', { headers: { cookie: await cookie() } })).json();
   assert.equal(data.total, 101); assert.equal(data.rows.length, 1); assert.equal(data.rows[0].jobId, 'AJ_pages'); assert.equal(data.rows[0].id, 'extra');
+  const auth={cookie:await cookie()};
+  const selected=await(await fetch(base+'/api/agent-insights/sessions/RM_pages/telemetry?page=1&jobId=AJ_pages&recordId=extra',{headers:auth})).json();
+  assert.equal(selected.rows.length,100);assert.equal(selected.selected.id,'extra');assert.equal(selected.selected.jobId,'AJ_pages');
+  const wrongRoom=await(await fetch(base+'/api/agent-insights/sessions/RM_other/telemetry?recordId=extra',{headers:auth})).json();assert.equal(wrongRoom.selected,null);
+  const wrongJob=await(await fetch(base+'/api/agent-insights/sessions/RM_pages/telemetry?jobId=AJ_other&recordId=extra',{headers:auth})).json();assert.equal(wrongJob.selected,null);
+  db.prepare("UPDATE agent_live_records SET expires_at=0 WHERE room_sid='RM_pages' AND id='extra'").run();
+  const expired=await(await fetch(base+'/api/agent-insights/sessions/RM_pages/telemetry?recordId=extra',{headers:auth})).json();assert.equal(expired.selected,null);
+
 });
 
 test('combined export rejects an excessive byte budget before materializing content', async () => {

@@ -1,4 +1,4 @@
-import { Fragment, useState, type ReactNode } from 'react';
+import { Children, cloneElement, isValidElement, Fragment, useId, useState, type ReactElement, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { Check, ChevronRight, Copy, HelpCircle, Inbox } from 'lucide-react';
 import { HeaderControls } from './HeaderControls';
@@ -100,8 +100,8 @@ export function StatusBadge({ status }: { status?: string | null }) {
 export function Tabs<T extends string>({ value, onChange, tabs }: { value: T; onChange: (v: T) => void; tabs: { id: T; label: string; count?: number }[] }) {
   return (
     <div className="tabs" role="tablist">
-      {tabs.map((t) => (
-        <button key={t.id} role="tab" aria-selected={value === t.id} className={`tab ${value === t.id ? 'on' : ''}`} onClick={() => onChange(t.id)}>
+      {tabs.map((t,i) => (
+        <button key={t.id} role="tab" aria-selected={value === t.id} tabIndex={value===t.id?0:-1} onKeyDown={e=>{const next=e.key==='ArrowRight'?(i+1)%tabs.length:e.key==='ArrowLeft'?(i-1+tabs.length)%tabs.length:e.key==='Home'?0:e.key==='End'?tabs.length-1:null;if(next!==null){e.preventDefault();onChange(tabs[next].id);e.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>('[role="tab"]')[next]?.focus();}}} className={`tab ${value === t.id ? 'on' : ''}`} onClick={() => onChange(t.id)}>
           {t.label}{t.count != null && <span className="count">{t.count}</span>}
         </button>
       ))}
@@ -137,13 +137,10 @@ export const SkeletonRows = ({ rows = 5 }: { rows?: number }) => (
   </div>
 );
 
-export const Field = ({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) => (
-  <div className="field">
-    <label>{label}</label>
-    {children}
-    {hint && <span className="hint">{hint}</span>}
-  </div>
-);
+export function Field({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
+  const id=useId(),helpId=useId();
+  return <div className="field"><label htmlFor={id}>{label}</label>{Children.map(children,child=>isValidElement(child)&&['input','select','textarea'].includes(String(child.type))?cloneElement(child as ReactElement<Record<string,unknown>>,{id,'aria-describedby':hint?helpId:undefined}):child)}{hint&&<span id={helpId} className="hint">{hint}</span>}</div>;
+}
 
 export const RANGES: [number, string][] = [[1, 'Past hour'], [24, 'Past 24 hours'], [168, 'Past 7 days'], [720, 'Past 30 days']];
 

@@ -15,8 +15,8 @@ const dist = await mkdtemp(path.join(tmpdir(), 'phase6-ui-browser-'));
 await build({ root, configFile: path.join(root, 'vite.config.ts'), logLevel: 'error', resolve: { alias: { 'livekit-client': path.join(root, 'tests/fixtures/mock-livekit.ts') } }, build: { outDir: dist, emptyOutDir: true } });
 const server = createServer(async (req, res) => {
   const url = new URL(req.url, 'http://local');
-  const file = url.pathname === '/theme.js' ? path.join(dist, 'theme.js') : url.pathname.startsWith('/assets/') ? path.join(dist, 'assets', path.basename(url.pathname)) : path.join(dist, 'index.html');
-  try { const data = await readFile(file); res.setHeader('Content-Type', file.endsWith('.js') ? 'text/javascript' : file.endsWith('.css') ? 'text/css' : file.endsWith('.woff2') ? 'font/woff2' : file.endsWith('.woff') ? 'font/woff' : 'text/html'); res.end(data); } catch { res.writeHead(404).end(); }
+  const file = ['/theme.js','/brand.svg'].includes(url.pathname) ? path.join(dist, url.pathname.slice(1)) : url.pathname.startsWith('/assets/') ? path.join(dist, 'assets', path.basename(url.pathname)) : path.join(dist, 'index.html');
+  try { const data = await readFile(file); res.setHeader('Content-Type', file.endsWith('.svg') ? 'image/svg+xml' : file.endsWith('.js') ? 'text/javascript' : file.endsWith('.css') ? 'text/css' : file.endsWith('.woff2') ? 'font/woff2' : file.endsWith('.woff') ? 'font/woff' : 'text/html'); res.end(data); } catch { res.writeHead(404).end(); }
 });
 await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
 const base = `http://127.0.0.1:${server.address().port}`;
@@ -35,6 +35,7 @@ async function setup(options = {}) {
   let scenarios = [structuredClone(scenario)], runs = [testRun('past-left', 'completed'), testRun('past-right', 'completed')], operations = [], counter = 0;
   await page.route('**/*', async route => {
     const req = route.request(), url = new URL(req.url()), raw = url.pathname;
+    if(raw==='/branding.json')return route.fulfill({contentType:'application/json',body:JSON.stringify({name:'LiveKit Console',domain:'',logoUrl:'/brand.svg',faviconUrl:'/brand.svg'})});
     if (!raw.includes('/api/')) return route.continue();
     const api = raw, method = req.method();
     assert.ok(!raw.startsWith('/p/') && !raw.startsWith('/api/projects'), `Unexpected scoped request: ${raw}`);
@@ -127,7 +128,7 @@ try {
     await page.goto(base + '/deployments?target=managed'); await page.getByText('Logs access is required to read deployment logs.').waitFor(); assert.ok(!requests.some(r => r.raw.endsWith('/logs'))); await page.close();
   });
   await check('scenario create/edit strips server fields and enforces ordered prompt bounds', async () => {
-    const { page, writes } = await setup(); await ready(page);
+    const { page, writes } = await setup(); await ready(page);await page.getByRole('tab',{name:'Scenarios',exact:true}).click();
     await page.getByRole('button', { name: 'Create scenario', exact: true }).click(); await page.getByLabel('Scenario name', { exact: true }).fill('New scenario'); await page.getByLabel('Prompt text 1', { exact: true }).fill('hello');
     await page.getByRole('button', { name: 'Save scenario', exact: true }).click(); await page.getByRole('heading', { name: 'New scenario', exact: true }).waitFor();
     assert.deepEqual(writes.find(w => w.raw.endsWith('/scenarios')).body, { name: 'New scenario', prompts: [{ text: 'hello', timeoutSeconds: 30 }] });
@@ -156,12 +157,15 @@ try {
       await page.waitForFunction(() => /cleanup/i.test(document.body.innerText) && /\bcomplete\b/.test(document.body.innerText), null, { timeout: 16000 });
       const records = writes.filter(w => w.raw.endsWith('/results')).flatMap(w => w.body.results);
       if (['stream','native','duplicate'].includes(mode)) { assert.equal(records.length, 2); assert.deepEqual(records.map(r => r.promptIndex), [0,1]); assert.ok(records.every(r => r.status === 'received')); assert.ok(records.every(r => r.source === (mode === 'native' ? 'transcription' : 'lk.transcription'))); if (mode === 'duplicate') assert.deepEqual(records.map(r => r.responseText), ['hello first answer','hello second answer']); }
-      else { assert.equal(records.length, 1); assert.equal(records[0].status, mode === 'disconnect' ? 'disconnected' : mode === 'failed' ? 'failed' : 'timeout'); assert.ok(!('responseText' in records[0])); await page.getByText('Browser-observed delay: No data', { exact: true }).waitFor(); }
+      else { assert.equal(records.length, 1); assert.equal(records[0].status, mode === 'disconnect' ? 'disconnected' : mode === 'failed' ? 'failed' : 'timeout'); assert.ok(!('responseText' in records[0])); await page.getByText('Browser-observed delay: No data', { exact: true }).first().waitFor(); }
       if (mode === 'disconnect') { await page.getByText('Microphone: Off', { exact: true }).waitFor(); assert.deepEqual(await page.evaluate(() => window.phase6RTC.mic), [true, false]); }
       await page.close();
     }
   });
 
+  await check('testing views preserve an active room and expose microphone state outside the test',async()=>{
+    const {page}=await setup();await ready(page);await start(page);await page.getByRole('button',{name:'Enable microphone',exact:true}).click();await page.getByRole('tab',{name:'Results',exact:true}).click();await page.getByText(/A test remains active. Microphone: On/).waitFor();assert.equal(await page.evaluate(()=>window.phase6RTC.connects.length),1);await page.getByRole('button',{name:'Return to test',exact:true}).click();await page.getByRole('button',{name:'Disable microphone',exact:true}).waitFor();await page.getByRole('button',{name:'End test',exact:true}).click();await page.getByRole('tab',{name:'Scenarios',exact:true}).click();await page.reload();await page.getByRole('tab',{name:'Scenarios',exact:true,selected:true}).waitFor();await page.close();
+  });
   await check('route navigation disconnects microphone and ends the owned room', async () => {
     const { page, writes } = await setup(); await ready(page); await start(page);
     await page.getByRole('button', { name: 'Enable microphone', exact: true }).click();
@@ -173,7 +177,7 @@ try {
   });
   await check('compare compatibility/provenance/no-data and responsive layout', async () => {
     for (const incompatible of [false, true]) {
-      const { page, requests } = await setup({ incompatible }); await ready(page); await page.getByLabel('Left run', { exact: true }).selectOption('past-left'); await page.getByLabel('Right run', { exact: true }).selectOption('past-right'); await page.getByRole('button', { name: 'Compare runs', exact: true }).click();
+      const { page, requests } = await setup({ incompatible }); await ready(page);await page.getByRole('tab',{name:'Results',exact:true}).click(); await page.getByRole('checkbox',{name:/Compare run past-left for/}).check(); await page.getByRole('checkbox',{name:/Compare run past-right for/}).check(); await page.getByText('Compare selected runs',{exact:true}).click(); await page.getByRole('button', { name: 'Compare runs', exact: true }).click();
       await page.getByText(incompatible ? /Incompatible or unavailable expectations/ : /Same scenario revision: expectations are compatible/).waitFor(); await page.getByText(/Unverified version provenance/).waitFor();
       assert.equal(await page.getByText('e2e_latency: No data', { exact: true }).count(), 2); assert.equal(await page.getByText('llm_ttft: p50 0 ms · p95 0 ms · 1 samples', { exact: true }).count(), 2);
       assert.ok(requests.some(r => r.raw === '/api/agent-tests/compare'));
