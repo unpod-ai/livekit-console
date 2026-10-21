@@ -8,7 +8,7 @@ type File={id:string;egressId:string;index:number;name:string;source:string;stat
 type Data={files:File[];agentRecording:string;accessDays:number};
 const MAX_BYTES=16*1024*1024,MAX_SECONDS=300;
 const clock=(n:number)=>`${Math.floor(n/60)}:${String(Math.floor(n%60)).padStart(2,'0')}`;
-export function SessionRecordings({sid}:{sid:string}) {
+export function SessionRecordings({sid,compact=false}:{sid:string;compact?:boolean}) {
   const allowed = can(useMe().data, 'recordings');
   const [params,setParams]=useSearchParams();
   const result=useApi<Data>(['recordings',sid],`/recordings/sessions/${encodeURIComponent(sid)}`, { enabled: allowed });
@@ -46,14 +46,15 @@ export function SessionRecordings({sid}:{sid:string}) {
     return()=>{cancelled=true;controller.abort();};
   },[file?.id,file?.state,waveDuration,stream]);
   function seek(seconds:number){if(!media.current||knownDuration==null)return;const value=Math.min(knownDuration,Math.max(0,seconds));media.current.currentTime=value;if(file?.startMs!=null)setParams(old=>{const next=new URLSearchParams(old);next.set('mediaAt',String(Math.round(file.startMs!+value*1000)));next.set('recording',file.id);return next;});}
-  if(!allowed)return <Alert>Recording access is required for playback.</Alert>;
+  if(!allowed)return compact?null:<Alert>Recording access is required for playback.</Alert>;
   if(result.error)return <Alert kind="bad">{(result.error as Error).message}</Alert>;
   if(!result.data)return <Alert>Loading recordings…</Alert>;
-  return <Panel title="Session recording">
+  if(compact&&!file&&!requested)return null;
+  return <div className={compact?'insights-recording':undefined}><Panel title={compact?undefined:"Session recording"}>
     <div style={{padding:14,minWidth:0}}>
       {!file?<><p className="muted">{requested?'The requested recording is not available in this session.':'No Egress file is recorded for this session. Agent-side recordings are not collected.'}</p>{requested&&<button className="btn secondary sm" onClick={()=>setParams(old=>{const next=new URLSearchParams(old);next.delete('recording');next.delete('mediaAt');return next;})}>Choose an available source</button>}</>:<>
-        <label>Recording source <select className="select" aria-label="Recording source" value={file.id} onChange={e=>setParams(old=>{const next=new URLSearchParams(old);next.set('recording',e.target.value);next.delete('mediaAt');return next;})}>{result.data.files.map(f=><option value={f.id} key={f.id}>Egress · {f.name} · {f.state}</option>)}</select></label>
-        <div className="badges" style={{margin:'10px 0'}}><Badge>Egress media</Badge><span className="muted">Agent-side media: not collected · Console access window: {result.data.accessDays} days</span></div>
+        {compact&&result.data.files.length===1?<div className="insights-recording-name" title={file.name}><Badge>Egress media</Badge><span>{file.name}</span></div>:<label>Recording source <select className="select" aria-label="Recording source" value={file.id} onChange={e=>setParams(old=>{const next=new URLSearchParams(old);next.set('recording',e.target.value);next.delete('mediaAt');return next;})}>{result.data.files.map(f=><option value={f.id} key={f.id}>Egress · {f.name} · {f.state}</option>)}</select></label>}
+        {!compact&&<div className="badges" style={{margin:'10px 0'}}><Badge>Egress media</Badge><span className="muted">Agent-side media: not collected · Console access window: {result.data.accessDays} days</span></div>}
         {file.state!=='ready'?<Alert kind="warn">Recording {file.state}. {file.state==='unconfigured'?'An administrator must configure trusted storage access.':file.state==='expired'?'The console access window has expired.':file.state==='unsupported'?'This source cannot be streamed safely by the configured integration.':file.state==='unavailable'?'The access window cannot be verified because source timestamps were not reported.':'The file is missing from the stored Egress results.'}</Alert>:<>
           <video ref={media} key={file.id} controls preload="metadata" src={stream} aria-label="Session recording playback" style={{width:'100%',maxHeight:file.mime?.startsWith('audio/')?64:420,background:'var(--surface-2)'}}
             onLoadedMetadata={()=>{const d=media.current?.duration;if(d!=null&&Number.isFinite(d)){setDuration(d);const value=at!==null?recordingOffset(at,file.startMs,d):null;if(value!==null)media.current!.currentTime=value;}}}
@@ -64,11 +65,11 @@ export function SessionRecordings({sid}:{sid:string}) {
             onKeyDown={e=>{if(['ArrowLeft','ArrowRight','Home','End'].includes(e.key)){e.preventDefault();seek(e.key==='Home'?0:e.key==='End'?knownDuration??0:position+(e.key==='ArrowRight'?5:-5));}}}>
             {peaks.map((v,i)=><line key={i} x1={i} x2={i} y1={32-v*30} y2={32+v*30} stroke={i/peaks.length<=position/(knownDuration||1)?'var(--accent)':'var(--muted)'} />)}
           </svg>:<p className="muted">{waveState||'Waveform waits for recording duration metadata.'}</p>}
-          <div className="mono muted">{clock(position)} / {knownDuration==null?'Unknown duration':clock(knownDuration)}</div>
+          {!compact&&<div className="mono muted">{clock(position)} / {knownDuration==null?'Unknown duration':clock(knownDuration)}</div>}
           {at!==null&&offset===null&&<Alert kind="warn">The selected timestamp cannot be aligned with this recording. {file.startMs==null?'Its media start time was not reported.':'Select a source covering that timestamp.'}</Alert>}
-          <p className="muted">Select a timestamped conversation event or span to seek. Alignment uses the Egress file's reported start time; it does not assume audio starts when the room was created.</p>
+          <details className="insights-help"><summary>Recording alignment</summary><p>Seeking uses the Egress file's reported start time. Agent-side recordings are not collected. Console access window: {result.data.accessDays} days.</p></details>
         </>}
       </>}
     </div>
-  </Panel>;
+  </Panel></div>;
 }

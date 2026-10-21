@@ -1,5 +1,6 @@
+import { Dropdown } from '../components/Dropdown';
 import { useState } from 'react';
-import { Plus, Pencil, Trash2 } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import { lk, type Json } from '../lib/api';
 import { joinList, splitList, useLkList, useMutate } from '../lib/hooks';
 import { Link } from 'react-router-dom';
@@ -133,7 +134,7 @@ export function Trunks() {
   const q = tab === 'inbound' ? inbound : outbound;
 
   const cols: Col<Json>[] = [
-    { key: 'id', header: 'Trunk ID', cell: (t) => <span className="mono">{t.sipTrunkId}</span>, text: (t) => t.sipTrunkId, sort: (t) => t.sipTrunkId },
+    { key: 'id', hidden: true, header: 'Trunk ID', cell: (t) => <span className="mono">{t.sipTrunkId}</span>, text: (t) => t.sipTrunkId, sort: (t) => t.sipTrunkId },
     { key: 'name', header: 'Trunk name', cell: (t) => t.name || '—', text: (t) => t.name ?? '', sort: (t) => t.name ?? '' },
     { key: 'numbers', header: 'Numbers', cell: (t) => joinList(t.numbers) || <span className="muted">Any</span>, text: (t) => joinList(t.numbers) },
     ...(tab === 'outbound'
@@ -155,14 +156,9 @@ export function Trunks() {
       </Kpis>
       <Tabs value={tab} onChange={setTab} tabs={[{ id: 'inbound', label: 'Inbound', count: inbound.data?.length }, { id: 'outbound', label: 'Outbound', count: outbound.data?.length }]} />
       <Panel>
-        <DataTable rows={q.data} cols={cols} rowKey={(t) => t.sipTrunkId} loading={q.isLoading} error={q.error} storageKey={`trunks-${tab}`} initialQuery={initialQuery} onRow={(t) => setOpen({ dir: tab, trunk: t })}
+        <DataTable rows={q.data} cols={cols} rowKey={(t) => t.sipTrunkId} loading={q.isLoading} error={q.error} storageKey={`trunks-polished-${tab}`} initialQuery={initialQuery} onRow={(t) => setOpen({ dir: tab, trunk: t })}
           empty={{ title: `No ${tab} trunks`, hint: 'Create a trunk to connect a carrier.' }}
-          rowActions={(t) => (
-            <>
-              <button className="btn ghost icon sm" aria-label={`Edit ${t.name}`} onClick={() => setOpen({ dir: tab, trunk: t })}><Pencil size={14} /></button>
-              <button className="btn ghost icon sm" aria-label={`Delete ${t.name}`} onClick={async () => (await confirm({ title: 'Delete trunk?', message: `${t.name || t.sipTrunkId} will stop carrying calls immediately.`, confirmLabel: 'Delete', danger: true })) && del.mutate(t.sipTrunkId)}><Trash2 size={14} color="var(--bad)" /></button>
-            </>
-          )} />
+          rowActions={(t)=><Dropdown action title={`Actions for ${t.name || t.sipTrunkId}`} label="Actions" value="" items={[{id:'edit',label:`Edit ${t.name||t.sipTrunkId}`},{id:'delete',label:`Delete ${t.name||t.sipTrunkId}`,danger:true}]} onSelect={async action=>{if(action==='edit')setOpen({dir:tab,trunk:t});else if(await confirm({title:'Delete trunk?',message:`${t.name || t.sipTrunkId} will stop carrying calls immediately.`,confirmLabel:'Delete',danger:true}))del.mutate(t.sipTrunkId);}}/>} />
       </Panel>
       {open && <TrunkDrawer key={open.trunk === 'new' ? 'new' : open.trunk.sipTrunkId} dir={open.dir} trunk={open.trunk} onClose={() => setOpen(null)} />}
     </>

@@ -7,3 +7,7 @@ dist
 .env.deploy
 node_modules
 *.tsbuildinfo
+
+# Python helper test artifacts
+__pycache__/
+*.py[cod]

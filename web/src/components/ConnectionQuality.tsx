@@ -6,7 +6,7 @@ import { fromMsPrecise } from '../lib/format';
 import { type Json } from '../lib/api';
 import { AreaChart, PALETTE } from './Charts';
 import { DataTable } from './DataTable';
-import { Alert, Panel, ServerPager } from './ui';
+import { Alert, Empty, Help, Panel, ServerPager } from './ui';
 
 // Preserve shareable diagnostic filters when changing detail tabs.
 export function useDiagnosticTab<T extends string>(fallback: T, valid: readonly T[]): [T, (tab: T) => void] {
@@ -56,7 +56,7 @@ export function useDiagnostics(kind: 'quality' | 'services' | 'sip', scope: Reco
 export function DiagnosticCoverage({ data }: { data?: DiagnosticData }) {
   if (!data) return null;
   return <>
-    <Alert>Monitoring coverage: submitted observations only · Retention {data.retentionDays} days · {fromMsPrecise(data.from)} – {fromMsPrecise(data.to)}. No observations does not establish service health or absence of failures.</Alert>
+    <details className="context-help"><summary>Collection coverage · {data.total.toLocaleString()} observations</summary><p>Monitoring coverage: submitted observations only · Retention {data.retentionDays} days · {fromMsPrecise(data.from)} – {fromMsPrecise(data.to)}. No observations does not establish service health or absence of failures.</p></details>
     {!data.collectionEnabled && <Alert kind="warn">Diagnostics collection is configured off. Retained observations remain available until expiry.</Alert>}
     {data.total > data.rows.length && <Alert kind="warn">Partial page: {data.offset + 1}–{data.offset + data.rows.length} of {data.total} observations, newest first. Charts and stream/instance choices cover this page only. Use pagination or narrow the time range; these are not complete range plots.</Alert>}
   </>;
@@ -79,8 +79,9 @@ export function DiagnosticMetricChart({ rows, keys, title, unit }: { rows: Json[
   }
   const values = [...buckets.values()];
   const measuredBuckets = values.filter(row => keys.some(key => row[key] != null));
-  return <Panel title={`${title} (${unit})`}>
-    {measuredBuckets.length === 1 ? <div style={{ padding: 20 }}>Only one measured display point: {keys.map(key => `${key}: ${measuredBuckets[0][key] == null ? 'Not reported' : `${measuredBuckets[0][key]} ${unit}`}`).join(' · ')}. More observations are needed for a trend.</div> : measured ? <><AreaChart data={values} series={keys.map((key, i) => ({ key, label: key, color: [PALETTE.cyan, PALETTE.purple, PALETTE.orange][i % 3] }))} bucketMs={bucketMs} fill="none" gaps format={n => n>=1e9?`${+(n/1e9).toFixed(1)}G`:n>=1e6?`${+(n/1e6).toFixed(1)}M`:n>=1e3?`${+(n/1e3).toFixed(1)}k`:String(Number(n.toPrecision(3)))} /><div className="muted" style={{ padding: 12 }}>Page observations · last sample per display bucket · missing values are gaps. Exact measurements are listed below.</div></> : <div className="empty">No measured {title.toLowerCase()} on this page.</div>}
+  if(!measured)return null;
+  return <Panel title={`${title} (${unit})`} actions={<Help text="Page observations only: last actual sample per display bucket; missing measurements remain gaps. Exact observations are available below."/>}>
+    {measuredBuckets.length === 1 ? <div style={{ padding: 20 }}>Only one measured display point: {keys.map(key => `${key}: ${measuredBuckets[0][key] == null ? 'Not reported' : `${measuredBuckets[0][key]} ${unit}`}`).join(' · ')}. More observations are needed for a trend.</div> : measured ? <><AreaChart data={values} series={keys.map((key, i) => ({ key, label: key, color: [PALETTE.cyan, PALETTE.purple, PALETTE.orange][i % 3] }))} bucketMs={bucketMs} fill="none" gaps format={n => n>=1e9?`${+(n/1e9).toFixed(1)}G`:n>=1e6?`${+(n/1e6).toFixed(1)}M`:n>=1e3?`${+(n/1e3).toFixed(1)}k`:String(Number(n.toPrecision(3)))} /></> : <div className="empty">No measured {title.toLowerCase()} on this page.</div>}
   </Panel>;
 }
 
@@ -99,12 +100,13 @@ export function ConnectionQuality({ sid, participantSid, startedAt, endedAt }: {
   if (result.checking) return <Alert>Checking access…</Alert>;
   if (!result.admin) return <Alert>Connection quality requires an administrator account.</Alert>;
   return <>
-    <Alert>Native RTC measurements and connection events submitted by reporters. SDK quality is an indicator, not a packet-loss measurement. One exact participant/reporter/track/direction/stats ID stream is plotted at a time.</Alert>
-    {startedAt&&<Alert>Detail views default to the recorded lifecycle window. Use From / To to investigate another interval.</Alert>}
+<details className="context-help"><summary>How connection measurements are collected</summary><p>Native RTC observations are submitted by reporters. SDK quality is an indicator, not a packet-loss measurement. Charts use one exact participant/reporter/track/direction/stats stream on the current page; missing measurements are gaps.</p></details>
+
     <DiagnosticCoverage data={data} />
     {result.error && <Alert kind="bad">{(result.error as Error).message}</Alert>}
-    <Panel title="Connection quality">
+    <details className="context-help"><summary>Connection filters{(trackSid||reporterId||direction||params.get('participantSid'))&&' · active'}</summary><Panel title="Connection quality">
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, padding: 14 }}>
+        {(['from','to'] as const).map(key=><label key={key} style={{flex:'1 1 200px',minWidth:0}}>{key==='from'?'From':'To'} (optional)<input className="input" type="datetime-local" step="0.001" aria-label={`Quality ${key}`} value={(()=>{const at=Number(params.get(key));if(!at||!Number.isFinite(at))return '';const date=new Date(at);return new Date(at-date.getTimezoneOffset()*60000).toISOString().slice(0,23);})()} onChange={e=>filter(key,e.target.value?String(new Date(e.target.value).getTime()):'')}/></label>)}
         {(!participantSid ? ['participantSid', 'trackSid', 'reporterId', 'direction'] : ['trackSid', 'reporterId', 'direction']).map(key => <label key={key} style={{ flex: '1 1 180px', minWidth: 0 }}>{key}<input className="input" maxLength={150} value={params.get(key) ?? ''} onChange={e => filter(key, e.target.value)} /></label>)}
         <label style={{ flex: '1 1 300px', minWidth: 0 }}>Exact stream<select className="select" value={selected} onChange={e => filter('qualityStream', e.target.value)}>
           {!selected && <option value="">No streams on this page</option>}
@@ -113,7 +115,9 @@ export function ConnectionQuality({ sid, participantSid, startedAt, endedAt }: {
         </select></label>
       </div>
       <DiagnosticPager data={data} onChange={n => filter(result.offsetKey, String(n))} />
-    </Panel>
+    </Panel></details>
+    {result.isLoading&&<Alert>Loading connection measurements…</Alert>}
+    {data&&!rows.some(r=>Object.values(r.metrics??{}).some(v=>typeof v==='number'))&&!result.error&&<Empty title="No connection measurements">No measured track statistics match this session, range and filters. Missing observations do not establish connection health.</Empty>}
     <div className="grid-2">
       <DiagnosticMetricChart rows={rows} keys={['bitrateBps']} title="Bandwidth" unit="bps" />
       <DiagnosticMetricChart rows={rows} keys={['packetLossPct']} title="Packet loss" unit="%" />
@@ -122,17 +126,17 @@ export function ConnectionQuality({ sid, participantSid, startedAt, endedAt }: {
       <DiagnosticMetricChart rows={rows} keys={['fps']} title="Frame rate" unit="fps" />
       <DiagnosticMetricChart rows={rows} keys={['reconnects']} title="Reconnects" unit="count" />
     </div>
-    <Panel title="Selected stream observations (newest first)"><DataTable rows={rows} loading={result.isLoading} search={false} pageSize={false} rowKey={r => r.id} empty={{ title: 'No observations for this stream on this page' }} cols={[
+    {rows.length>0&&<details className="context-help"><summary>Selected stream observations</summary><Panel title="Selected stream observations (newest first)"><DataTable rows={rows} loading={result.isLoading} search={false} pageSize={false} rowKey={r => r.id} empty={{ title: 'No observations for this stream on this page' }} cols={[
       { key: 'at', header: 'Time', cell: r => fromMsPrecise(r.at) },
       { key: 'event', header: 'Connection event', cell: r => r.event ?? 'Not reported' },
       { key: 'quality', header: 'SDK quality indicator', cell: r => r.quality ?? 'Not reported' },
       { key: 'reason', header: 'Reason', cell: r => r.reason ?? 'Not reported', wrap: true },
       { key: 'metrics', header: 'Measured metrics', wrap: true, cell: r => Object.entries(r.metrics ?? {}).map(([key, value]) => `${key}: ${value}`).join(' · ') || 'No measurements' },
-    ]} /></Panel>
-    <Panel title="Room lifecycle events (all participants)"><DataTable rows={data?.lifecycle} loading={result.isLoading} search={false} pageSize={50} rowKey={r => String(r.id)} empty={{ title: 'No room lifecycle events in this range' }} cols={[
+    ]} /></Panel></details>}
+    <details className="context-help"><summary>Room lifecycle events</summary><Panel title="Room lifecycle events (all participants)"><DataTable rows={data?.lifecycle} loading={result.isLoading} search={false} pageSize={50} rowKey={r => String(r.id)} empty={{ title: 'No room lifecycle events in this range' }} cols={[
       { key: 'ts', header: 'Time', cell: r => fromMsPrecise(r.ts) }, { key: 'event', header: 'Event', cell: r => r.type }, { key: 'identity', header: 'Participant identity', cell: r => r.identity ?? 'Room' },
       { key: 'participant', header: 'Participant SID', cell: r => typeof r.participantSid === 'string' && r.participantSid.startsWith('PA_') ? <Link className="mono" to={`/sessions/${encodeURIComponent(sid)}/participants/${encodeURIComponent(r.participantSid)}`}>{r.participantSid}</Link> : r.participantSid ?? 'Not reported' },
       { key: 'reason', header: 'Disconnect reason', cell: r => r.reason ?? 'Not reported', wrap: true },
-    ]} /><div className="muted" style={{ padding: 12 }}>Room-wide webhook history, including other participants. The API returns at most 500 lifecycle events, oldest first; this list may be capped.</div></Panel>
+    ]} /><div className="muted" style={{ padding: 12 }}>Room-wide webhook history, including other participants. The API returns at most 500 lifecycle events, oldest first; this list may be capped.</div></Panel></details>
   </>;
 }

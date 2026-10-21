@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react';
-import { Waypoints } from 'lucide-react';
+import { Brand } from '../components/Brand';
 import { api } from '../lib/api';
 import { ThemeControl } from '../components/ThemeControl';
 import { Alert, Field, errText } from '../components/ui';
@@ -23,7 +23,7 @@ export function Login() {
     <div className="login-wrap">
       <div className="login-appearance"><ThemeControl /></div>
       <form className="login-card" onSubmit={submit}>
-        <div className="brand" style={{ padding: '0 0 18px' }}><span className="brand-mark"><Waypoints size={15} aria-hidden /></span>LiveKit Console</div>
+        <Brand />
         <h1 style={{ fontSize: 18, marginBottom: 4 }}>Sign in</h1>
         <p className="muted" style={{ margin: '0 0 18px' }}>Manage your self-hosted LiveKit server.</p>
         <Field label="Username"><input className="input" name="username" autoFocus autoComplete="username" required /></Field>

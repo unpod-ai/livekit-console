@@ -1,4 +1,7 @@
 import { useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { useDiagnosticTab } from '../components/ConnectionQuality';
+import { Drawer } from '../components/Drawer';
 import { api, type Json } from '../lib/api';
 import { useApi, useMutate } from '../lib/hooks';
 import { can, useMe } from '../lib/me';
@@ -31,13 +34,21 @@ function PolicyEditor({ initial }: { initial: PolicyResponse }) {
     e.preventDefault();
     if (valid && await confirm({ title: 'Apply retention policy?', message: 'Shorter retention and redaction also apply to content already stored. Expired or deleted content cannot be recovered.', confirmLabel: 'Apply policy', danger: true })) save.mutate({ ...draft, redactTerms: termList });
   }}>
-    <Alert>Retention applies to stored and future data. Recording policy controls console access and never deletes storage objects. Audit retention is managed separately by the operator.</Alert>
-    {categoryList.map(key => <label key={key}>{labels[key]} · days<input className="input" type="number" min={key === 'workers' ? 14 : initial.bounds?.minDays ?? 1} max={initial.bounds?.maxDays ?? 3650} step="1" value={draft.categories[key].retentionDays ?? ''} placeholder={['history', 'traffic'].includes(key) ? 'Keep indefinitely' : undefined} onChange={e => setDraft({ ...draft, categories: { ...draft.categories, [key]: { ...draft.categories[key], retentionDays: e.target.value === '' ? null : Number(e.target.value) } } })} /><span className="hint">{key === 'workers' ? '14–3650 days' : ['history', 'traffic'].includes(key) ? 'Leave empty to keep indefinitely' : '1–3650 days'}</span></label>)}
-    <label className="check"><input type="checkbox" checked={draft.categories.recordings.accessEnabled !== false} onChange={e => setDraft({ ...draft, categories: { ...draft.categories, recordings: { ...draft.categories.recordings, accessEnabled: e.target.checked } } })} />Allow console recording access</label>
-    <label>Content redaction<select className="select" value={draft.redaction} onChange={e => setDraft({ ...draft, redaction: e.target.value as Policy['redaction'] })}><option value="off">Off</option><option value="standard">Standard</option><option value="strict">Strict</option></select></label>
-    <label>Additional terms to redact<textarea className="textarea" rows={4} value={terms} onChange={e => setTerms(e.target.value)} /><span className="hint">One term per line, up to {initial.bounds?.maxTerms ?? 50} terms.</span></label>
+    <fieldset className="form-section"><legend>Data retention</legend>
+      <p className="inline-note">Applies to stored and future data. Audit retention is managed separately by the operator.</p>
+      <div className="settings-grid">{categoryList.filter(key => key !== 'recordings').map(key => <label key={key}>{labels[key]} · days<input className="input" type="number" min={key === 'workers' ? 14 : initial.bounds?.minDays ?? 1} max={initial.bounds?.maxDays ?? 3650} step="1" value={draft.categories[key].retentionDays ?? ''} placeholder={['history', 'traffic'].includes(key) ? 'Keep indefinitely' : undefined} onChange={e => setDraft({ ...draft, categories: { ...draft.categories, [key]: { ...draft.categories[key], retentionDays: e.target.value === '' ? null : Number(e.target.value) } } })} /><span className="hint">{key === 'workers' ? '14–3650 days' : ['history', 'traffic'].includes(key) ? 'Leave empty to keep indefinitely' : '1–3650 days'}</span></label>)}</div>
+    </fieldset>
+    <fieldset className="form-section"><legend>Recording access</legend>
+      <p className="inline-note">Controls console playback access; storage objects are never deleted by this policy.</p>
+      <label className="check"><input type="checkbox" checked={draft.categories.recordings.accessEnabled !== false} onChange={e => setDraft({ ...draft, categories: { ...draft.categories, recordings: { ...draft.categories.recordings, accessEnabled: e.target.checked } } })} />Allow console recording access</label>
+      <label>Recording access · days<input className="input" type="number" min={initial.bounds?.minDays ?? 1} max={initial.bounds?.maxDays ?? 3650} step="1" value={draft.categories.recordings.retentionDays ?? ''} onChange={e => setDraft({ ...draft, categories: { ...draft.categories, recordings: { ...draft.categories.recordings, retentionDays: e.target.value === '' ? null : Number(e.target.value) } } })} /><span className="hint">{initial.bounds?.minDays ?? 1}–{initial.bounds?.maxDays ?? 3650} days</span></label>
+    </fieldset>
+    <fieldset className="form-section"><legend>Content redaction</legend>
+      <div className="settings-grid"><label>Content redaction<select className="select" value={draft.redaction} onChange={e => setDraft({ ...draft, redaction: e.target.value as Policy['redaction'] })}><option value="off">Off</option><option value="standard">Standard</option><option value="strict">Strict</option></select></label>
+    <label>Additional terms to redact<textarea className="textarea" rows={4} value={terms} onChange={e => setTerms(e.target.value)} /><span className="hint">One term per line, up to {initial.bounds?.maxTerms ?? 50} terms.</span></label></div>
+    </fieldset>
     {save.error && <Alert kind="bad">{save.error.message}</Alert>}
-    <button className="btn" disabled={!valid || save.isPending}>{save.isPending ? 'Applying…' : 'Apply policy'}</button>
+    <div className="form-actions"><button className="btn" disabled={!valid || save.isPending}>{save.isPending ? 'Applying…' : 'Apply policy'}</button></div>
   </form></Panel>;
 }
 
@@ -90,7 +101,7 @@ function Audit() {
     { key: 'action', header: 'Action', cell: r => r.action, text: r => String(r.action ?? '') },
     { key: 'resource', header: 'Resource', cell: r => r.resource ?? r.route, wrap: true },
     { key: 'status', header: 'Status', cell: r => r.status ?? r.outcome ?? 'Pending' },
-    { key: 'request', header: 'Request ID', cell: r => r.requestId ?? r.id, wrap: true },
+    { key: 'request', header: 'Request ID', cell: r => <details><summary>Request details</summary><span className="mono">{r.requestId ?? r.id}</span></details>, text: r => String(r.requestId ?? r.id), wrap: true },
   ]} empty={{ title: 'No audit entries for this server' }} /><p className="muted" style={{ padding: 14 }}>Latest 100 entries, including account and sign-in activity. Audit history cannot be deleted from data controls.</p></Panel>;
 }
 
@@ -100,35 +111,48 @@ export function Operations() {
   return <OperationsContent />;
 }
 function OperationsContent() {
-  const [tab, setTab] = useState('health');
+  const [tab,setTab]=useDiagnosticTab('health',['health','policy','alerts','data','audit'] as const);
+  const [params,setParams]=useSearchParams();
   const summary = useApi<Summary>(['operations-summary'], '/operations/summary');
   const policy = useApi<PolicyResponse>(['operations-policy'], '/operations/policy', { live: false });
   const storage = summary.data?.storage;
+  const collectors = summary.data?.collectors;
+  const collectorCounts = collectors?.reduce((counts, row) => {
+    const state = row.enabled === false || row.state === 'disabled' ? 'disabled' : row.state === 'ok' ? 'ok' : ['error', 'failed', 'stale'].includes(row.state) ? 'attention' : 'unknown';
+    counts[state]++;
+    return counts;
+  }, { ok: 0, attention: 0, disabled: 0, unknown: 0 });
+  const collector=summary.data?.collectors.find(r=>String(r.source??r.id)===params.get('collector'));
+  function selectCollector(id:string|null){setParams(old=>{const next=new URLSearchParams(old);id?next.set('collector',id):next.delete('collector');return next;});}
   return <>
     <PageHeader title="Operations" crumbs={[{ label: 'Console' }, { label: 'Operations' }]} sub="Monitor collection, manage retained data, and review console activity." />
     <Tabs value={tab} onChange={setTab} tabs={[{ id: 'health', label: 'Health & storage' }, { id: 'policy', label: 'Retention & privacy' }, { id: 'alerts', label: 'Alerts' }, { id: 'data', label: 'Data controls' }, { id: 'audit', label: 'Audit' }]} />
     {summary.error && <Alert kind="bad">{summary.error.message}</Alert>}
     {tab === 'health' && <>
-      <Kpis><Kpi label="Database size" value={storage ? fmtBytes(storage.databaseBytes) : 'Not measured'} /><Kpi label="Write-ahead log" value={storage ? fmtBytes(storage.walBytes) : 'Not measured'} /><Kpi label="Allocated storage" value={storage ? fmtBytes(storage.allocatedBytes) : 'Not measured'} /></Kpis>
-      <Panel title="Collectors"><DataTable rows={summary.data?.collectors} loading={summary.isLoading} rowKey={r => String(r.source ?? r.id)} cols={[
+      <Kpis><Kpi label="Healthy collectors" value={collectorCounts?.ok ?? 'Not measured'} /><Kpi label="Need attention" value={collectorCounts?.attention ?? 'Not measured'} /><Kpi label="Disabled" value={collectorCounts?.disabled ?? 'Not measured'} /><Kpi label="Unobserved / unknown" value={collectorCounts?.unknown ?? 'Not measured'} /></Kpis>
+      <Panel title="Collectors"><DataTable rows={summary.data?.collectors} loading={summary.isLoading} rowKey={r => String(r.source ?? r.id)} onRow={r=>selectCollector(String(r.source??r.id))} cols={[
         { key: 'source', header: 'Source', cell: r => sourceLabel(r.source, summary.data?.collectors ?? []), text: r => sourceLabel(r.source, summary.data?.collectors ?? []) },
-        { key: 'state', header: 'State', cell: r => <Badge>{r.state ?? (r.enabled === false ? 'Disabled' : 'Unknown')}</Badge> },
+        { key: 'state', header: 'State', cell: r => <Badge tone={r.state==='ok'?'ok':['error','failed'].includes(r.state)?'bad':r.state==='stale'?'warn':undefined}>{r.state ?? (r.enabled === false ? 'Disabled' : 'Unknown')}</Badge> },
         { key: 'receipt', header: 'Last received', cell: r => fromMs(r.lastReceipt) },
-        { key: 'sourceAt', header: 'Last source time', cell: r => fromMs(r.sourceAt) },
+        { key: 'sourceAt', hidden: true, header: 'Last source time', cell: r => fromMs(r.sourceAt) },
         { key: 'lag', header: 'Ingestion lag', cell: r => r.lagMs == null ? 'Not measured' : `${r.lagMs.toLocaleString()} ms` },
-        { key: 'success', header: 'Last successful check', cell: r => fromMs(r.lastSuccess) },
-        { key: 'rate', header: 'Receipts / minute (past hour)', cell: r => r.receiptsPerMinute == null ? 'Not measured' : Number(r.receiptsPerMinute).toFixed(2) },
-        { key: 'failures', header: 'Failed attempts', cell: r => r.failures ?? 'Unknown' },
+        { key: 'success', hidden: true, header: 'Last successful check', cell: r => fromMs(r.lastSuccess) },
+        { key: 'rate', hidden: true, header: 'Receipts / minute (past hour)', cell: r => r.receiptsPerMinute == null ? 'Not measured' : Number(r.receiptsPerMinute).toFixed(2) },
+        { key: 'failures', hidden: true, header: 'Failed attempts', cell: r => r.failures ?? 'Unknown' },
         { key: 'error', header: 'Error category', cell: r => r.error ?? 'None reported', wrap: true },
       ]} empty={{ title: 'No collector observations yet' }} /></Panel>
+      <Kpis><Kpi label="Database size" value={storage ? fmtBytes(storage.databaseBytes) : 'Not measured'} /><Kpi label="Write-ahead log" value={storage ? fmtBytes(storage.walBytes) : 'Not measured'} /><Kpi label="Allocated storage" value={storage ? fmtBytes(storage.allocatedBytes) : 'Not measured'} /></Kpis>
       <Panel title="Stored data"><DataTable rows={Object.entries(summary.data?.categories ?? storage?.categories ?? {}).map(([category, value]) => ({ category, ...value }))} rowKey={r => r.category} loading={summary.isLoading} cols={[
         { key: 'category', header: 'Category', cell: r => labels[r.category as Category] ?? r.category },
         { key: 'rows', header: 'Rows', cell: r => r.rows.toLocaleString() },
         { key: 'retention', header: 'Retention', cell: r => r.retentionDays == null ? 'Keep indefinitely' : `${r.retentionDays} days` },
-        { key: 'coverage', header: 'Coverage', wrap: true, cell: r => coverageText(r.tables) },
+        { key: 'coverage', header: 'Coverage', wrap: true, cell: r => <details><summary>Tables</summary>{coverageText(r.tables)}</details> },
       ]} search={false} /></Panel>
-      <Alert>Disabled or unobserved sources have no inferred health. Missing latency and volume measurements are not treated as zero.</Alert>
+      <details className="context-help"><summary>How collection health is measured</summary><p>Disabled or unobserved sources have no inferred health. Missing latency and volume measurements are not treated as zero. Select a collector for source/check times and failures.</p></details>
     </>}
+    <Drawer open={params.has('collector')} title="Collector details" onClose={()=>selectCollector(null)}>{collector?<><KV items={[
+      ['Source',sourceLabel(collector.source,summary.data?.collectors??[])],['State',collector.state??'Unknown'],['Last received',fromMs(collector.lastReceipt)],['Last source time',fromMs(collector.sourceAt)],['Last successful check',fromMs(collector.lastSuccess)],['Ingestion lag',collector.lagMs==null?'Not measured':`${collector.lagMs.toLocaleString()} ms`],['Receipts / minute',collector.receiptsPerMinute==null?'Not measured':Number(collector.receiptsPerMinute).toFixed(2)],['Failed attempts',collector.failures??'Unknown'],['Error category',collector.error??'None reported'],
+    ]}/>{collector.error&&<Alert kind="warn">Check the configured source endpoint, permissions and collection settings. Historical failures do not establish a current outage.</Alert>}</>:<Alert>Collector details are unavailable.</Alert>}</Drawer>
     {tab === 'policy' && (policy.error ? <Alert kind="bad">{policy.error.message}</Alert> : policy.data ? <PolicyEditor key={policy.dataUpdatedAt} initial={policy.data} /> : <Alert>Loading retention policy…</Alert>)}
     {tab === 'alerts' && <Alerts collectors={summary.data?.collectors ?? []} />}
     {tab === 'data' && <DataControls summary={summary.data} bounds={policy.data?.bounds} />}

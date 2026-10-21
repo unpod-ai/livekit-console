@@ -1,6 +1,7 @@
+import { Dropdown } from '../components/Dropdown';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Plus, Pencil, Trash2 } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import { lk, type Json } from '../lib/api';
 import { joinList, splitList, useLkList, useMutate } from '../lib/hooks';
 import { useConfirm } from '../lib/confirm';
@@ -143,7 +144,7 @@ export function Dispatch() {
   const trunkName = (id: string) => trunks.data?.find((t) => t.sipTrunkId === id)?.name ?? id;
 
   const cols: Col<Json>[] = [
-    { key: 'id', header: 'Rule ID', cell: (r) => <span className="mono">{r.sipDispatchRuleId}</span>, text: (r) => r.sipDispatchRuleId, sort: (r) => r.sipDispatchRuleId },
+    { key: 'id', hidden: true, header: 'Rule ID', cell: (r) => <span className="mono">{r.sipDispatchRuleId}</span>, text: (r) => r.sipDispatchRuleId, sort: (r) => r.sipDispatchRuleId },
     { key: 'name', header: 'Rule name', cell: (r) => r.name || '—', text: (r) => r.name ?? '', sort: (r) => r.name ?? '' },
     { key: 'type', header: 'Rule type', cell: (r) => <Badge>{(ruleKind(r).type ?? 'unknown').replace(/^./, (c) => c.toUpperCase())}</Badge>, text: (r) => ruleKind(r).type ?? '' },
     { key: 'room', header: 'Destination room', cell: (r) => <RoomPattern text={ruleKind(r).target} />, text: (r) => ruleKind(r).target },
@@ -161,14 +162,9 @@ export function Dispatch() {
         <SipUriKpi />
       </Kpis>
       <Panel>
-        <DataTable rows={rules.data} cols={cols} rowKey={(r) => r.sipDispatchRuleId} loading={rules.isLoading} error={rules.error} storageKey="dispatch" initialQuery={initialQuery} onRow={setOpen}
+        <DataTable rows={rules.data} cols={cols} rowKey={(r) => r.sipDispatchRuleId} loading={rules.isLoading} error={rules.error} storageKey="dispatch-polished" initialQuery={initialQuery} onRow={setOpen}
           empty={{ title: 'No dispatch rules', hint: 'Create a rule so inbound calls land in a room.' }}
-          rowActions={(r) => (
-            <>
-              <button className="btn ghost icon sm" aria-label={`Edit ${r.name}`} onClick={() => setOpen(r)}><Pencil size={14} /></button>
-              <button className="btn ghost icon sm" aria-label={`Delete ${r.name}`} onClick={async () => (await confirm({ title: 'Delete dispatch rule?', message: `${r.name || r.sipDispatchRuleId} will stop routing calls immediately.`, confirmLabel: 'Delete', danger: true })) && del.mutate(r.sipDispatchRuleId)}><Trash2 size={14} color="var(--bad)" /></button>
-            </>
-          )} />
+          rowActions={(r)=><Dropdown action title={`Actions for ${r.name || r.sipDispatchRuleId}`} label="Actions" value="" items={[{id:'edit',label:`Edit ${r.name||r.sipDispatchRuleId}`},{id:'delete',label:`Delete ${r.name||r.sipDispatchRuleId}`,danger:true}]} onSelect={async action=>{if(action==='edit')setOpen(r);else if(await confirm({title:'Delete dispatch rule?',message:`${r.name || r.sipDispatchRuleId} will stop routing calls immediately.`,confirmLabel:'Delete',danger:true}))del.mutate(r.sipDispatchRuleId);}}/>} />
       </Panel>
       {open && <RuleDrawer key={open === 'new' ? 'new' : open.sipDispatchRuleId} rule={open} onClose={() => setOpen(null)} />}
     </>

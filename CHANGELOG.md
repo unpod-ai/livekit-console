@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.2.0 — 2026-10-22
+
+- Add inline per-message timings, session timing summaries and source-scoped agent latency views.
+- Include user-message speech/turn delays without counting them as LLM/TTS/response samples.
+- Preserve exact telemetry record selection, URL-backed investigation and private recording seek.
+- Refine console layouts, mobile navigation, accessible controls, tables, forms and worker history.
+- Restore near-black dark surfaces while retaining softer accents and the light/system themes.
+- Add validated runtime name/domain/logo/favicon settings and an independent default console symbol.
+
+See [release notes](docs/releases/0.2.0.md) for upgrade instructions, validation and limitations.
+
 ## 0.1.0-preview.1
 
 Initial public preview. The private workspace packages use version 0.1.0.

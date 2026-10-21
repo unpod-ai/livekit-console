@@ -3,6 +3,8 @@ import { useMe, can } from '../lib/me';
 import { useApi } from '../lib/hooks';
 import { fromMs } from '../lib/format';
 import { AreaChart, BarsChart, PALETTE } from './Charts';
+import { Drawer } from './Drawer';
+import { Combobox } from './Combobox';
 import { DataTable } from './DataTable';
 import { ModelUsage, type Usage } from './ModelUsage';
 import { Alert, Kpi, Kpis, Panel } from './ui';
@@ -41,30 +43,34 @@ export function AgentUsage({ name, hours }: { name: string; hours: number }) {
     ...(models.some(m => m.type === 'stt_usage') ? [{ key: 'sttAudio', label: 'STT audio seconds', color: PALETTE.purple }] : []),
     ...(models.some(m => m.type === 'tts_usage') ? [{ key: 'ttsAudio', label: 'TTS audio seconds', color: PALETTE.orange }] : []),
   ];
+  const headlines = [
+    { type: 'llm_usage', counter: 'input_tokens', label: 'LLM input tokens' },
+    { type: 'llm_usage', counter: 'output_tokens', label: 'LLM output tokens' },
+    { type: 'stt_usage', counter: 'audio_duration', label: 'STT audio seconds' },
+    { type: 'tts_usage', counter: 'audio_duration', label: 'TTS audio seconds' },
+    { type: 'tts_usage', counter: 'characters_count', label: 'TTS characters' },
+  ].filter(h => models.some(m => m.type === h.type && m.metrics[h.counter] != null));
+  function contributors(open: boolean) { setParams(old => { const next = new URLSearchParams(old); open ? next.set('usageContributors', '1') : next.delete('usageContributors'); return next; }); }
   return <>
-    <Alert>Usage is grouped by final report time in the selected header range. It covers retained instrumented reports, not every call. Cached and modality tokens are already included in their parent totals.</Alert>
     {!data.enabled && <Alert kind="warn">New report collection is disabled. Retained historical usage is shown until its expiration.</Alert>}
-    <Kpis>
-      <Kpi label="Reports with model usage" value={c.usageReports} />
-      <Kpi label="Reports in range" value={c.totalReports} />
-      <Kpi label="Usage not reported" value={c.missingUsageReports} />
-      <Kpi label="Expired reports" value={c.expiredReports} />
-    </Kpis>
+    <Kpis>{headlines.map(h => <Kpi key={h.label} label={h.label} value={models.filter(m => m.type === h.type).reduce((sum, m) => sum + (m.metrics[h.counter] ?? 0), 0).toLocaleString(undefined, { maximumFractionDigits: 3 })} />)}</Kpis>
+    <div className="metrics-toolbar"><span className="muted">{c.usageReports} reports with usage / {c.totalReports} in range</span><button className="btn secondary sm" onClick={() => contributors(true)}>Contributing reports ({data.totalContributingReports})</button></div>
+    <details className="metrics-help"><summary>Coverage and methodology</summary><p>Usage is grouped by final report time in the selected header range. It covers retained instrumented reports, not every call. Cached and modality tokens are already included in their parent totals. {c.retainedReports} reports retained · {c.emptyUsageReports} contain no supported model rows.</p></details>
     {(c.missingUsageReports > 0 || c.expiredReports > 0 || c.omittedUsage > 0) && <Alert kind="warn">Coverage is incomplete: {c.missingUsageReports} reports have no usage data, {c.expiredReports} have expired and {c.omittedUsage} unsupported usage entries were excluded. These gaps are not counted as zero consumption.</Alert>}
     {c.emptyUsageReports > 0 && <p className="muted">{c.emptyUsageReports} reports contain no supported model rows.</p>}
     <Panel title="Usage filter">
-      <div style={{ padding: '12px 14px' }}><label>Model <select aria-label="Usage model" className="select" value={model} onChange={e => select(e.target.value, 1)}>
-        <option value="">All models</option>
-        {model && !data.models.some(m => key(m) === model) && <option value={model}>Selected model has no retained usage</option>}
-        {data.models.map(m => <option key={key(m)} value={key(m)}>{m.type.replace('_usage', '').toUpperCase()} · {m.provider || 'Unknown provider'} · {m.model || 'Unknown model'}</option>)}
-      </select></label></div>
+      <div style={{ padding: '12px 14px' }}><label>Model <Combobox label="Usage model" value={model} onChange={value=>select(value,1)} options={[
+        {value:'',label:'All models'},
+        ...(model&&!data.models.some(m=>key(m)===model)?[{value:model,label:'Selected model has no retained usage'}]:[]),
+        ...data.models.map(m=>({value:key(m),label:`${m.type.replace('_usage','').toUpperCase()} · ${m.provider||'Unknown provider'} · ${m.model||'Unknown model'}`})),
+      ]}/></label></div>
     </Panel>
     {!models.length ? <Alert>No retained model usage matches this agent, range and model. Reports from older integrations cannot be backfilled.</Alert> : <>
       {models.some(m => m.type === 'llm_usage') && <Panel title="LLM tokens by report time"><BarsChart data={data.series} series={[{ key: 'llmInput', label: 'Input tokens (includes cached)', color: PALETTE.cyan }, { key: 'llmOutput', label: 'Output tokens', color: PALETTE.purple }]} from={data.from} to={data.to} bucketMs={data.bucketMs} /></Panel>}
       {speech.length > 0 && <Panel title="Speech audio seconds by report time"><AreaChart data={data.series} series={speech} from={data.from} to={data.to} bucketMs={data.bucketMs} fill="none" /></Panel>}
       <ModelUsage usage={models} scope="agent" />
     </>}
-    <Panel title={`Contributing reports (${data.totalContributingReports})`}>
+    <Drawer open={params.get('usageContributors')==='1'||params.has('usagePage')} title={`Contributing reports (${data.totalContributingReports})`} onClose={()=>setParams(old=>{const next=new URLSearchParams(old);next.delete('usageContributors');next.delete('usagePage');return next;})}>
       <DataTable rows={data.reports} search={false} pageSize={false} rowKey={r => `${r.roomSid}/${r.jobId}`} empty={{ title: 'No contributing reports' }} cols={[
         { key: 'session', header: 'Session report', wrap: true, cell: r => r.sessionAvailable
           ? <Link className="rowlink mono" to={`/sessions/${encodeURIComponent(r.roomSid)}?tab=insights&reportJob=${encodeURIComponent(r.jobId)}`}>{r.roomSid} · {r.jobId}</Link>
@@ -77,6 +83,6 @@ export function AgentUsage({ name, hours }: { name: string; hours: number }) {
         <span className="muted">Page {data.page} of {Math.max(1, Math.ceil(data.totalContributingReports / data.pageSize))}</span>
         <button className="btn secondary sm" disabled={data.page * data.pageSize >= data.totalContributingReports} onClick={() => select(model, data.page + 1)}>Next reports</button>
       </div>
-    </Panel>
+    </Drawer>
   </>;
 }

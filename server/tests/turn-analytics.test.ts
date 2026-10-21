@@ -16,3 +16,21 @@ test('stage durations use measured native node spans without counting nested pro
  const rows=canonicalMeasurements([{...row,kind:'span',itemId:'span1',spanName:'llm_node',end:1300,traceId:'a'.repeat(32),spanId:'b'.repeat(16)}, {...row,kind:'span',itemId:'span2',spanName:'llm_request',end:1200}],5000);
  assert.equal(rows.filter(r=>r.metric==='llm_duration').length,1);assert.equal(rows.find(r=>r.metric==='llm_duration')!.valueMs,300);
 });
+
+test('live contributor keeps its record ID separately from the canonical message ID',()=>{
+ const [sample]=canonicalMeasurements([{...row,kind:'message',itemId:'live-record-2',messageId:'canonical-message',metrics:{e2e_latency:.25}}],5000);
+ assert.equal(sample.itemId,'canonical-message');assert.equal(sample.recordId,'live-record-2');assert.equal(sample.source,'live_message');
+});
+
+test('turn-completed callback timing keeps its own population and is not a native node measurement',()=>{
+ const rows=canonicalMeasurements([{...row,kind:'report',metrics:{on_user_turn_completed_delay:.075}}, {...row,kind:'span',itemId:'callback-span',spanName:'llm_node',end:1100,metrics:{on_user_turn_completed_delay:.075}}],5000);
+ assert.equal(rows.filter(r=>r.metric==='on_user_turn_completed_delay').length,1);
+ assert.equal(rows.find(r=>r.metric==='on_user_turn_completed_delay')!.valueMs,75);
+});
+
+test('user speech timings contribute without treating user messages as LLM or response samples',()=>{
+ const rows=canonicalMeasurements([{...row,kind:'report',role:'user',metrics:{e2e_latency:99,llm_node_ttft:99,transcription_delay:.592,end_of_turn_delay:1.09,on_user_turn_completed_delay:0}}, {...row,kind:'report',itemId:'assistant2',metrics:{e2e_latency:.4}}],5000);
+ assert.deepEqual(rows.filter(r=>r.itemId==='message1').map(r=>r.metric).sort(),['end_of_turn_delay','on_user_turn_completed_delay','transcription_delay']);
+ assert.equal(rows.find(r=>r.metric==='transcription_delay')!.valueMs,592);
+ assert.equal(rows.filter(r=>r.metric==='e2e_latency').length,1);
+});

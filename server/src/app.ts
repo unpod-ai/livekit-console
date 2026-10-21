@@ -1,6 +1,7 @@
 import cookieParser from 'cookie-parser';
 import express from 'express';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
+import { loadBranding, brandHtml } from './branding.js';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { enforceRole, login, logout, me, requireAdmin, requireAuth } from './auth.js';
@@ -25,7 +26,9 @@ import { startTrafficSync } from './traffic.js';
 import { startWorkerPolling } from './workers.js';
 import { agentInsights, telemetryIngest, startReportRetention } from './telemetry.js';
 
+const branding = loadBranding(process.env);
 const app = express();
+app.get('/branding.json', (_req,res) => {res.set('Cache-Control','no-store');res.json(branding);});
 app.set('trust proxy', 1);
 app.use((_req, res, next) => {
   const json = res.json.bind(res);
@@ -62,8 +65,10 @@ app.use('/p', (_req,res) => res.status(404).json({error:'Not found'}));
 // In production the built web app is served from here.
 const webDist = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../web/dist');
 if (existsSync(webDist)) {
-  app.use(express.static(webDist));
-  app.get('*', (_req, res) => res.sendFile(path.join(webDist, 'index.html')));
+  const html = brandHtml(readFileSync(path.join(webDist,'index.html'),'utf8'),branding);
+  app.get('/index.html', (_req, res) => res.type('html').set('Cache-Control','no-store').send(html));
+  app.use(express.static(webDist, {index:false}));
+  app.get('*', (_req, res) => res.type('html').set('Cache-Control','no-store').send(html));
 }
 
 const host = process.env.HOST ?? '0.0.0.0';

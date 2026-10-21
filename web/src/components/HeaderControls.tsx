@@ -21,10 +21,10 @@ export function HeaderControls({ range, refresh }: { range?: boolean; refresh?: 
   const updatedAt = Math.max(0, ...qc.getQueryCache().getAll().map((q) => q.state.dataUpdatedAt));
 
   return (
-    <>
-      <ThemeControl />
-      {refresh && updatedAt > 0 && <span className="muted" style={{ fontSize: 12 }} aria-live="off">Updated {relTime(updatedAt)}</span>}
-      {range && (
+    <div className="header-controls">
+      <div className="header-display"><ThemeControl />
+      {refresh && updatedAt > 0 && <span className="muted header-updated" style={{ fontSize: 12 }} aria-live="off">Updated {relTime(updatedAt)}</span>}
+      </div><div className="header-data">{range && (
         <Dropdown title="Time range" icon={<Clock size={14} aria-hidden />} label={rangeLabel(hours)} value={hours} onSelect={(h) => setHours(Number(h))} items={RANGE_OPTIONS.map(([id, label]) => ({ id, label }))} />
       )}
       {refresh && (
@@ -35,6 +35,6 @@ export function HeaderControls({ range, refresh }: { range?: boolean; refresh?: 
           <Dropdown title="Auto-refresh" label={REFRESH_OPTIONS.find(([v]) => v === interval)?.[1] ?? 'Auto-refresh'} value={interval} onSelect={(v) => setInterval(Number(v))} items={REFRESH_OPTIONS.map(([id, label]) => ({ id, label }))} />
         </>
       )}
-    </>
+    </div></div>
   );
 }

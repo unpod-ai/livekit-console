@@ -55,8 +55,8 @@ export function Overview() {
   const noEvents = collector.data && collector.data.events === 0;
   const big = (value: number | string | undefined, label: string, color: string) => (
     <div style={{ textAlign: 'center' }}>
-      <div style={{ color, fontSize: 32, lineHeight: 1.1 }}>{value ?? '…'}</div>
-      <div style={{ color, opacity: 0.85, fontSize: 14, marginTop: 2 }}>{label}</div>
+      <div style={{ color:'var(--text)', fontSize: 30, fontWeight:500, lineHeight: 1.2 }}>{value ?? '…'}</div>
+      <div style={{ color:'var(--muted)', fontSize: 13, marginTop: 5, borderBottom:`2px solid ${color}`,paddingBottom:8 }}>{label}</div>
     </div>
   );
 
@@ -70,7 +70,19 @@ export function Overview() {
         <Kpi label="System status" value={<span style={{ fontSize: 15, display: 'inline-flex', alignItems: 'center', gap: 6 }}>{rooms.isLoading ? '…' : lkOk ? <><CheckCircle2 size={16} color="var(--ok)" />LiveKit reachable</> : <><AlertTriangle size={16} color="var(--bad)" />LiveKit unreachable</>}</span>}
           foot={collector.data ? (collector.data.lastEventAt ? `Last webhook ${relTime(collector.data.lastEventAt)}` : 'No webhooks received yet') : undefined} />
       </Kpis>
-      <div className="kpis" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
+      {noEvents && <div className="alert warn">No webhook events have been received. History pages stay empty until LiveKit is configured to send webhooks to this console (<span className="mono">./deploy.sh webhook</span>).</div>}
+
+      <h2 className="section-heading">Session activity</h2>
+      <Panel>
+        <div style={{ display: 'flex', justifyContent: 'space-around', padding: '18px 14px 0', flexWrap: 'wrap', gap: 12 }}>
+          {big(i?.sessions?.toLocaleString(), 'Total sessions', PALETTE.cyan)}
+          {big(i?.sessionsWithAgents?.toLocaleString(), 'With agents', PALETTE.purple)}
+          {big(i?.sessionsWithTelephony?.toLocaleString(), 'With telephony', PALETTE.orange)}
+        </div>
+        <AreaChart data={merged} bucketMs={i?.bucketMs ?? 3600000} from={from} to={to} height={210}
+          series={[{ key: 'total', label: 'Total sessions', color: PALETTE.cyan }, { key: 'agents', label: 'With agents', color: PALETTE.purple }, { key: 'sip', label: 'With telephony', color: PALETTE.orange }]} />
+      </Panel>
+      <details className="context-help overview-shortcuts"><summary>Manage connections and routing</summary>      <div className="kpis" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
         {[
           { to: '/telephony/trunks', icon: Cable, label: 'Manage SIP trunks' },
           { to: '/telephony/dispatch', icon: GitBranch, label: 'Configure dispatch rules' },
@@ -81,18 +93,7 @@ export function Overview() {
         ))}
         <a href="https://docs.livekit.io" target="_blank" rel="noopener noreferrer" className="kpi link" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px' }}><BookOpen size={16} color="var(--accent)" aria-hidden />Docs and API reference<ArrowRight size={13} style={{ marginLeft: 'auto', opacity: 0.6 }} /></a>
       </div>
-      {noEvents && <div className="alert warn">No webhook events have been received. History pages stay empty until LiveKit is configured to send webhooks to this console (<span className="mono">./deploy.sh webhook</span>).</div>}
-
-      <h2 style={{ fontSize: 14, margin: '8px 0 10px', color: 'var(--accent)' }}>Insights</h2>
-      <Panel>
-        <div style={{ display: 'flex', justifyContent: 'space-around', padding: '18px 14px 0', flexWrap: 'wrap', gap: 12 }}>
-          {big(i?.sessions?.toLocaleString(), 'Total sessions', PALETTE.cyan)}
-          {big(i?.sessionsWithAgents?.toLocaleString(), 'With agents', PALETTE.purple)}
-          {big(i?.sessionsWithTelephony?.toLocaleString(), 'With telephony', PALETTE.orange)}
-        </div>
-        <AreaChart data={merged} bucketMs={i?.bucketMs ?? 3600000} from={from} to={to} height={210}
-          series={[{ key: 'total', label: 'Total sessions', color: PALETTE.cyan }, { key: 'agents', label: 'With agents', color: PALETTE.purple }, { key: 'sip', label: 'With telephony', color: PALETTE.orange }]} />
-      </Panel>
+</details>
       <div className="grid-3" style={{ marginBottom: 16 }}>
         <Tile label="Average session duration" help="Mean time a session stayed open" value={i ? (i.avgSessionMs >= 60000 ? String(Math.round(i.avgSessionMs / 60000)) : String(Math.round(i.avgSessionMs / 1000))) : '…'} unit={i ? (i.avgSessionMs >= 60000 ? (Math.round(i.avgSessionMs / 60000) === 1 ? ' min' : ' mins') : ' secs') : undefined} />
         <Tile label="Agent session minutes" help="Total minutes agents spent inside sessions" value={i?.agentSessionMinutes?.toLocaleString() ?? '…'} unit=" mins" spark={i && <Spark points={i.agentMinSeries} from={from} to={to} bucketMs={i.bucketMs} fill={false} />} />
@@ -109,7 +110,7 @@ export function Overview() {
         </Panel>
       </div>
       <Panel title="Recent sessions" actions={<Link className="btn ghost sm" to="/sessions">View all <ArrowRight size={13} /></Link>}>
-        <DataTable rows={recent.data?.rows} cols={cols} rowKey={(s) => s.room_sid} search={false} pageSize={false} loading={recent.isLoading} onRow={(s) => navigate(`/sessions/${s.room_sid}`)} empty={{ title: 'No sessions in this range' }} />
+        <DataTable mobile rows={recent.data?.rows} cols={cols} rowKey={(s) => s.room_sid} search={false} pageSize={false} loading={recent.isLoading} onRow={(s) => navigate(`/sessions/${s.room_sid}`)} empty={{ title: 'No sessions in this range' }} />
       </Panel>
     </>
   );

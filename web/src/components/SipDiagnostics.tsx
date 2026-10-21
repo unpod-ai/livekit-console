@@ -1,7 +1,7 @@
 import { Link, useSearchParams } from 'react-router-dom';
 import { fromMsPrecise } from '../lib/format';
 import { DataTable } from './DataTable';
-import { Alert, Badge, KV, Panel } from './ui';
+import { Alert, Badge, KV, Kpi, Kpis, Panel } from './ui';
 import { DiagnosticCoverage, DiagnosticPager, useDiagnostics } from './ConnectionQuality';
 
 const hasPrefix = (value: unknown, prefix: string): value is string => typeof value === 'string' && value.startsWith(prefix);
@@ -13,15 +13,16 @@ export function SipDiagnostics({ roomSid, participantSid, callId, startedAt, end
   if (result.checking) return <Alert>Checking access…</Alert>;
   if (!result.admin) return <Alert>SIP diagnostics require an administrator account.</Alert>;
   return <>
-    <Alert>SIP service observations include attempts that fail before joining a room, when the SIP log source is configured and submitting records. Missing observations can reflect source coverage or retention. Links use exact room/participant SIDs or API-resolved durable call IDs.</Alert>
-    {startedAt&&<Alert>Call details default to the recorded lifecycle window with a 30-minute setup margin. Use From / To to investigate another interval.</Alert>}
+    <details className="context-help"><summary>SIP collection coverage and correlation</summary><p>SIP service observations include attempts that fail before joining a room, when the SIP log source is configured and submitting records. Missing observations can reflect source coverage or retention. Links use exact room/participant SIDs or API-resolved durable call IDs.</p></details>
+    {startedAt&&<p className="muted">Using the call lifecycle with a 30-minute setup margin.</p>}
     <DiagnosticCoverage data={data} />
     {result.error && <Alert kind="bad">{(result.error as Error).message}</Alert>}
+    {data&&<Kpis><Kpi label="Observed events" value={data.total}/><Kpi label="Failure events on this page" value={data.rows.filter(r=>(Number(r.code)>=400)||/fail|reject|error/i.test(r.stage??'')).length} help="Events, not distinct calls; only the current retained page"/><Kpi label="Observed call IDs on this page" value={new Set(data.rows.map(r=>r.callId).filter(Boolean)).size}/></Kpis>}
     <Panel title={fields.callId ? `SIP service timeline · ${fields.callId}` : 'SIP service attempts and events'}>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, padding: 14 }}>
+      <details className="context-help" style={{padding:'0 14px'}}><summary>Advanced call filters{Object.values(fields).some(Boolean)&&' · scoped'}</summary><div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, padding: 14 }}>
         {(['q', 'callId', 'roomSid', 'participantSid'] as const).map(key => <label key={key} style={{ minWidth: 0, flex: '1 1 180px' }}>{key === 'q' ? 'Search IDs / reason' : key}<input className="input" maxLength={256} value={fields[key]} readOnly={key === 'roomSid' ? !!roomSid : key === 'participantSid' ? !!participantSid : key === 'callId' ? !!callId : false} onChange={e => filter(key, e.target.value)} /></label>)}
         {(['from', 'to'] as const).map(key => <label key={key} style={{ minWidth: 0, flex: '1 1 180px' }}>{key === 'from' ? 'From' : 'To'} (Unix ms, optional)<input className="input" inputMode="numeric" value={params.get(key) ?? ''} onChange={e => filter(key, e.target.value)} placeholder="Global time range" /></label>)}
-      </div>
+      </div></details>
       <DataTable rows={data?.rows} loading={result.isLoading} search={false} pageSize={false} rowKey={r => r.id} empty={{ title: 'No retained SIP service observations match', hint: 'Configure the SIP log source to see pre-room failures; collection availability is shown above.' }} cols={[
         { key: 'at', header: 'Time (newest first)', cell: r => <span className="nowrap">{fromMsPrecise(r.at)}</span> },
         { key: 'call', header: 'Call ID', wrap: true, cell: r => <Link className="rowlink mono" to={`/telephony/diagnostics?${(() => { const next = new URLSearchParams(params); next.set('callId', r.callId); next.delete('sipOffset'); return next; })()}`}>{r.callId}</Link> },

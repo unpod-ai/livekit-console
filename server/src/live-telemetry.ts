@@ -182,7 +182,10 @@ liveInsights.get('/sessions/:sid/telemetry', (req,res) => {
     const {where,args}=filters(req), total=db.prepare(`SELECT COUNT(*) AS n FROM agent_live_records WHERE ${where}`).get(...args)!.n as number;
     const page=Math.min(p,Math.max(1,Math.ceil(total/100)));
     const rows=db.prepare(`SELECT job_id,content FROM agent_live_records WHERE ${where} ORDER BY at,id LIMIT 100 OFFSET ?`).all(...args,(page-1)*100).map(r=>({...privacy(JSON.parse(r.content as string)),jobId:r.job_id}));
-    res.json({enabled:config.telemetryEventsEnabled&&!!config.telemetryToken,redaction:config.telemetryRedaction,retentionDays:config.liveRetentionDays,jobs:jobs(req.params.sid),rows,total,page,pageSize:100});
+    const recordId=req.query.recordId===undefined?null:text(req.query.recordId,'recordId');
+    const exact=recordId?db.prepare(`SELECT job_id,content FROM agent_live_records WHERE ${where} AND id=? LIMIT 1`).get(...args,recordId):undefined;
+    const selected=exact?{...privacy(JSON.parse(exact.content as string)),jobId:exact.job_id}:null;
+    res.json({enabled:config.telemetryEventsEnabled&&!!config.telemetryToken,redaction:config.telemetryRedaction,retentionDays:config.liveRetentionDays,jobs:jobs(req.params.sid),rows,total,page,pageSize:100,selected});
   } catch(err) { res.status(err instanceof ReportValidationError?422:500).json({error:err instanceof ReportValidationError?err.message:'Could not read live telemetry'}); }
 });
 liveInsights.get('/sessions/:sid/export',(req,res)=>{

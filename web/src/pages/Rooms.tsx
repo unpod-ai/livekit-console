@@ -36,7 +36,7 @@ export function Rooms() {
         <DataTable rows={rooms.data} cols={cols} rowKey={(r) => r.sid} loading={rooms.isLoading} error={rooms.error} storageKey="rooms" onRow={(r) => navigate(`/rooms/${encodeURIComponent(r.name)}`)} empty={{ title: 'No active rooms', hint: 'Rooms are created when a participant joins, or create one here.' }}
           rowActions={(r) => <button className="btn ghost icon sm" aria-label={`Delete ${r.name}`} onClick={async () => (await confirm({ title: 'Delete room?', message: `${r.name} will be closed and all participants disconnected.`, confirmLabel: 'Delete room', danger: true })) && del.mutate(r.name)}><Trash2 size={14} color="var(--bad)" /></button>} />
       </Panel>
-      <Drawer open={creating} title="Create room" onClose={() => setCreating(false)}
+      <Drawer compact open={creating} title="Create room" onClose={() => setCreating(false)}
         footer={<><button className="btn secondary" onClick={() => setCreating(false)}>Cancel</button><button className="btn" disabled={!name || create.isPending} onClick={() => create.mutate(undefined, { onSuccess: () => { setCreating(false); setName(''); } })}>Create</button></>}>
         <Field label="Room name"><input className="input" value={name} onChange={(e) => setName(e.target.value)} /></Field>
         <div className="grid-2">

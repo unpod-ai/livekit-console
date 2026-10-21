@@ -34,7 +34,7 @@ export function Sessions() {
   useEffect(() => setOffset(0), [hours]);
 
   const cols: Col<Json>[] = [
-    { key: 'sid', header: 'Session ID', cell: (s) => <Link className="rowlink mono" to={`/sessions/${s.room_sid}`} onClick={stop}>{s.room_sid}</Link> },
+    { key: 'sid', header: 'Session ID', hidden: true, cell: (s) => <Link className="rowlink mono" to={`/sessions/${s.room_sid}`} onClick={stop}>{s.room_sid}</Link> },
     { key: 'room', header: 'Room name', cell: (s) => <Link className="rowlink" to={`/sessions/${s.room_sid}`} onClick={stop}>{s.room_name}</Link> },
     { key: 'start', header: 'Started at', cell: (s) => <span className="nowrap">{fromMs(s.started_at)}{s.partial === 1 ? ' *' : ''}{s.partial === 2 && <> <Badge tone="warn">Reconstructed</Badge></>}</span> },
     { key: 'end', header: 'Ended at', hidden: true, cell: (s) => fromMs(s.ended_at) },
@@ -59,7 +59,7 @@ export function Sessions() {
         <Kpi label="Sessions" value={res.data?.total ?? '…'} help="Sessions matching the current filters" />
       </Kpis>
       <Panel>
-        <DataTable rows={res.data?.rows} cols={cols} rowKey={(s) => s.room_sid} loading={res.isLoading} error={res.error} search={false} pageSize={false} storageKey="sessions"
+        <DataTable rows={res.data?.rows} cols={cols} rowKey={(s) => s.room_sid} loading={res.isLoading} error={res.error} search={false} pageSize={false} mobile storageKey="sessions-polished"
           onRow={(s) => navigate(`/sessions/${s.room_sid}`)}
           toolbar={<>
             {agent && <button className="btn secondary" onClick={() => reset(setAgent)('')} title="Clear agent filter">Agent: {agent} ✕</button>}
@@ -109,7 +109,7 @@ export function SessionDetail() {
 
   return (
     <>
-      <PageHeader crumbs={[{ label: 'Console' }, { label: 'Sessions', to: '/sessions' }, { label: sid }]} title={s?.room_name ?? sid} range
+      <PageHeader crumbs={[{ label: 'Console' }, { label: 'Sessions', to: '/sessions' }, { label: sid }]} title={s?.room_name ?? sid}
         sub={s && <StatusBadge status={s.ended_at ? 'closed' : 'active'} />}
         actions={s && !s.ended_at ? <Link className="btn secondary" to={`/rooms/${enc(s.room_name)}`}><Radio size={14} />Open live room</Link> : undefined} />
       {error && <Alert kind="bad">{(error as Error).message}{' '}This session may predate the collector; only sessions seen since webhooks were enabled are recorded.</Alert>}
@@ -167,7 +167,7 @@ export function ParticipantDetail() {
   const attrs = Object.entries(p?.attributes ?? {});
   return (
     <>
-      <PageHeader crumbs={[{ label: 'Console' }, { label: 'Sessions', to: '/sessions' }, { label: sid, to: `/sessions/${sid}` }, { label: psid }]} title={p?.identity ?? psid} range sub={p && <Badge>{kindLabel(p.kind)}</Badge>}
+      <PageHeader crumbs={[{ label: 'Console' }, { label: 'Sessions', to: '/sessions' }, { label: sid, to: `/sessions/${sid}` }, { label: psid }]} title={p?.identity ?? psid} sub={p && <Badge>{kindLabel(p.kind)}</Badge>}
         actions={<>
           {p?.kind === 'SIP' && <Link className="btn secondary" to={`/telephony/calls/${p.sid}`}>View call</Link>}
           {p?.kind === 'EGRESS' && isEgressIdentity(p.identity) && <Link className="btn secondary" to={`/egress/${p.identity}`}>View egress</Link>}

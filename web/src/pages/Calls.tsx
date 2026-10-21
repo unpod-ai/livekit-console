@@ -32,8 +32,8 @@ export function Calls() {
   useEffect(() => setOffset(0), [hours]);
 
   const cols: Col<Json>[] = [
-    { key: 'id', header: 'Call ID', cell: (c) => <Link className="rowlink mono" to={`/telephony/calls/${c.id}`} onClick={(e) => e.stopPropagation()}>{c.callId ?? c.id}</Link> },
-    { key: 'from', header: 'From', cell: (c) => c.from ?? '—' },
+    { key: 'id', header: 'Call ID', hidden: true, cell: (c) => <Link className="rowlink mono" to={`/telephony/calls/${c.id}`} onClick={(e) => e.stopPropagation()}>{c.callId ?? c.id}</Link> },
+    { key: 'from', header: 'From', cell: (c) => <Link className="rowlink" to={`/telephony/calls/${c.id}`} onClick={e=>e.stopPropagation()}>{c.from??'Unknown caller'}</Link> },
     { key: 'to', header: 'To', cell: (c) => c.to ?? '—' },
     { key: 'dir', header: 'Direction', cell: (c) => <DirectionBadge d={c.direction} source={c.directionSource} /> },
     { key: 'start', header: 'Started at', cell: (c) => <span className="nowrap">{fromMs(c.joinedAt)}</span> },
@@ -53,7 +53,7 @@ export function Calls() {
         <Kpi label="Active calls" value={d?.active ?? '…'} accent foot="Calls started over time" spark={d && <Spark points={d.series} from={Date.now() - hours * 3600000} to={Date.now()} bucketMs={d.bucketMs} />} />
       </Kpis>
       <Panel>
-        <DataTable rows={d?.rows} cols={cols} rowKey={(c) => c.id} loading={res.isLoading} error={res.error} search={false} pageSize={false} storageKey="calls" onRow={(c) => navigate(`/telephony/calls/${c.id}`)}
+        <DataTable rows={d?.rows} cols={cols} rowKey={(c) => c.id} loading={res.isLoading} error={res.error} search={false} pageSize={false} mobile storageKey="calls-polished" onRow={(c) => navigate(`/telephony/calls/${c.id}`)}
           toolbar={<>
             <input className="input" style={{ width: 240 }} placeholder="Search number, call ID or room" aria-label="Search calls" value={q} onChange={(e) => reset(setQ)(e.target.value)} />
             <select className="select" style={{ width: 'auto' }} aria-label="Direction" value={direction} onChange={(e) => reset(setDirection)(e.target.value)}><option value="">All directions</option><option value="inbound">Inbound</option><option value="outbound">Outbound</option></select>
@@ -62,7 +62,7 @@ export function Calls() {
           empty={{ title: 'No calls in this range', hint: 'Calls appear once a SIP participant joins a room and LiveKit webhooks reach this console.' }}
           footer={<ServerPager offset={offset} limit={LIMIT} total={d?.total ?? 0} onChange={setOffset} />} />
       </Panel>
-      <Alert><Info size={14} style={{ verticalAlign: -2, marginRight: 6 }} />Calls rejected before joining a room may appear in {admin ? <Link to="/telephony/diagnostics">SIP diagnostics</Link> : <>administrator SIP diagnostics</>}, when the SIP service log source is configured and submitting observations. This calls list is reconstructed from room participants.</Alert>
+      <details className="context-help"><summary>Call collection coverage</summary><p><Info size={14} style={{ verticalAlign: -2, marginRight: 6 }} />Calls rejected before joining a room may appear in {admin ? <Link to="/telephony/diagnostics">SIP diagnostics</Link> : <>administrator SIP diagnostics</>}, when the SIP service log source is configured and submitting observations. This calls list is reconstructed from room participants.</p></details>
     </>
   );
 }
@@ -76,20 +76,20 @@ export function CallDetail() {
   const attrs = Object.entries(c?.attributes ?? {});
   return (
     <>
-      <PageHeader crumbs={[{ label: 'Telephony' }, { label: 'Calls', to: '/telephony/calls' }, { label: c?.direction ? c.direction.replace(/^./, (x: string) => x.toUpperCase()) : 'Call' }, { label: c?.callId ?? id }]} title={c?.callId ?? id} range sub={c && <><DirectionBadge d={c.direction} source={c.directionSource} /> <StatusBadge status={c.state} /></>} />
+      <PageHeader crumbs={[{ label: 'Telephony' }, { label: 'Calls', to: '/telephony/calls' }, { label: c?.direction ? c.direction.replace(/^./, (x: string) => x.toUpperCase()) : 'Call' }, { label: c?.callId ?? id }]} title={c?.from&&c?.to?`${c.from} → ${c.to}`:c?.callId??id} sub={c && <><DirectionBadge d={c.direction} source={c.directionSource} /> <StatusBadge status={c.state} /></>} />
       {error && <Alert kind="bad">{(error as Error).message}</Alert>}
       <Tabs value={tab} onChange={setTab} tabs={[{ id: 'overview', label: 'Call overview' }, { id: 'events', label: 'Events', count: data?.events.length }, ...(admin ? [{ id: 'diagnostics' as const, label: 'Diagnostics' }] : [])]} />
       {c && tab === 'overview' && (
         <>
-          <Panel title="Call overview"><KV items={[['Call ID', <span className="mono">{c.callId ?? '—'}</span>], ['Started at', fromMs(c.joinedAt)], ['Ended at', fromMs(c.leftAt)], ['Duration', durationMs(c.joinedAt, c.leftAt)], ['Session', <Link to={`/sessions/${c.roomSid}`}>{c.roomName}</Link>], ['Status', <StatusBadge status={c.state} />]]} /></Panel>
+          <Panel title="Call overview"><KV items={[['From',c.from??'—'],['To',c.to??'—'], ['Started at', fromMs(c.joinedAt)], ['Ended at', fromMs(c.leftAt)], ['Duration', durationMs(c.joinedAt, c.leftAt)], ['Session', <Link to={`/sessions/${c.roomSid}`}>{c.roomName}</Link>], ['Status', <StatusBadge status={c.state} />]]} /></Panel>
           <div className="grid-2">
-            <Panel title="SIP details"><KV items={[['Direction', <DirectionBadge d={c.direction} source={c.directionSource} />], ['Trunk ID', c.trunkId ? <Link className="mono" to={`/telephony/trunks?q=${c.trunkId}`}>{c.trunkId}</Link> : '—'], ['Dispatch rule', c.ruleId ? <Link className="mono" to={`/telephony/dispatch?q=${c.ruleId}`}>{c.ruleId}</Link> : '—'], ['Last call status', c.callStatus ?? '—'], ['Provider call ID', <span className="mono">{c.providerCallId ?? '—'}</span>], ['SIP host', <span className="mono">{c.sipHost ?? '—'}</span>]]} /></Panel>
+            <Panel title="SIP details"><KV items={[['Direction', <DirectionBadge d={c.direction} source={c.directionSource} />], ['Trunk ID', c.trunkId ? <Link className="mono" to={`/telephony/trunks?q=${c.trunkId}`}>{c.trunkId}</Link> : '—'], ['Dispatch rule', c.ruleId ? <Link className="mono" to={`/telephony/dispatch?q=${c.ruleId}`}>{c.ruleId}</Link> : '—'], ['Last call status', c.callStatus ?? '—'], ['SIP call ID',<span className="mono">{c.callId??id}</span>]]} /></Panel>
             <Panel title="Call details"><KV items={[['From number', c.from ?? '—'], ['To number', c.to ?? '—'], ['Participant', <Link to={`/sessions/${c.roomSid}/participants/${c.id}`} className="mono">{c.identity}</Link>]]} /></Panel>
           </div>
-          <Panel title={`SIP attributes (${attrs.length})`}>
+          <details className="context-help"><summary>Provider details and SIP attributes</summary><Panel title="Provider details"><KV items={[['Provider call ID',c.providerCallId??'Not reported'],['SIP host',c.sipHost??'Not reported']]}/></Panel><Panel title={`SIP attributes (${attrs.length})`}>
             <DataTable rows={attrs} search={attrs.length > 8} pageSize={false} rowKey={([k]) => k} cols={[{ key: 'k', header: 'Key', cell: ([k]) => <span className="mono">{k}</span>, text: ([k]) => k }, { key: 'v', header: 'Value', cell: ([, v]) => <span className="mono">{String(v)}</span>, text: ([, v]) => String(v), wrap: true }]} />
-          </Panel>
-          <Alert><Info size={14} style={{ verticalAlign: -2, marginRight: 6 }} />SIP service stages, response codes and sanitized reasons are available in the administrator Diagnostics tab when the SIP log source submits observations.</Alert>
+          </Panel></details>
+          <p className="muted"><Info size={14} style={{ verticalAlign: -2, marginRight: 6 }} />SIP service stages, response codes and sanitized reasons are available in the administrator Diagnostics tab when the SIP log source submits observations.</p>
         </>
       )}
       {c && tab === 'diagnostics' && <SipDiagnostics startedAt={c.joinedAt} endedAt={c.leftAt} roomSid={c.roomSid} participantSid={c.id} callId={c.callId ?? c.providerCallId ?? undefined} />}

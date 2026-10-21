@@ -12,6 +12,7 @@ import { LiveProvider } from './lib/live';
 import { RangeProvider } from './lib/range';
 import { ToastProvider } from './lib/toast';
 import './styles.css';
+import './components/polish.css';
 
 function ConsoleRoot() {
   const [client] = useState(() => new QueryClient({ defaultOptions: { queries: { staleTime: 2000, retry: 1, refetchOnWindowFocus: false } } }));
