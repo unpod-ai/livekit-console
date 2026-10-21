@@ -46,7 +46,9 @@ if [[ "${1:-}" == "--sync-env" ]]; then
 fi
 
 echo "==> Building image and restarting container"
-"${SSH[@]}" bash -s -- "$DEPLOY_DIR" "$CONSOLE_PORT" "${LIVEKIT_INTERNAL_URL:-ws://127.0.0.1:7880}" "${AGENT_WORKER_URLS:-}" "${PROJECT_CONFIG_DIR:-}" "${CONSOLE_BACKEND_PORT_BASE:-}" <<'REMOTE'
+# SSH joins command arguments through a remote shell; quote once so empty values and spaces survive.
+printf -v remote_command '%q ' bash -s -- "$DEPLOY_DIR" "$CONSOLE_PORT" "${LIVEKIT_INTERNAL_URL:-ws://127.0.0.1:7880}" "${AGENT_WORKER_URLS:-}" "${PROJECT_CONFIG_DIR:-}" "${CONSOLE_BACKEND_PORT_BASE:-}"
+"${SSH[@]}" "$remote_command" <<'REMOTE'
 set -euo pipefail
 dir="$1"; port="$2"; lk_url="$3"; worker_urls="$4"; config_dir="$5"; backend_base="$6"
 extra_args=()
