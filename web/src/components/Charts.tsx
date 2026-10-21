@@ -17,7 +17,7 @@ function useWidth(): [React.RefObject<HTMLDivElement>, number] {
   return [ref, w];
 }
 
-export const PALETTE = { cyan: '#20d5f9', purple: '#c24df7', orange: '#ff7a2f', green: '#1fb66a', amber: '#ffa424', gray: '#8a8a8a', red: '#ff7566' };
+export const PALETTE = { cyan: 'var(--chart-cyan)', purple: 'var(--chart-purple)', orange: 'var(--chart-orange)', green: 'var(--chart-green)', amber: 'var(--chart-amber)', gray: 'var(--chart-gray)', red: 'var(--chart-red)' };
 
 function niceMax(v: number): number {
   if (v <= 4) return 4;

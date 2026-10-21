@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-const COLORS=['#20d5f9','#c24df7','#1fb66a','#ffa424','#ff7566','#ff7a2f'];
+const COLORS=['var(--chart-cyan)','var(--chart-purple)','var(--chart-green)','var(--chart-amber)','var(--chart-red)','var(--chart-orange)'];
 type Row={agentName:string;t:number;count:number;p50:number|null;p95:number|null};
 export function PerformanceChart({rows,from,to,bucketMs,bucket,onBucket,onRange}:{rows:Row[];from:number;to:number;bucketMs:number;bucket:number|null;onBucket:(t:number)=>void;onRange:(from:number,to:number)=>void}) {
  const start=useRef<number|null>(null),[drag,setDrag]=useState<[number,number]|null>(null);

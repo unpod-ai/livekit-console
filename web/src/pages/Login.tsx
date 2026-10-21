@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { Waypoints } from 'lucide-react';
 import { api } from '../lib/api';
+import { ThemeControl } from '../components/ThemeControl';
 import { Alert, Field, errText } from '../components/ui';
 
 export function Login() {
@@ -20,6 +21,7 @@ export function Login() {
   };
   return (
     <div className="login-wrap">
+      <div className="login-appearance"><ThemeControl /></div>
       <form className="login-card" onSubmit={submit}>
         <div className="brand" style={{ padding: '0 0 18px' }}><span className="brand-mark"><Waypoints size={15} aria-hidden /></span>LiveKit Console</div>
         <h1 style={{ fontSize: 18, marginBottom: 4 }}>Sign in</h1>

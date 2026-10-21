@@ -11,7 +11,7 @@ const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
 const dist = fileURLToPath(new URL('../dist/', import.meta.url));
 const server = createServer(async (req, res) => {
   const url = new URL(req.url, 'http://local');
-  const file = url.pathname.startsWith('/assets/') ? path.join(dist, 'assets', path.basename(url.pathname)) : path.join(dist, 'index.html');
+  const file = url.pathname === '/theme.js' ? path.join(dist, 'theme.js') : url.pathname.startsWith('/assets/') ? path.join(dist, 'assets', path.basename(url.pathname)) : path.join(dist, 'index.html');
   try {
     const data = await readFile(file);
     res.setHeader('Content-Type', file.endsWith('.js') ? 'text/javascript' : file.endsWith('.css') ? 'text/css' : file.endsWith('.woff2') ? 'font/woff2' : file.endsWith('.woff') ? 'font/woff' : 'text/html');
@@ -90,7 +90,7 @@ try {
     await page.getByRole('link', { name: 'Sessions', exact: true }).click(); await page.getByText('Recorded session', { exact: true }).waitFor();
     await page.reload(); await page.getByText('Recorded session', { exact: true }).waitFor();
     await page.locator('tbody tr').first().click(); await page.getByRole('heading', { name: 'Recorded session', exact: true }).waitFor();
-    await page.goBack(); await page.getByText('Recorded session', { exact: true }).waitFor(); await page.goBack(); await page.getByRole('tab', { name: 'Webhooks & history' }).waitFor();
+    await page.goBack(); await page.waitForURL(u=>u.pathname==='/sessions'); await page.getByRole('link', {name:'Recorded session',exact:true}).waitFor(); await page.goBack(); await page.getByRole('tab', { name: 'Webhooks & history' }).waitFor();
     assert.equal(new URL(page.url()).searchParams.has('project'), false); assert.ok(requests.every(r => r.raw.startsWith('/api/'))); await page.close();
   });
   await check('viewer content grants allow unscoped media and telemetry but never administrator controls', async () => {
@@ -179,6 +179,56 @@ try {
       assert.equal(requests.some(r => r.raw.endsWith('/logs')), capability === 'logs');
       await page.close();
     }
+  });
+  await check('System Light Dark appearance follows OS, persists and synchronizes without changing data', async () => {
+    const {page,writes}=await setup();await page.emulateMedia({colorScheme:'light'});await page.goto(base+'/operations');
+    const theme=()=>page.evaluate(()=>({resolved:document.documentElement.dataset.theme,preference:document.documentElement.dataset.themePreference,scheme:getComputedStyle(document.documentElement).colorScheme}));
+    await page.getByRole('button',{name:'Use system theme',exact:true}).waitFor();
+    assert.deepEqual(await theme(),{resolved:'light',preference:'system',scheme:'light'});
+    await page.emulateMedia({colorScheme:'dark'});await page.waitForFunction(()=>document.documentElement.dataset.theme==='dark');
+    await page.getByRole('button',{name:'Use light theme',exact:true}).click();assert.equal((await theme()).resolved,'light');
+    await page.emulateMedia({colorScheme:'light'});await page.emulateMedia({colorScheme:'dark'});assert.equal((await theme()).resolved,'light');
+    await page.reload();await page.getByRole('heading',{name:'Operations',exact:true}).waitFor();assert.equal((await theme()).resolved,'light');
+    await page.getByRole('link',{name:'Settings',exact:true}).click();await page.getByRole('heading',{name:'Settings',exact:true}).waitFor();assert.equal((await theme()).preference,'light');
+    await page.getByRole('button',{name:'Use dark theme',exact:true}).focus();await page.keyboard.press('Enter');assert.equal((await theme()).resolved,'dark');
+    await page.getByRole('button',{name:'Use system theme',exact:true}).click();await page.emulateMedia({colorScheme:'light'});await page.waitForFunction(()=>document.documentElement.dataset.theme==='light');
+    await page.evaluate(()=>window.dispatchEvent(new StorageEvent('storage',{key:'lkc.theme',newValue:'dark',storageArea:localStorage})));assert.equal((await theme()).resolved,'dark');
+    await page.evaluate(()=>window.dispatchEvent(new StorageEvent('storage',{key:'lkc.theme',newValue:null,storageArea:localStorage})));assert.equal((await theme()).resolved,'light');
+    for(const appearance of ['light','dark']){
+      await page.getByRole('button',{name:'Use '+appearance+' theme',exact:true}).click();
+      await page.setViewportSize({width:375,height:812});assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+      await page.goto(base+'/operations?tab=policy');await page.getByRole('tab',{name:'Retention & privacy',exact:true}).click();
+      assert.equal((await theme()).resolved,appearance);await page.screenshot({path:'/tmp/console-theme-'+appearance+'-mobile.png'});
+      await page.setViewportSize({width:1440,height:1000});await page.goto(base+'/sessions/RM_same?tab=insights');await page.getByRole('heading',{name:'Recorded session',exact:true}).waitFor();
+      assert.equal((await theme()).resolved,appearance);assert.equal(await page.locator('video').count(),1);await page.screenshot({path:'/tmp/console-theme-'+appearance+'-session.png'});
+    }
+    await page.route('**/api/history/insights?*',route=>route.fulfill({contentType:'application/json',body:JSON.stringify({avgSessionMs:12000,totalSessions:2,agentSessions:1,sipSessions:0,participants:3,agentSessionMinutes:2,countries:[],series:[{t:Math.floor(Date.now()/3600000)*3600000-3600000,n:2}],agentSeries:[{t:Math.floor(Date.now()/3600000)*3600000-3600000,n:3}],sipSeries:[],agentMinSeries:[],peopleSeries:[],kinds:[],bucketMs:3600000})}));
+    for(const appearance of ['light','dark']){
+      await page.getByRole('button',{name:'Use '+appearance+' theme',exact:true}).click();
+      const contrasts=await page.evaluate(()=>{
+        const probe=document.createElement('span');document.body.append(probe);
+        const rgb=color=>color.match(/[\d.]+/g).slice(0,3).map(Number);
+        const luminance=color=>rgb(color).map(v=>{v/=255;return v<=.04045?v/12.92:((v+.055)/1.055)**2.4}).reduce((n,v,i)=>n+v*[.2126,.7152,.0722][i],0);
+        const ratio=(a,b)=>(Math.max(a,b)+.05)/(Math.min(a,b)+.05);
+        probe.style.color='var(--bg)';const bg=luminance(getComputedStyle(probe).color),out={};
+        for(const key of ['border-strong','text','text-2','muted','accent','ok','warn','bad','info','purple','chart-cyan','chart-purple','chart-orange','chart-green','chart-amber','chart-gray','chart-red']){probe.style.color='var(--'+key+')';out[key]=ratio(bg,luminance(getComputedStyle(probe).color));}
+        probe.remove();return out;
+      });
+      for(const [key,ratio] of Object.entries(contrasts))assert.ok(ratio>=(key.startsWith('chart-')||key==='border-strong'?3:4.5),appearance+' '+key+' contrast '+ratio);
+      await page.goto(base+'/');await page.getByRole('heading',{name:'Overview',exact:true}).waitFor();await page.locator('svg.chart').first().waitFor();
+      assert.ok(await page.locator('svg.chart path[stroke]').count()>0);await page.screenshot({path:'/tmp/console-theme-'+appearance+'-charts.png'});
+      await page.goto(base+'/operations');await page.getByRole('tab',{name:'Data controls',exact:true}).click();await page.getByRole('button',{name:'Delete category',exact:true}).click();await page.getByRole('alertdialog').waitFor();
+      assert.equal((await theme()).resolved,appearance);await page.screenshot({path:'/tmp/console-theme-'+appearance+'-dialog.png'});await page.getByRole('alertdialog').getByRole('button',{name:'Cancel',exact:true}).click();
+    }
+    assert.equal(writes.length,0,'appearance changes must not mutate backend data');await page.close();
+  });
+  await check('theme resolves before React and remains usable when browser storage is blocked',async()=>{
+    const {page}=await setup();await page.emulateMedia({colorScheme:'light'});
+    await page.addInitScript(()=>{Object.defineProperty(Storage.prototype,'getItem',{value(){throw new DOMException('Blocked','SecurityError')}});Object.defineProperty(Storage.prototype,'setItem',{value(){throw new DOMException('Blocked','SecurityError')}});});
+    await page.route('**/assets/index-*.js',route=>route.abort());await page.goto(base+'/login');
+    assert.equal(await page.evaluate(()=>document.documentElement.dataset.theme),'light');assert.equal(await page.locator('#root').innerHTML(),'');
+    await page.emulateMedia({colorScheme:'dark'});await page.waitForFunction(()=>document.documentElement.dataset.theme==='dark');
+    await page.evaluate(()=>window.dispatchEvent(new CustomEvent('console-theme-set',{detail:'light'})));assert.equal(await page.evaluate(()=>document.documentElement.dataset.theme),'light');await page.close();
   });
   assert.deepEqual(errors, []);
   console.log(JSON.stringify({ passed: passed.length, pageErrors: errors.length }));

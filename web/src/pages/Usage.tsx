@@ -5,7 +5,7 @@ import { fmtMs } from '../lib/format';
 import { BarsChart } from '../components/Charts';
 import { Alert, Kpi, Kpis, PageHeader, Panel } from '../components/ui';
 
-const C = { a: '#20d5f9', b: '#dc85ff', c: '#1fb66a', d: '#ffa424' };
+const C = { a: 'var(--chart-cyan)', b: 'var(--purple)', c: 'var(--chart-green)', d: 'var(--chart-amber)' };
 
 export function Usage() {
   const { hours } = useRange();
