@@ -153,7 +153,7 @@ Verification: isolated worker polling and fresh-process tests cover rename, nati
 - [x] Monitor ingestion/storage growth and select indexes, rollups or external stores based on measured volume.
 - [x] Verify backup and restore after adding each new telemetry store.
 
-Verification: isolated project backends with colliding IDs and distinct SDK/upload credentials, role/content grants, immediate subsequent-request revocation, raw ingestion/Range proxying, sanitized audit, retroactive policy/deletion, measured alerts/storage and control/operations snapshot restore are covered by tests. Browser checks cover project switching, scoped resources, access recovery, Operations and desktop/mobile layouts. Live default-project migration is verified separately before closing the phase.
+Verification: isolated project backends with colliding IDs and distinct SDK/upload credentials, role/content grants, immediate subsequent-request revocation, raw ingestion/Range proxying, sanitized audit, retroactive policy/deletion, measured alerts/storage and control/operations snapshot restore are covered by tests. Browser checks cover project switching, scoped resources, access recovery, Operations and desktop/mobile layouts. Live default-project migration verified existing login, retained history/current and archived workers, scoped private recording Range playback, Operations measurements, project navigation, mobile containment and anonymous denial. Separate control/project snapshots passed restore integrity; console, worker and collector stayed healthy with zero collector backlog/drops. Conditional OIDC remains deferred.
 
 ## Phase 6 — Deployment management and agent testing
 
