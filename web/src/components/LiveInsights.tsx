@@ -15,7 +15,7 @@ type Job = { jobId: string; agentName: string; state: string; reasons: string[];
   sdkVersion: string | null; participantSid: string | null; workerId: string | null; capabilities: string[];
   receivedCount: number; expectedCount: number | null; droppedCount: number; lastReceived: number | null; expiresAt: number | null };
 type Data = { enabled: boolean; redaction: string; jobs: Job[]; rows: RecordRow[]; total: number; page: number; pageSize: number };
-const colors: Record<string, string> = { llm: 'var(--accent)', tts: '#c24df7', stt: '#1fb66a', tool: '#ffa424', turn: '#ff7a2f', realtime: '#dc85ff' };
+const colors: Record<string, string> = { llm: 'var(--accent)', tts: 'var(--chart-purple)', stt: 'var(--chart-green)', tool: 'var(--chart-amber)', turn: 'var(--chart-orange)', realtime: 'var(--purple)' };
 function Timing({ metrics }: { metrics?: Record<string, number> }) {
   return <span>{Object.entries(metrics ?? {}).map(([k, v]) => <span key={k} style={{ display: 'block' }}>{k.replace(/_/g, ' ')}: {k.includes('tokens') || k === 'total_requests' ? v : `${(v * 1000).toFixed(1)} ms`}</span>)}</span>;
 }
@@ -80,7 +80,7 @@ export function LiveInsights({ sid }: { sid: string }) {
           <p className="muted">Measured window: {(duration / 1000).toFixed(3)} s. Bars use actual span start/end timestamps. Timeline follows the current page and filters.</p>
           {spans.map(s => <button key={s.id} className="btn secondary" aria-label={`Select trace ${s.name}`} aria-pressed={params.get('selectedSpan')===s.spanId} onClick={() => { setParams(old=>{const next=new URLSearchParams(old);next.set('liveTrace',s.traceId??'');next.set('mediaAt',String(s.at));next.set('selectedSpan',s.spanId??'');next.delete('livePage');return next;}); }} style={{ display: 'grid', gridTemplateColumns: 'minmax(100px, 30%) 1fr', width: '100%', textAlign: 'left', marginBottom: 6, minWidth: 0, gap: 10 }}>
             <span style={{ overflowWrap: 'anywhere', minWidth: 0 }}>{s.name} · {((s.end! - s.at) / 1000).toFixed(3)} s{s.status === 'error' && ' · error'}{s.interrupted && ' · interrupted'}</span>
-            <span style={{ position: 'relative', alignSelf: 'center', height: 14, background: 'var(--border)' }}><span style={{ display: 'block', position: 'absolute', left: `${(s.at - start) / duration * 100}%`, width: `${Math.max(.5, (s.end! - s.at) / duration * 100)}%`, height: 14, background: colors[s.stage ?? ''] ?? '#999' }} /></span>
+            <span style={{ position: 'relative', alignSelf: 'center', height: 14, background: 'var(--border)' }}><span style={{ display: 'block', position: 'absolute', left: `${(s.at - start) / duration * 100}%`, width: `${Math.max(.5, (s.end! - s.at) / duration * 100)}%`, height: 14, background: colors[s.stage ?? ''] ?? 'var(--muted)' }} /></span>
           </button>)}
         </>}
       </div>

@@ -5,6 +5,7 @@ import { REFRESH_OPTIONS, useLive } from '../lib/live';
 import { RANGE_OPTIONS, rangeLabel, useRange } from '../lib/range';
 import { relTime } from '../lib/format';
 import { Dropdown } from './Dropdown';
+import { ThemeControl } from './ThemeControl';
 
 /** Top-right page controls, like Cloud's: time range, manual refresh, auto-refresh interval, and when data last updated. */
 export function HeaderControls({ range, refresh }: { range?: boolean; refresh?: boolean }) {
@@ -21,6 +22,7 @@ export function HeaderControls({ range, refresh }: { range?: boolean; refresh?: 
 
   return (
     <>
+      <ThemeControl />
       {refresh && updatedAt > 0 && <span className="muted" style={{ fontSize: 12 }} aria-live="off">Updated {relTime(updatedAt)}</span>}
       {range && (
         <Dropdown title="Time range" icon={<Clock size={14} aria-hidden />} label={rangeLabel(hours)} value={hours} onSelect={(h) => setHours(Number(h))} items={RANGE_OPTIONS.map(([id, label]) => ({ id, label }))} />

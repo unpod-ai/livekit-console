@@ -15,7 +15,7 @@ const dist = await mkdtemp(path.join(tmpdir(), 'phase6-ui-browser-'));
 await build({ root, configFile: path.join(root, 'vite.config.ts'), logLevel: 'error', resolve: { alias: { 'livekit-client': path.join(root, 'tests/fixtures/mock-livekit.ts') } }, build: { outDir: dist, emptyOutDir: true } });
 const server = createServer(async (req, res) => {
   const url = new URL(req.url, 'http://local');
-  const file = url.pathname.startsWith('/assets/') ? path.join(dist, 'assets', path.basename(url.pathname)) : path.join(dist, 'index.html');
+  const file = url.pathname === '/theme.js' ? path.join(dist, 'theme.js') : url.pathname.startsWith('/assets/') ? path.join(dist, 'assets', path.basename(url.pathname)) : path.join(dist, 'index.html');
   try { const data = await readFile(file); res.setHeader('Content-Type', file.endsWith('.js') ? 'text/javascript' : file.endsWith('.css') ? 'text/css' : file.endsWith('.woff2') ? 'font/woff2' : file.endsWith('.woff') ? 'font/woff' : 'text/html'); res.end(data); } catch { res.writeHead(404).end(); }
 });
 await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
