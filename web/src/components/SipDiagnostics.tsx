@@ -1,4 +1,4 @@
-import { Link, useSearchParams } from '../lib/router';
+import { Link, useSearchParams } from 'react-router-dom';
 import { fromMsPrecise } from '../lib/format';
 import { DataTable } from './DataTable';
 import { Alert, Badge, KV, Panel } from './ui';

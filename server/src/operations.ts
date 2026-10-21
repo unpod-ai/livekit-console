@@ -1,3 +1,4 @@
+import { auditRows } from './audit.js';
 import express, { Router, type ErrorRequestHandler } from 'express';
 import { requireAuth, requireAdmin, requireContent } from './auth.js';
 import { bounds, category, getPolicy, updatePolicy, deleteCategory, exportCategory, storageMeasurements, initializePolicy, maintainOperations, OperationsError } from './operations-policy.js';
@@ -6,6 +7,7 @@ export { observeIngestion } from './operations-observability.js';
 export const operations=Router();
 operations.use(requireAuth,requireAdmin,(_req,res,next)=>{res.set('Cache-Control','no-store');next();},express.json({limit:'32kb'}));
 operations.get('/summary',(_req,res)=>{maintainOperations();evaluateAlerts();const storage=storageMeasurements();res.json({backend:{state:'ready'},collectors:collectorStates(),storage,categories:storage.categories,alerts:alertRows()});});
+operations.get('/audit',(_req,res)=>res.json({rows:auditRows()}));
 operations.get('/policy',(_req,res)=>res.json({...getPolicy(),bounds}));
 operations.patch('/policy',(req,res)=>res.json({...updatePolicy(req.body),bounds}));
 operations.get('/rules',(_req,res)=>res.json(ruleRows()));

@@ -1,6 +1,5 @@
 import { useState, type FormEvent } from 'react';
 import { Waypoints } from 'lucide-react';
-import { projectHref } from '../lib/project';
 import { api } from '../lib/api';
 import { Alert, Field, errText } from '../components/ui';
 
@@ -13,7 +12,7 @@ export function Login() {
     setBusy(true);
     try {
       await api('/auth/login', { method: 'POST', body: { username: f.get('username'), password: f.get('password') } });
-      window.location.assign(projectHref('/'));
+      window.location.assign('/');
     } catch (err) {
       setError(errText(err));
       setBusy(false);

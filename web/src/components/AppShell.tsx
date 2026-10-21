@@ -1,24 +1,23 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { NavLink, Outlet, useNavigate } from '../lib/router';
+import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import {
   Activity, BarChart3, GitFork, Bot, Cable, CircleDot, DoorOpen, Download, GitBranch, Hash, KeyRound,
   LayoutDashboard, LogOut, PanelLeftClose, PanelLeftOpen, PhoneCall, Search, Settings, Waypoints,
 } from 'lucide-react';
-import { ProjectSelector, useProjects } from '../lib/projects';
-import { selectedProject, projectHref } from '../lib/project';
 import { api } from '../lib/api';
-import { Alert } from './ui';
 import { useMe, can } from '../lib/me';
 
 type Item = { to: string; label: string; icon: typeof Activity; admin?: boolean; transcripts?: boolean };
 const GROUPS: { title: string; items: Item[] }[] = [
-  { title: 'Project', items: [
+  { title: 'Console', items: [
     { to: '/', label: 'Overview', icon: LayoutDashboard },
     { to: '/sessions', label: 'Sessions', icon: Activity },
     { to: '/rooms', label: 'Live rooms', icon: DoorOpen },
     { to: '/agents', label: 'Agents', icon: Bot },
     { to: '/agent-analytics', label: 'Agent analytics', icon: Activity, transcripts: true },
     { to: '/usage', label: 'Usage', icon: BarChart3, transcripts: true },
+    { to: '/deployments', label: 'Deployments', icon: GitBranch, admin: true },
+    { to: '/agent-testing', label: 'Agent testing', icon: Bot, admin: true, transcripts: true },
     { to: '/operations', label: 'Operations', icon: Settings, admin: true },
     { to: '/diagnostics', label: 'Diagnostics', icon: Activity, admin: true },
   ] },
@@ -73,8 +72,6 @@ export function AppShell() {
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem('lkc.collapsed') === '1');
   const [palette, setPalette] = useState(false);
   const me = useMe();
-  const projects = useProjects();
-  const project = projects.find(p => p.id === selectedProject());
   const mac = useRef(/Mac/i.test(navigator.platform));
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -84,7 +81,7 @@ export function AppShell() {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
   const toggle = () => { localStorage.setItem('lkc.collapsed', collapsed ? '0' : '1'); setCollapsed(!collapsed); };
-  const logout = async () => { await api('/auth/logout', { method: 'POST' }); window.location.assign(projectHref('/login')); };
+  const logout = async () => { await api('/auth/logout', { method: 'POST' }); window.location.assign('/login'); };
 
   return (
     <div className={`shell ${collapsed ? 'collapsed' : ''}`}>
@@ -115,7 +112,7 @@ export function AppShell() {
           </button>
         </div>
       </aside>
-      <main className="content"><div className="page"><div className="project-bar"><ProjectSelector />{project && <span className="muted">{project.backend.state === 'ready' ? 'Ready' : `Project status: ${project.backend.state}`}</span>}</div>{project && project.backend.state !== 'ready' ? <><Alert kind="warn">{project.backend.state === 'starting' ? 'This project is starting. Please retry shortly.' : 'This project is temporarily unavailable. Select another project or retry.'}</Alert><button className="btn secondary" onClick={() => window.location.reload()}>Retry project</button></> : <Outlet />}</div></main>
+      <main className="content"><div className="page"><Outlet /></div></main>
       {palette && <Palette onClose={() => setPalette(false)} />}
     </div>
   );

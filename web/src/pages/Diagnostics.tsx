@@ -1,4 +1,4 @@
-import { useSearchParams } from '../lib/router';
+import { useSearchParams } from 'react-router-dom';
 import { useMe } from '../lib/me';
 import { fromMsPrecise } from '../lib/format';
 import { DataTable } from '../components/DataTable';
@@ -23,7 +23,7 @@ export function Diagnostics() {
   if (result.checking) return <Alert>Checking access…</Alert>;
   if (!result.admin) return <Alert>Service diagnostics require an administrator account.</Alert>;
   return <>
-    <PageHeader crumbs={[{ label: 'Project' }, { label: 'Diagnostics' }]} title="Service diagnostics" sub="Observed service health and capacity" range />
+    <PageHeader crumbs={[{ label: 'Console' }, { label: 'Diagnostics' }]} title="Service diagnostics" sub="Observed service health and capacity" range />
     <Alert>Container running state does not establish application readiness. Stale means no observation received for over 2 minutes; this is a display threshold, not a service health check. Instance coverage is limited to retained observations in the chosen range and page.</Alert>
     <DiagnosticCoverage data={data} />
     {result.error && <Alert kind="bad">{(result.error as Error).message}</Alert>}

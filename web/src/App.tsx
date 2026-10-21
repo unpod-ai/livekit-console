@@ -1,8 +1,11 @@
-import { Navigate, Route, Routes } from './lib/router';
+import { Navigate, Route, Routes } from 'react-router-dom';
 import { ApiError } from './lib/api';
 import { useMe, can } from './lib/me';
-import { ProjectSelector, SignOut } from './lib/projects';
+import { SignOut } from './components/SignOut';
 import { Alert } from './components/ui';
+import { Deployments } from './pages/Deployments';
+import { lazy, Suspense } from 'react';
+const AgentTesting = lazy(() => import('./pages/AgentTesting').then(m => ({ default: m.AgentTesting })));
 import { Operations } from './pages/Operations';
 import { AppShell } from './components/AppShell';
 import { AgentDetail } from './pages/AgentDetail';
@@ -28,7 +31,7 @@ function Protected() {
   const me = useMe();
   if (me.isPending) return null;
   if (me.error instanceof ApiError && me.error.status === 401) return <Navigate to="/login" replace />;
-  if (me.isError) return <div className="page"><Alert kind="bad">{me.error instanceof ApiError && me.error.status === 403 ? 'You no longer have access to this project.' : 'This project is temporarily unavailable.'}</Alert><button className="btn secondary" onClick={() => me.refetch()}>Retry</button><ProjectSelector /><SignOut /></div>;
+  if (me.isError) return <div className="page"><Alert kind="bad">{me.error instanceof ApiError && me.error.status === 403 ? 'You no longer have access to this console.' : 'The console is temporarily unavailable.'}</Alert><button className="btn secondary" onClick={() => me.refetch()}>Retry</button><SignOut /></div>;
   return <AppShell />;
 }
 
@@ -54,6 +57,8 @@ export function App() {
         <Route path="diagnostics" element={<Diagnostics />} />
         <Route path="telephony/diagnostics" element={<TelephonyDiagnostics />} />
         <Route path="usage" element={<ContentAccess><Usage /></ContentAccess>} />
+        <Route path="deployments" element={<Deployments />} />
+        <Route path="agent-testing" element={<Suspense fallback={<Alert>Loading agent testing…</Alert>}><AgentTesting /></Suspense>} />
         <Route path="operations" element={<Operations />} />
         <Route path="telephony/calls" element={<Calls />} />
         <Route path="telephony/calls/:id" element={<CallDetail />} />

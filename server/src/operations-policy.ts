@@ -2,6 +2,7 @@ import { statSync } from 'node:fs';
 import { db } from './db.js';
 import { config } from './config.js';
 import { redactContent } from './telemetry-privacy.js';
+import { operationsStores } from './operations-stores.js';
 
 const DAY = 86400000;
 export const categoryNames = ['reports','live','logs','diagnostics','history','workers','traffic','recordings'] as const;
@@ -48,6 +49,7 @@ export function updatePolicy(value: unknown): Policy {
  return getPolicy();
 }
 function scrub(){
+ for(const store of operationsStores())store.scrub();
  for(const table of ['agent_session_reports','agent_live_records','diagnostic_records'])for(const row of db.prepare(`SELECT rowid,content FROM ${table} WHERE content IS NOT NULL`).iterate()){
   const mode=table==='diagnostic_records'&&policy.redaction==='off'?'standard':policy.redaction;
   const value=JSON.parse(row.content as string);
@@ -61,6 +63,7 @@ function scrub(){
 }
 const changes=(sql:string,...args:(string|number)[])=>Number(db.prepare(sql).run(...args).changes);
 export function maintainOperations(at=Date.now()) {
+ for(const store of operationsStores())store.maintain(at);
  for(const [table,kind,anchor,where] of [
   ['agent_session_reports','reports','received_at','1'],['agent_live_jobs','live','first_received','1'],['agent_live_records','live','received_at',"kind!='log'"],['agent_live_records','logs','received_at',"kind='log'"],['agent_log_entries','logs','received_at','1'],['diagnostic_records','diagnostics','at','1'],
  ] as const) db.prepare(`UPDATE ${table} SET expires_at=MIN(expires_at,${anchor}+?) WHERE (${where}) AND expires_at>${anchor}+?`).run(policy.categories[kind].retentionDays!*DAY,policy.categories[kind].retentionDays!*DAY);
@@ -94,6 +97,7 @@ export function deleteCategory(name:string) {
   if(kind==='workers')for(const table of ['agent_worker_samples','inventory_rollups'])if(db.prepare('SELECT 1 FROM sqlite_master WHERE name=?').get(table))run(table,`DELETE FROM ${table}`);
   if(kind==='traffic')run('repo_traffic','DELETE FROM repo_traffic');
   if(kind==='recordings'){policy.categories.recordings.accessEnabled=false;db.prepare('INSERT INTO operations_policy VALUES(1,?) ON CONFLICT(id) DO UPDATE SET value=excluded.value').run(JSON.stringify(policy));}
+  for(const store of operationsStores())if(store.category===kind){const extra=store.delete();rows+=extra.rows;Object.assign(tables,extra.tables);}
   db.exec('COMMIT');
  }catch(error){db.exec('ROLLBACK');throw error;}
  return {category:kind,rows,tables,tombstonesRetained:true,upstreamDeleted:false,metadataMayBeRediscovered:['history','workers','traffic'].includes(kind)};
@@ -117,7 +121,8 @@ export function exportCategory(name:string,content=false,maxBytes=bounds.exportB
    return redactContent(row,policy.redaction,policy.redactTerms);
   });
  }
- const result={category:kind,content,exportedAt:Date.now(),rows:count,tables,truncated:false};if(Buffer.byteLength(JSON.stringify(result))>maxBytes)throw new OperationsError('Export exceeds byte budget',413);return result;
+ for(const store of operationsStores())if(store.category===kind){const extra=store.export(content,{maxRows:bounds.exportRows-count,maxBytes:Math.max(0,maxBytes-Buffer.byteLength(JSON.stringify(tables)))});count+=extra.rows;Object.assign(tables,extra.tables);}
+ const result={category:kind,content,exportedAt:Date.now(),rows:count,tables,truncated:false};if(count>bounds.exportRows||Buffer.byteLength(JSON.stringify(result))>maxBytes)throw new OperationsError('Export exceeds byte budget',413);return result;
 }
 export function storageMeasurements(){
  const pageSize=Number(db.prepare('PRAGMA page_size').get()!.page_size),pageCount=Number(db.prepare('PRAGMA page_count').get()!.page_count),freePages=Number(db.prepare('PRAGMA freelist_count').get()!.freelist_count);
@@ -125,6 +130,7 @@ export function storageMeasurements(){
  const size=(p:string)=>{try{return statSync(p).size;}catch{return 0;}};
  const categories={} as Record<Category,{rows:number;tables:Record<string,number>;retentionDays:number|null}>;
  for(const kind of categoryNames){const tables:Record<string,number>={};for(const table of coverage[kind])if(db.prepare('SELECT 1 FROM sqlite_master WHERE name=?').get(table))tables[table]=Number(db.prepare(`SELECT COUNT(*) n FROM ${table}${where(kind,table)}`).get()!.n);categories[kind]={rows:Object.values(tables).reduce((a,b)=>a+b,0),tables,retentionDays:policy.categories[kind].retentionDays};}
+ for(const store of operationsStores()){const extra=store.storage();categories[store.category].rows+=extra.rows;Object.assign(categories[store.category].tables,extra.tables);}
  return {pageSize,pageCount,freePages,allocatedBytes:pageSize*pageCount,databaseBytes:size(file),walBytes:size(file+'-wal'),categories};
 }
 export function initializePolicy(){maintainOperations();scrub();}

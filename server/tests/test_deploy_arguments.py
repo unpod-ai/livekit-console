@@ -22,13 +22,13 @@ class DeployArgumentsTest(unittest.TestCase):
             ssh.chmod(0o755)
             capture = root / 'capture.json'
             env = dict(os.environ, PATH=str(binary) + ':' + os.environ['PATH'], DEPLOY_CAPTURE=str(capture))
-            for key in ['PROJECT_CONFIG_DIR', 'CONSOLE_BACKEND_PORT_BASE']:
+            for key in ['AGENT_WORKER_URLS']:
                 env.pop(key, None)
             subprocess.run(['bash', str(root / 'deploy.sh')], env=env, check=True, stdout=subprocess.DEVNULL)
             data = json.loads(capture.read_text())
             self.assertEqual(len(data['command']), 6)  # ssh options + host + one shell command
             remote = shlex.split(data['command'][-1])
             self.assertEqual(remote[:3], ['bash', '-s', '--'])
-            self.assertEqual(remote[-2:], ['', ''])
+            self.assertEqual(remote[-1], '')
             prefix = data['script'].split('cd ~/')[0]
             subprocess.run(['bash', '-s', '--', *remote[3:]], input=prefix, text=True, check=True, env=env)

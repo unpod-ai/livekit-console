@@ -1,9 +1,8 @@
 import { useState } from 'react';
-import { api, projectResource, type Json } from '../lib/api';
+import { api, type Json } from '../lib/api';
 import { useApi, useMutate } from '../lib/hooks';
 import { can, useMe } from '../lib/me';
 import { useConfirm } from '../lib/confirm';
-import { selectedProject } from '../lib/project';
 import { fmtBytes, fromMs } from '../lib/format';
 import { DataTable } from '../components/DataTable';
 import { Alert, Badge, Kpi, Kpis, KV, PageHeader, Panel, Tabs } from '../components/ui';
@@ -22,7 +21,7 @@ function PolicyEditor({ initial }: { initial: PolicyResponse }) {
   const [draft, setDraft] = useState<Policy>(() => ({ categories: structuredClone(initial.categories), redaction: initial.redaction, redactTerms: [...initial.redactTerms] }));
   const [terms, setTerms] = useState(initial.redactTerms.join('\n'));
   const confirm = useConfirm();
-  const save = useMutate((body: Policy) => api('/operations/policy', { method: 'PATCH', body }), { invalidate: [['operations-policy'], ['operations-summary']], success: 'Project policy updated' });
+  const save = useMutate((body: Policy) => api('/operations/policy', { method: 'PATCH', body }), { invalidate: [['operations-policy'], ['operations-summary']], success: 'Retention policy updated' });
   const termList = terms.split('\n').map(t => t.trim()).filter(Boolean);
   const valid = categoryList.every(key => {
     const days = draft.categories[key].retentionDays;
@@ -30,7 +29,7 @@ function PolicyEditor({ initial }: { initial: PolicyResponse }) {
   }) && termList.length <= (initial.bounds?.maxTerms ?? 50) && termList.every(t => t.length <= (initial.bounds?.maxTermLength ?? 200));
   return <Panel title="Retention and privacy"><form className="panel-body operations-form" onSubmit={async e => {
     e.preventDefault();
-    if (valid && await confirm({ title: 'Apply project policy?', message: 'Shorter retention and redaction also apply to content already stored. Expired or deleted content cannot be recovered.', confirmLabel: 'Apply policy', danger: true })) save.mutate({ ...draft, redactTerms: termList });
+    if (valid && await confirm({ title: 'Apply retention policy?', message: 'Shorter retention and redaction also apply to content already stored. Expired or deleted content cannot be recovered.', confirmLabel: 'Apply policy', danger: true })) save.mutate({ ...draft, redactTerms: termList });
   }}>
     <Alert>Retention applies to stored and future data. Recording policy controls console access and never deletes storage objects. Audit retention is managed separately by the operator.</Alert>
     {categoryList.map(key => <label key={key}>{labels[key]} · days<input className="input" type="number" min={key === 'workers' ? 14 : initial.bounds?.minDays ?? 1} max={initial.bounds?.maxDays ?? 3650} step="1" value={draft.categories[key].retentionDays ?? ''} placeholder={['history', 'traffic'].includes(key) ? 'Keep indefinitely' : undefined} onChange={e => setDraft({ ...draft, categories: { ...draft.categories, [key]: { ...draft.categories[key], retentionDays: e.target.value === '' ? null : Number(e.target.value) } } })} /><span className="hint">{key === 'workers' ? '14–3650 days' : ['history', 'traffic'].includes(key) ? 'Leave empty to keep indefinitely' : '1–3650 days'}</span></label>)}
@@ -53,27 +52,27 @@ function DataControls({ summary, bounds }: { summary?: Summary; bounds?: PolicyR
   const coverage = summary?.categories?.[category] ?? summary?.storage.categories?.[category];
   const contentAllowed = category === 'reports' ? can(me.data, 'transcripts') : category === 'live' ? can(me.data, 'transcripts') && can(me.data, 'logs') : category === 'logs' ? can(me.data, 'logs') : category === 'diagnostics';
   const metadataAllowed = category === 'reports' ? can(me.data, 'transcripts') : category === 'live' ? can(me.data, 'transcripts') && can(me.data, 'logs') : ['logs', 'history'].includes(category) ? can(me.data, 'logs') : category === 'recordings' ? can(me.data, 'recordings') : true;
-  const remove = useMutate(() => api<Json>(`/operations/data/${category}`, { method: 'DELETE', body: { confirm: category } }), { invalidate: [['operations-summary'], ['operations-policy']], success: 'Project data action completed' });
+  const remove = useMutate(() => api<Json>(`/operations/data/${category}`, { method: 'DELETE', body: { confirm: category } }), { invalidate: [['operations-summary'], ['operations-policy']], success: 'Data action completed' });
   async function download() {
     setExporting(true); setError('');
     try {
-      const res = await fetch(projectResource(`/api/operations/export/${category}?content=${content && contentAllowed ? 'true' : 'false'}`), { credentials: 'same-origin' });
+      const res = await fetch(`/api/operations/export/${category}?content=${content && contentAllowed ? 'true' : 'false'}`, { credentials: 'same-origin' });
       if (!res.ok) { const body = await res.json().catch(() => ({})); throw new Error(body.error ?? 'Export could not be completed.'); }
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
-      const link = document.createElement('a'); link.href = url; link.download = `${selectedProject()}-${category}.json`; link.click();
+      const link = document.createElement('a'); link.href = url; link.download = `console-${category}.json`; link.click();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
     } catch (e) { setError(e instanceof Error ? e.message : 'Export failed.'); }
     finally { setExporting(false); }
   }
-  return <Panel title="Export and delete project data"><div className="panel-body">
+  return <Panel title="Export and delete server data"><div className="panel-body">
     <Alert>Exports are bounded to {(bounds?.exportRows ?? 10000).toLocaleString()} rows and {fmtBytes(bounds?.exportBytes ?? 8 * 1024 * 1024)}. A category exceeding either limit is refused. Local history metadata may be collected again from upstream sources after deletion. Content deletion retains expiry markers.</Alert>
     <div className="operations-form">
       <label>Data category<select className="select" value={category} disabled={remove.isPending || exporting} onChange={e => { setCategory(e.target.value as Category); setContent(false); setReceipt(null); setError(''); }}>{categoryList.map(key => <option key={key} value={key}>{labels[key]}</option>)}</select></label>
       {contentAllowed && <label className="check"><input type="checkbox" checked={content} onChange={e => setContent(e.target.checked)} />Include retained content</label>}
       <button className="btn secondary" disabled={exporting || remove.isPending || !metadataAllowed} onClick={download}>{exporting ? 'Exporting…' : 'Export category'}</button>
       <button className="btn danger" disabled={remove.isPending || exporting || !summary} onClick={async () => {
-        if (await confirm({ title: category === 'recordings' ? 'Disable recording access?' : `Delete ${labels[category].toLowerCase()}?`, message: category === 'recordings' ? 'This disables playback through the console. Files in upstream storage remain intact.' : `This affects only the selected project. ${coverage ? coverageText(coverage.tables) : 'Stored rows in the selected category'} will be processed. Retained conversation content cannot be restored. Collected metadata may appear again.`, confirmLabel: category === 'recordings' ? 'Disable access' : 'Delete category', danger: true })) remove.mutate(undefined, { onSuccess: setReceipt });
+        if (await confirm({ title: category === 'recordings' ? 'Disable recording access?' : `Delete ${labels[category].toLowerCase()}?`, message: category === 'recordings' ? 'This disables playback through the console. Files in upstream storage remain intact.' : `This affects this server. ${coverage ? coverageText(coverage.tables) : 'Stored rows in the selected category'} will be processed. Retained conversation content cannot be restored. Collected metadata may appear again.`, confirmLabel: category === 'recordings' ? 'Disable access' : 'Delete category', danger: true })) remove.mutate(undefined, { onSuccess: setReceipt });
       }}>{remove.isPending ? 'Working…' : category === 'recordings' ? 'Disable access' : 'Delete category'}</button>
     </div>
     {!metadataAllowed && <Alert>You need the content permissions for this category before exporting.</Alert>}
@@ -85,20 +84,19 @@ function DataControls({ summary, bounds }: { summary?: Summary; bounds?: PolicyR
 
 function Audit() {
   const audit = useApi<{ rows: Json[] }>(['operations-audit'], '/operations/audit?limit=100');
-  return <Panel title="Project audit"><DataTable rows={audit.data?.rows} loading={audit.isLoading} error={audit.error} rowKey={r => String(r.id)} cols={[
+  return <Panel title="Audit"><DataTable rows={audit.data?.rows} loading={audit.isLoading} error={audit.error} rowKey={r => String(r.id)} cols={[
     { key: 'time', header: 'Time', cell: r => fromMs(r.at ?? r.createdAt), sort: r => r.at ?? r.createdAt ?? 0 },
-    { key: 'scope', header: 'Scope', cell: r => !r.projectId || ['control', 'global'].includes(r.projectId) ? 'Global control' : r.projectId, text: r => String(r.projectId ?? 'Global control') },
     { key: 'actor', header: 'Actor', cell: r => r.actor, text: r => String(r.actor ?? '') },
     { key: 'action', header: 'Action', cell: r => r.action, text: r => String(r.action ?? '') },
     { key: 'resource', header: 'Resource', cell: r => r.resource ?? r.route, wrap: true },
     { key: 'status', header: 'Status', cell: r => r.status ?? r.outcome ?? 'Pending' },
     { key: 'request', header: 'Request ID', cell: r => r.requestId ?? r.id, wrap: true },
-  ]} empty={{ title: 'No audit entries for this project' }} /><p className="muted" style={{ padding: 14 }}>Latest 100 entries. Global administrators also see global account and sign-in activity, labeled by scope. Audit history cannot be deleted from project controls.</p></Panel>;
+  ]} empty={{ title: 'No audit entries for this server' }} /><p className="muted" style={{ padding: 14 }}>Latest 100 entries, including account and sign-in activity. Audit history cannot be deleted from data controls.</p></Panel>;
 }
 
 export function Operations() {
   const me = useMe();
-  if (me.data?.role !== 'admin') return <Alert>Only project administrators can manage operations.</Alert>;
+  if (me.data?.role !== 'admin') return <Alert>Only administrators can manage operations.</Alert>;
   return <OperationsContent />;
 }
 function OperationsContent() {
@@ -107,7 +105,7 @@ function OperationsContent() {
   const policy = useApi<PolicyResponse>(['operations-policy'], '/operations/policy', { live: false });
   const storage = summary.data?.storage;
   return <>
-    <PageHeader title="Operations" crumbs={[{ label: 'Project' }, { label: 'Operations' }]} sub="Monitor collection, manage retained data, and review project activity." />
+    <PageHeader title="Operations" crumbs={[{ label: 'Console' }, { label: 'Operations' }]} sub="Monitor collection, manage retained data, and review console activity." />
     <Tabs value={tab} onChange={setTab} tabs={[{ id: 'health', label: 'Health & storage' }, { id: 'policy', label: 'Retention & privacy' }, { id: 'alerts', label: 'Alerts' }, { id: 'data', label: 'Data controls' }, { id: 'audit', label: 'Audit' }]} />
     {summary.error && <Alert kind="bad">{summary.error.message}</Alert>}
     {tab === 'health' && <>
@@ -131,7 +129,7 @@ function OperationsContent() {
       ]} search={false} /></Panel>
       <Alert>Disabled or unobserved sources have no inferred health. Missing latency and volume measurements are not treated as zero.</Alert>
     </>}
-    {tab === 'policy' && (policy.error ? <Alert kind="bad">{policy.error.message}</Alert> : policy.data ? <PolicyEditor key={policy.dataUpdatedAt} initial={policy.data} /> : <Alert>Loading project policy…</Alert>)}
+    {tab === 'policy' && (policy.error ? <Alert kind="bad">{policy.error.message}</Alert> : policy.data ? <PolicyEditor key={policy.dataUpdatedAt} initial={policy.data} /> : <Alert>Loading retention policy…</Alert>)}
     {tab === 'alerts' && <Alerts collectors={summary.data?.collectors ?? []} />}
     {tab === 'data' && <DataControls summary={summary.data} bounds={policy.data?.bounds} />}
     {tab === 'audit' && <Audit />}

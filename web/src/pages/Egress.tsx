@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Link, useNavigate, useParams } from '../lib/router';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { Plus, Square } from 'lucide-react';
 import { lk, type Json } from '../lib/api';
 import { useApi, useLkList, useMutate } from '../lib/hooks';

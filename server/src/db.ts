@@ -29,6 +29,9 @@ db.exec(`
     password_hash TEXT NOT NULL, role TEXT NOT NULL CHECK (role IN ('admin','viewer')),
     created_at INTEGER NOT NULL, last_login_at INTEGER
   );
+  CREATE TABLE IF NOT EXISTS console_metadata(key TEXT PRIMARY KEY,value TEXT NOT NULL);
+  CREATE TABLE IF NOT EXISTS console_audit(id TEXT PRIMARY KEY,at INTEGER NOT NULL,actor TEXT NOT NULL,method TEXT NOT NULL,route TEXT NOT NULL,resource_hash TEXT NOT NULL,action TEXT NOT NULL,status INTEGER);
+  CREATE INDEX IF NOT EXISTS console_audit_time ON console_audit(at DESC);
   CREATE TABLE IF NOT EXISTS agent_worker_samples (
     id INTEGER PRIMARY KEY AUTOINCREMENT, url TEXT NOT NULL, agent_name TEXT, at INTEGER NOT NULL,
     ok INTEGER NOT NULL, load REAL, active_jobs INTEGER, latency_ms INTEGER
@@ -97,6 +100,11 @@ db.exec(`
 
 // The manual agent ping was replaced by worker status polling.
 db.exec('DROP TABLE IF EXISTS agent_pings');
+
+const userCols = (db.prepare('PRAGMA table_info(users)').all() as { name: string }[]).map(c => c.name);
+for (const col of ['transcripts', 'recordings', 'logs']) if (!userCols.includes(col)) {
+  db.exec(`ALTER TABLE users ADD COLUMN ${col} INTEGER NOT NULL DEFAULT 0; UPDATE users SET ${col}=1 WHERE role='admin'`);
+}
 
 // Older databases lack the worker's type/SDK columns; they let a worker that has since died still show what it was.
 const sampleCols = (db.prepare('PRAGMA table_info(agent_worker_samples)').all() as { name: string }[]).map((c) => c.name);

@@ -85,13 +85,16 @@ test('consistent SQLite backup restores policy alerts and tombstones with integr
  try{assert.equal(restored.prepare('PRAGMA integrity_check').get()!.integrity_check,'ok');for(const table of ['operations_policy','operations_collectors','operations_rules','operations_alerts','operations_deleted_jobs'])assert.equal(restored.prepare(`SELECT COUNT(*) n FROM ${table}`).get()!.n,db.prepare(`SELECT COUNT(*) n FROM ${table}`).get()!.n);assert.equal(restored.prepare('SELECT value FROM operations_policy').get()!.value,db.prepare('SELECT value FROM operations_policy').get()!.value);}finally{restored.close();}
 });
 
-test('child exports require category grants and recording grants permit viewers independently of admin',async()=>{
+test('account exports require category grants and recording grants permit viewers independently of admin',async()=>{
  const jwt=(await import('jsonwebtoken')).default;const {recordingRouter}=await import('../src/recordings.js');
  updatePolicy({categories:{recordings:{accessEnabled:true}}});
- const app2=express();app2.use('/recordings',recordingRouter({bucket:'test',prefix:'',retentionDays:30},{send:async()=>({})} as any));
+ const app2=express();app2.use(cookieParser());app2.use('/recordings',recordingRouter({bucket:'test',prefix:'',retentionDays:30},{send:async()=>({})} as any));
  const server2=app2.listen(0,'127.0.0.1');await new Promise<void>(r=>server2.once('listening',r));const base2=`http://127.0.0.1:${(server2.address() as any).port}`;
- Object.assign(process.env,{CONSOLE_PROJECT_CHILD:'1',CONSOLE_PROJECT_ID:'test',CONSOLE_GATEWAY_SECRET:'private-gateway-key'});
- const headers=(role:string,caps:Partial<Record<'recordings'|'transcripts'|'logs',boolean>>)=>({'x-console-gateway':jwt.sign({sub:'test',role,capabilities:{transcripts:false,recordings:false,logs:false,...caps}},process.env.CONSOLE_GATEWAY_SECRET!,{algorithm:'HS256',audience:'console-project:test',expiresIn:30})});
+ let accessUser=0;
+ const headers=(role:string,caps:Partial<Record<'recordings'|'transcripts'|'logs',boolean>>)=>{
+  const id=Number(db.prepare('INSERT INTO users(username,password_hash,role,created_at,transcripts,recordings,logs) VALUES(?,?,?,?,?,?,?)').run('access-'+(++accessUser),'unused',role,Date.now(),+(caps.transcripts??false),+(caps.recordings??false),+(caps.logs??false)).lastInsertRowid);
+  return {cookie:'lkc_session='+jwt.sign({src:'db',uid:id},'test-secret')};
+ };
  try{
   assert.equal((await fetch(base2+'/recordings/sessions/RM_creds',{headers:headers('viewer',{recordings:true})})).status,200);
   assert.equal((await fetch(base2+'/recordings/sessions/RM_creds',{headers:headers('admin',{})})).status,403);
@@ -99,7 +102,7 @@ test('child exports require category grants and recording grants permit viewers 
   assert.equal((await fetch(base+'/operations/export/live',{headers:headers('admin',{transcripts:true})})).status,403);
   assert.equal((await fetch(base+'/operations/export/logs',{headers:headers('admin',{logs:true})})).status,200);
   assert.equal((await fetch(base+'/operations/policy',{headers:headers('viewer',{logs:true,transcripts:true})})).status,403);
- }finally{delete process.env.CONSOLE_PROJECT_CHILD;delete process.env.CONSOLE_PROJECT_ID;delete process.env.CONSOLE_GATEWAY_SECRET;await new Promise<void>(r=>server2.close(()=>r()));}
+ }finally{await new Promise<void>(r=>server2.close(()=>r()));}
 });
 
 test('history retention preserves active sessions participants events and ongoing egress',()=>{
@@ -148,4 +151,15 @@ test('worker-down thresholds count failed observations in the selected window',a
  const {config}=await import('../src/config.js');const {workerSource}=await import('../src/operations-observability.js');const url='http://threshold-worker';config.workerUrls=[url];const source=workerSource(url),at=Date.now();
  const rule=saveRule({kind:'worker_down',source,threshold:2,windowSeconds:60,enabled:true});recordCollector(source,{ok:false,error:'upstream'},at-1000);evaluateAlerts(at-1000);assert.equal(alertRows().filter(a=>a.ruleId===rule.id).length,0);
  recordCollector(source,{ok:false,error:'upstream'},at);evaluateAlerts(at);assert.equal(alertRows().find(a=>a.ruleId===rule.id)!.value,2);
+});
+
+test('registered live stores share retention, redaction, storage, exports and deletion budgets',async()=>{
+ const {registerOperationsStore}=await import('../src/operations-stores.js');
+ let content:string|null='test private content',maintained=0,scrubbed=0;
+ registerOperationsStore('test-fixture',{category:'live',maintain:()=>{maintained++;},scrub:()=>{scrubbed++;content='[REDACTED]';},storage:()=>({rows:1,tables:{test_fixture:1}}),delete:()=>{content=null;return {rows:1,tables:{test_fixture:1}};},export:(include,limits)=>{if(limits.maxRows<1||limits.maxBytes<64)throw new Error('budget');return {rows:1,tables:{test_fixture:[{content:include?content:null}]}};}});
+ updatePolicy({redaction:'standard'});assert.ok(maintained>0);assert.ok(scrubbed>0);
+ assert.equal(storageMeasurements().categories.live.tables.test_fixture,1);
+ assert.deepEqual(exportCategory('live',true).tables.test_fixture,[{content:'[REDACTED]'}]);
+ assert.throws(()=>exportCategory('live',true,16));
+ assert.equal(deleteCategory('live').tables.test_fixture,1);assert.equal(content,null);
 });

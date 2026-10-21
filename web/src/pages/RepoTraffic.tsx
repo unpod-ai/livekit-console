@@ -7,7 +7,7 @@ import { Dropdown } from '../components/Dropdown';
 import { Alert, Kpi, Kpis, PageHeader, Panel, errText } from '../components/ui';
 import { fromMs } from '../lib/format';
 
-// The repository is a different thing from the project, so it has its own range instead of the global one.
+// The repository is a different thing from the LiveKit server, so it has its own range instead of the global one.
 const DAY = 86400000;
 const OPTIONS: [number, string][] = [[7, 'Last 7 days'], [14, 'Last 14 days'], [30, 'Last 30 days'], [60, 'Last 2 months'], [90, 'Last 3 months'], [180, 'Last 6 months'], [365, 'Last year'], [0, 'All time']];
 const KEY = 'lkc.repoRange';

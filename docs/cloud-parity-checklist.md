@@ -88,7 +88,7 @@ Acceptance:
 - [x] Add in-console audio/video playback with seeking and clear loading, missing and expired-file states.
 - [x] Add audio waveform and timestamp synchronization with transcripts and selected turns.
 - [x] Record which audio source is available; distinguish Egress media from agent-side recordings.
-- [x] Add per-agent/project latency percentiles and stage breakdowns based on collected turn metrics.
+- [x] Add per-agent/server latency percentiles and stage breakdowns based on collected turn metrics.
 - [x] Add model usage breakdowns; label optional rate-based costs as estimates rather than provider invoices.
 - [x] Show per-agent retained token and speech usage charts with links to contributing reports; exclude expired data.
 - [x] Click a chart bucket or outlier to open the matching sessions.
@@ -141,10 +141,10 @@ Acceptance:
 
 Verification: isolated worker polling and fresh-process tests cover rename, native-ID changes, explicit alias merges, endpoint removal and raw-sample expiry. Browser acceptance covers archived/current workers, job/session links, independent long-range selection, mobile width and viewer restrictions. Production agent names remain unchanged. Live deployment checks also verified current and archived inventory, retained rollups, historical navigation, anonymous access denial and an integrity-checked backup of the inventory tables.
 
-## Phase 5 — Project administration and operations
+## Phase 5 — Administration and operations
 
-- [x] Support multiple configured LiveKit projects with isolated credentials, data and permissions.
-- [x] Add project-scoped access and configurable access to transcripts, recordings and logs.
+- [x] Manage one configured LiveKit server per console (multi-project support removed by explicit scope change).
+- [x] Add account roles and configurable access to transcripts, recordings and logs.
 - [x] Evaluate organizational SSO/OIDC requirements; retain local accounts until an identity provider is required (OIDC integration deferred, not implemented).
 - [x] Record administrative changes and destructive actions in an audit history.
 - [x] Configure retention, deletion, export and redaction for each collected data category.
@@ -153,7 +153,9 @@ Verification: isolated worker polling and fresh-process tests cover rename, nati
 - [x] Monitor ingestion/storage growth and select indexes, rollups or external stores based on measured volume.
 - [x] Verify backup and restore after adding each new telemetry store.
 
-Verification: isolated project backends with colliding IDs and distinct SDK/upload credentials, role/content grants, immediate subsequent-request revocation, raw ingestion/Range proxying, sanitized audit, retroactive policy/deletion, measured alerts/storage and control/operations snapshot restore are covered by tests. Browser checks cover project switching, scoped resources, access recovery, Operations and desktop/mobile layouts. Live default-project migration verified existing login, retained history/current and archived workers, scoped private recording Range playback, Operations measurements, project navigation, mobile containment and anonymous denial. Separate control/project snapshots passed restore integrity; console, worker and collector stayed healthy with zero collector backlog/drops. Conditional OIDC remains deferred.
+Earlier gateway acceptance covered isolation, permissions, policy, audit and backups. The current single-server
+cleanup supersedes that architecture; migration, direct permissions and live acceptance must pass again before this
+preview is called verified. Conditional OIDC remains deferred.
 
 ## Phase 6 — Deployment management and agent testing
 

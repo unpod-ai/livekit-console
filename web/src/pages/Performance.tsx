@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useSearchParams } from '../lib/router';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useRange } from '../lib/range';
 import { useApi } from '../lib/hooks';
 import { useMe, can } from '../lib/me';
@@ -36,7 +36,7 @@ export function Performance({initialAgent}:{initialAgent?:string}) {
  if(!admin)return <Alert>Measured agent analytics requires transcripts access.</Alert>;
  const data=result.data;
  return <>
-  {!initialAgent&&<PageHeader crumbs={[{label:'Project'},{label:'Agent analytics'}]} title="Agent performance" sub="Measured turn timings, stage durations and final-report usage" range/>}
+  {!initialAgent&&<PageHeader crumbs={[{label:'Console'},{label:'Agent analytics'}]} title="Agent performance" sub="Measured turn timings, stage durations and final-report usage" range/>}
   <Panel title="Investigation filters">
    <form onSubmit={e=>{e.preventDefault();const a=new Date(draftFrom).getTime(),b=new Date(draftTo).getTime();if(Number.isFinite(a)&&Number.isFinite(b))range(a,b);}} style={{padding:14,display:'flex',gap:12,flexWrap:'wrap'}}>
     <label style={{flex:'1 1 200px',minWidth:0}}>From<input className="input" aria-label="Performance from" type="datetime-local" step="1" required value={draftFrom} onChange={e=>{setRangeDirty(true);setDraftFrom(e.target.value);}}/></label>
@@ -44,7 +44,7 @@ export function Performance({initialAgent}:{initialAgent?:string}) {
     <label style={{flex:'1 1 190px'}}>Metric<select className="select" aria-label="Performance metric" value={metric} onChange={e=>update({perfMetric:e.target.value})}>{Object.entries(METRICS).map(([key,label])=><option key={key} value={key}>{label}</option>)}</select></label>
     <button className="btn secondary sm" style={{alignSelf:'end'}}>Apply range</button><button type="button" className="btn secondary sm" style={{alignSelf:'end'}} onClick={()=>{setRangeDirty(false);update({perfFrom:null,perfTo:null});}}>Use header range</button><button type="button" className="btn secondary sm" style={{alignSelf:'end'}} onClick={()=>{setRangeDirty(false);update({perfAgents:'[]',perfMetric:'e2e_latency',perfFrom:null,perfTo:null});}}>Reset filters</button>
    </form>
-   <div style={{padding:'0 14px 14px',display:'flex',gap:12,flexWrap:'wrap'}}><span className="muted">Compare up to four agents; leave all clear for the project.</span>{(data?.agents??agents).map(name=><label key={name} style={{overflowWrap:'anywhere'}}><input type="checkbox" checked={agents.includes(name)} disabled={!agents.includes(name)&&agents.length>=4} onChange={e=>update({perfAgents:JSON.stringify(e.target.checked?[...agents,name]:agents.filter(a=>a!==name))})}/> {name}</label>)}</div>
+   <div style={{padding:'0 14px 14px',display:'flex',gap:12,flexWrap:'wrap'}}><span className="muted">Compare up to four agents; leave all clear for the server.</span>{(data?.agents??agents).map(name=><label key={name} style={{overflowWrap:'anywhere'}}><input type="checkbox" checked={agents.includes(name)} disabled={!agents.includes(name)&&agents.length>=4} onChange={e=>update({perfAgents:JSON.stringify(e.target.checked?[...agents,name]:agents.filter(a=>a!==name))})}/> {name}</label>)}</div>
   </Panel>
   {result.error&&<Alert kind="bad">{(result.error as Error).message}</Alert>}
   {!data&&!result.error&&<Alert>Loading measured analytics…</Alert>}
@@ -65,7 +65,7 @@ export function Performance({initialAgent}:{initialAgent?:string}) {
     <div style={{padding:12,display:'flex',gap:12,flexWrap:'wrap',justifyContent:'flex-end'}}><span>{data.totalContributors} contributors · Page {data.page} of {Math.max(1,Math.ceil(data.totalContributors/data.pageSize))}</span><button className="btn secondary sm" disabled={data.page<=1} onClick={()=>update({perfPage:String(data.page-1)},false)}>Previous measurements</button><button className="btn secondary sm" disabled={data.page*data.pageSize>=data.totalContributors} onClick={()=>update({perfPage:String(data.page+1)},false)}>Next measurements</button></div>
    </Panel>
    <p className="muted">{data.usageCoverage.usageReports} reports with usage / {data.usageCoverage.totalReports} in range · {data.usageCoverage.expiredReports} expired · {data.usageCoverage.missingUsageReports} not reported</p>
-   <ModelUsage title="Final-report model usage" usage={data.models} scope="project"/>
+   <ModelUsage title="Final-report model usage" usage={data.models} scope="server"/>
    {data.modelsByAgent.length>1&&data.modelsByAgent.map(agent=><ModelUsage key={agent.agentName} title={`Model usage · ${agent.agentName}`} usage={agent.models} scope="agent"/>)}
    <Drawer open={!!sample} title="Contributing measurement" onClose={()=>update({perfSample:null},false)}>{data.selected?<>
     <KV items={[["Agent",data.selected.agentName],["Metric",data.metricLabel],["Value",fmt(data.selected.valueMs)],["Time",fromMsPrecise(data.selected.at)],["Source",data.selected.source],["Job",data.selected.jobId],["Native item",data.selected.itemId],["Trace",data.selected.traceId??'Not reported'],["Span",data.selected.spanId??'Not reported'],["Turn",data.selected.turnId??'Not reported']]}/><Link className="btn secondary" to={link(data.selected)}>Open session at measurement</Link>

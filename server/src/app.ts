@@ -3,10 +3,15 @@ import express from 'express';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { enforceRole, login, logout, me, requireAdmin, requireAuth, requireContent } from './auth.js';
-import { createHash } from 'node:crypto';
-import { safeProjectResponse } from './project-response.js';
+import { enforceRole, login, logout, me, requireAdmin, requireAuth } from './auth.js';
+import { safeResponse } from './response-privacy.js';
+import { auditRequests, pruneAudit } from './audit.js';
+import { insightContent } from './insight-content.js';
 import { operations, observeIngestion, startOperations } from './operations.js';
+import { deployments } from './deployments.js';
+import { agentTests, maintainAgentTests, maintainAgentTestContent, scrubAgentTestContent, deleteAgentTestContent, agentTestStorage, exportAgentTestContent } from './agent-tests.js';
+import { registerOperationsStore } from './operations-stores.js';
+import { OperationsError } from './operations-policy.js';
 import { users } from './users.js';
 import { diagnosticIngest, diagnosticReads, purgeDiagnostics } from './diagnostics.js';
 import { config } from './config.js';
@@ -22,9 +27,9 @@ import { agentInsights, telemetryIngest, startReportRetention } from './telemetr
 
 const app = express();
 app.set('trust proxy', 1);
-if (process.env.CONSOLE_PROJECT_CHILD === '1') app.use((_req, res, next) => {
+app.use((_req, res, next) => {
   const json = res.json.bind(res);
-  res.json = body => json(safeProjectResponse(body));
+  res.json = body => json(safeResponse(body));
   next();
 });
 // LiveKit signs webhooks itself, so this route sits outside the session login.
@@ -35,23 +40,24 @@ app.use('/api/telemetry', telemetryIngest);
 app.use(express.json());
 app.use(cookieParser());
 
-app.get('/healthz', (_req, res) => res.json({ ok: true, projectId: process.env.CONSOLE_PROJECT_ID, instance: process.env.CONSOLE_GATEWAY_SECRET ? createHash('sha256').update(process.env.CONSOLE_GATEWAY_SECRET).digest('hex') : undefined }));
-if (process.env.CONSOLE_PROJECT_CHILD !== '1') {
+app.get('/healthz', (_req, res) => res.json({ ok: true }));
+app.use('/api', auditRequests);
 app.post('/api/auth/login', login);
 app.post('/api/auth/logout', logout);
 app.use('/api/users', requireAuth, requireAdmin, users);
-}
 app.get('/api/auth/me', requireAuth, me);
 app.use('/api/diagnostics', diagnosticReads);
 app.use('/api/recordings', recordingRouter());
 app.use('/api/operations', operations);
-app.use('/api/agent-insights', requireAuth, (req, res, next) => {
-  const grants = /\/logs\/?$/.test(req.path) ? ['logs'] as const : /\/(telemetry|export)\/?$/.test(req.path) ? ['transcripts', 'logs'] as const : ['transcripts'] as const;
-  requireContent(...grants)(req, res, next);
-}, agentInsights);
+app.use('/api/deployments', deployments);
+app.use('/api/agent-tests', agentTests);
+app.use('/api/agent-insights', requireAuth, insightContent, agentInsights);
 app.use('/api/inventory', inventory);
 app.use('/api/history', requireAuth, history);
 app.use('/api', requireAuth, enforceRole, api);
+
+app.use('/api', (_req,res) => res.status(404).json({error:'Not found'}));
+app.use('/p', (_req,res) => res.status(404).json({error:'Not found'}));
 
 // In production the built web app is served from here.
 const webDist = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../web/dist');
@@ -61,7 +67,13 @@ if (existsSync(webDist)) {
 }
 
 const host = process.env.HOST ?? '0.0.0.0';
+registerOperationsStore('agent-tests', {category:'live',maintain:maintainAgentTestContent,scrub:scrubAgentTestContent,delete:deleteAgentTestContent,storage:agentTestStorage,export:(content,limits)=>{
+  try{return exportAgentTestContent(content,limits);}catch(error){if((error as {status?:number}).status===413)throw new OperationsError('Export exceeds record or byte budget',413);throw error;}
+}});
+pruneAudit();
+setInterval(pruneAudit,86400000).unref();
 startOperations();
+void maintainAgentTests().catch(() => console.error('Agent test startup cleanup failed'));
 startReconciler();
 startWorkerPolling();
 startReportRetention();

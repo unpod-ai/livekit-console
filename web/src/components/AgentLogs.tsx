@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, useSearchParams } from '../lib/router';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useApi } from '../lib/hooks';
 import { useMe, can } from '../lib/me';
 import { fromMsPrecise } from '../lib/format';

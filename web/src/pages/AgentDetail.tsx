@@ -1,4 +1,4 @@
-import { Link, useNavigate, useParams, useSearchParams } from '../lib/router';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Radio } from 'lucide-react';
 import { type Json } from '../lib/api';
 import { useApi } from '../lib/hooks';
@@ -9,6 +9,7 @@ import { DataTable, type Col } from '../components/DataTable';
 import { Alert, Badge, Help, Kpi, Kpis, PageHeader, Panel, Tabs } from '../components/ui';
 import { AgentInventory, jobType, sdkLabel, workerAvailable, WorkersPanel, type AgentInventoryData } from '../components/AgentInventory';
 import { Performance } from './Performance';
+import { AgentDeployments } from '../components/AgentDeployments';
 import { AgentUsage } from '../components/AgentUsage';
 
 const STATE_TONE: Record<string, 'ok' | 'warn' | 'info' | undefined> = { listening: 'ok', speaking: 'info', thinking: 'warn', initializing: 'warn' };
@@ -59,11 +60,12 @@ export function AgentDetail() {
 
   return (
     <>
-      <PageHeader crumbs={[{ label: 'Project' }, { label: 'Agents', to: '/agents' }, { label: name }, { label: { overview: 'Overview', worker: 'Inventory', sessions: 'Sessions', usage: 'Usage', performance: 'Performance' }[tab] }]} title={name} range
+      <PageHeader crumbs={[{ label: 'Console' }, { label: 'Agents', to: '/agents' }, { label: name }, { label: { overview: 'Overview', worker: 'Inventory', sessions: 'Sessions', usage: 'Usage', performance: 'Performance' }[tab] }]} title={name} range
         actions={<div style={{ textAlign: 'right', lineHeight: 1.2 }}><div className="mono muted" style={{ fontSize: 9.5, letterSpacing: 0.5 }}>CURRENT STATUS</div>{statusEl}</div>} />
       <Tabs value={tab} onChange={setTab} tabs={[{ id: 'overview', label: 'Overview' }, { id: 'worker', label: 'Inventory' }, { id: 'sessions', label: 'Sessions', count: detail.data?.sessions.length }, { id: 'usage', label: 'Usage' }, { id: 'performance', label: 'Performance' }]} />
       {inventory.error && <Alert kind="bad">{inventory.error.message}</Alert>}
       {inventory.isLoading && <Alert>Resolving agent inventory…</Alert>}
+      {identity && <AgentDeployments agentName={name} aliases={identity.aliases} />}
       {identity && <div className="muted" style={{ marginBottom: 12 }}>Console agent ID (not native): <span className="mono">{identity.id}</span>{identity.aliases.some(n => n !== name) && <> · Linked names: {identity.aliases.filter(n => n !== name).join(', ')}</>}</div>}
       {tab === 'performance' && identity && <><Alert>Performance compares the selected raw source name: {name}. Linked names ({identity.aliases.filter(n => n !== name).join(', ') || 'none'}) are not automatically pooled into this population.</Alert><Performance key={name} initialAgent={name} /></>}
       {tab === 'usage' && identity && <AgentUsage key={name} name={name} hours={hours} />}
