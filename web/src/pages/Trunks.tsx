@@ -9,7 +9,7 @@ import { useInitialQuery } from '../lib/useTab';
 import { Drawer } from '../components/Drawer';
 import { JsonEditor, parseJson } from '../components/JsonEditor';
 import { DataTable, type Col } from '../components/DataTable';
-import { Alert, Badge, Field, Kpi, Kpis, PageHeader, Panel, Tabs } from '../components/ui';
+import { Alert, Badge, CopyButton, Field, Kpi, Kpis, PageHeader, Panel, Tabs } from '../components/ui';
 import { SipUriKpi } from '../components/SipUri';
 
 type Dir = 'inbound' | 'outbound';
@@ -60,7 +60,7 @@ function TrunkDrawer({ dir: initialDir, trunk, onClose }: { dir: Dir; trunk: Jso
   const valid = tab === 'json' ? !parseJson(json).error : !!form.name && (dir === 'inbound' || !!form.address);
 
   return (
-    <Drawer open wide title={editing ? 'Edit trunk' : 'Create a new trunk'} subtitle="Configure a SIP trunk for inbound calls (carrier into LiveKit) or outbound calls (LiveKit out to a carrier)." onClose={onClose}
+    <Drawer open wide title={editing ? `Edit trunk · ${(trunk as Json).sipTrunkId}` : 'Create a new trunk'} subtitle="Configure a SIP trunk for inbound calls (carrier into LiveKit) or outbound calls (LiveKit out to a carrier)." onClose={onClose}
       footer={<>
         <button className="btn secondary" onClick={onClose}>Cancel</button>
         <button className="btn" disabled={!valid || save.isPending} onClick={() => save.mutate(undefined, { onSuccess: onClose })}>{save.isPending ? 'Saving…' : editing ? 'Save changes' : 'Create'}</button>
@@ -134,8 +134,8 @@ export function Trunks() {
   const q = tab === 'inbound' ? inbound : outbound;
 
   const cols: Col<Json>[] = [
-    { key: 'id', hidden: true, header: 'Trunk ID', cell: (t) => <span className="mono">{t.sipTrunkId}</span>, text: (t) => t.sipTrunkId, sort: (t) => t.sipTrunkId },
     { key: 'name', header: 'Trunk name', cell: (t) => t.name || '—', text: (t) => t.name ?? '', sort: (t) => t.name ?? '' },
+    { key: 'id', header: 'Trunk ID', cell: (t) => <span className="badges" onClick={(e) => e.stopPropagation()}><span className="mono">{t.sipTrunkId}</span><CopyButton text={t.sipTrunkId} label={`Copy ${t.sipTrunkId}`} /></span>, text: (t) => t.sipTrunkId, sort: (t) => t.sipTrunkId },
     { key: 'numbers', header: 'Numbers', cell: (t) => joinList(t.numbers) || <span className="muted">Any</span>, text: (t) => joinList(t.numbers) },
     ...(tab === 'outbound'
       ? [{ key: 'address', header: 'SIP URI', cell: (t: Json) => <span className="mono">{t.address}</span>, text: (t: Json) => t.address ?? '' }]
@@ -156,7 +156,7 @@ export function Trunks() {
       </Kpis>
       <Tabs value={tab} onChange={setTab} tabs={[{ id: 'inbound', label: 'Inbound', count: inbound.data?.length }, { id: 'outbound', label: 'Outbound', count: outbound.data?.length }]} />
       <Panel>
-        <DataTable rows={q.data} cols={cols} rowKey={(t) => t.sipTrunkId} loading={q.isLoading} error={q.error} storageKey={`trunks-polished-${tab}`} initialQuery={initialQuery} onRow={(t) => setOpen({ dir: tab, trunk: t })}
+        <DataTable rows={q.data} cols={cols} rowKey={(t) => t.sipTrunkId} loading={q.isLoading} error={q.error} storageKey={`trunks-v3-${tab}`} initialQuery={initialQuery} onRow={(t) => setOpen({ dir: tab, trunk: t })}
           empty={{ title: `No ${tab} trunks`, hint: 'Create a trunk to connect a carrier.' }}
           rowActions={(t)=><Dropdown action title={`Actions for ${t.name || t.sipTrunkId}`} label="Actions" value="" items={[{id:'edit',label:`Edit ${t.name||t.sipTrunkId}`},{id:'delete',label:`Delete ${t.name||t.sipTrunkId}`,danger:true}]} onSelect={async action=>{if(action==='edit')setOpen({dir:tab,trunk:t});else if(await confirm({title:'Delete trunk?',message:`${t.name || t.sipTrunkId} will stop carrying calls immediately.`,confirmLabel:'Delete',danger:true}))del.mutate(t.sipTrunkId);}}/>} />
       </Panel>
