@@ -128,12 +128,13 @@ export function scrubRetainedTelemetry(): void {
     for (const table of ['agent_session_reports', 'agent_live_records']) {
       // The live table is added by the Phase 1 schema; both tables hold normalized content only.
       for (const row of db.prepare(`SELECT rowid,content FROM ${table} WHERE content IS NOT NULL`).iterate()) {
-        db.prepare(`UPDATE ${table} SET content=? WHERE rowid=?`).run(JSON.stringify(redactContent(JSON.parse(row.content as string), config.telemetryRedaction, config.telemetryRedactTerms)), row.rowid as number);
+        const content = JSON.stringify(redactContent(JSON.parse(row.content as string), config.telemetryRedaction, config.telemetryRedactTerms));
+        if (content !== row.content) db.prepare(`UPDATE ${table} SET content=? WHERE rowid=?`).run(content, row.rowid as number);
       }
     }
     for (const row of db.prepare('SELECT rowid,message,logger FROM agent_log_entries WHERE message IS NOT NULL').iterate()) {
       const value = redactContent(row, config.telemetryRedaction, config.telemetryRedactTerms);
-      db.prepare('UPDATE agent_log_entries SET message=?,logger=? WHERE rowid=?').run(value.message as string, value.logger as string | null, row.rowid as number);
+      if (value.message !== row.message || value.logger !== row.logger) db.prepare('UPDATE agent_log_entries SET message=?,logger=? WHERE rowid=?').run(value.message as string, value.logger as string | null, row.rowid as number);
     }
     db.exec('COMMIT');
   } catch (err) { db.exec('ROLLBACK'); throw err; }

@@ -48,6 +48,7 @@ export function updatePolicy(value: unknown): Policy {
  catch(error){db.exec('ROLLBACK');policy=before;applyConfig();throw error;}
  return getPolicy();
 }
+// Re-redacts retained content. Rows that redaction leaves unchanged are skipped, so a restart only rewrites what changed.
 function scrub(){
  for(const store of operationsStores())store.scrub();
  for(const table of ['agent_session_reports','agent_live_records','diagnostic_records'])for(const row of db.prepare(`SELECT rowid,content FROM ${table} WHERE content IS NOT NULL`).iterate()){
@@ -55,10 +56,10 @@ function scrub(){
   const value=JSON.parse(row.content as string);
   const safe=redactContent(value,mode,policy.redactTerms);
   if(table==='diagnostic_records' && typeof value.reason==='string')safe.reason=redactContent({text:value.reason},mode,policy.redactTerms).text;
-  const content=JSON.stringify(safe);db.prepare(`UPDATE ${table} SET content=? WHERE rowid=?`).run(content,row.rowid!);
+  const content=JSON.stringify(safe);if(content!==row.content)db.prepare(`UPDATE ${table} SET content=? WHERE rowid=?`).run(content,row.rowid!);
  }
  for(const row of db.prepare('SELECT rowid,message,logger FROM agent_log_entries WHERE message IS NOT NULL').iterate()){
-  const safe=redactContent(row,policy.redaction,policy.redactTerms);db.prepare('UPDATE agent_log_entries SET message=?,logger=? WHERE rowid=?').run(safe.message!,safe.logger!,row.rowid!);
+  const safe=redactContent(row,policy.redaction,policy.redactTerms);if(safe.message!==row.message||safe.logger!==row.logger)db.prepare('UPDATE agent_log_entries SET message=?,logger=? WHERE rowid=?').run(safe.message!,safe.logger!,row.rowid!);
  }
 }
 const changes=(sql:string,...args:(string|number)[])=>Number(db.prepare(sql).run(...args).changes);
@@ -133,4 +134,5 @@ export function storageMeasurements(){
  for(const store of operationsStores()){const extra=store.storage();categories[store.category].rows+=extra.rows;Object.assign(categories[store.category].tables,extra.tables);}
  return {pageSize,pageCount,freePages,allocatedBytes:pageSize*pageCount,databaseBytes:size(file),walBytes:size(file+'-wal'),categories};
 }
-export function initializePolicy(){maintainOperations();scrub();}
+// One transaction at startup: committing each rewritten row separately made startup take tens of minutes on a large database.
+export function initializePolicy(){db.exec('BEGIN IMMEDIATE');try{maintainOperations();scrub();db.exec('COMMIT');}catch(err){db.exec('ROLLBACK');throw err;}}
